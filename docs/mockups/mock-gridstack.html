@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camp Planner — GridStack mock</title>
+
+<!-- GridStack 12.6.0 from CDN (MIT, free). v12 needs NO custom CSS for >12 columns. -->
+<link href="https://cdn.jsdelivr.net/npm/gridstack@12.6.0/dist/gridstack.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/gridstack@12.6.0/dist/gridstack-all.js"></script>
+<script src="./data.js"></script>
+
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; margin: 0; background: #fafafa; color: #222; }
+  header { padding: 14px 18px; background: #fff; border-bottom: 1px solid #e3e3e3; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: #666; font-size: 12px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+  .legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+
+  #board { margin: 12px; }
+  .label-w { width: 64px; flex: 0 0 64px; }
+
+  /* shared time-axis header, aligned to the grid area */
+  .axis { display: flex; align-items: flex-end; }
+  .axis .ticks { position: relative; flex: 1; height: 20px; border-bottom: 1px solid #ddd; }
+  .axis .tick { position: absolute; bottom: 0; transform: translateX(-50%);
+                font-size: 10px; color: #999; border-left: 1px solid #eee; padding-left: 0; }
+
+  /* one row per day */
+  .day-row { display: flex; align-items: stretch; border-top: 1px solid #eee; }
+  .day-row .label-w { display: flex; flex-direction: column; justify-content: center;
+                      padding: 4px 8px; font-weight: 600; background: #fff; }
+  .day-row .label-w small { font-weight: 400; color: #888; }
+  /* the small "next-day" runway columns sit as plain empty grid at the end of the row */
+  .grid-host { flex: 1; position: relative; }
+  .grid-stack { position: relative; background:
+     repeating-linear-gradient(to right, transparent, transparent calc(100%/44 - 1px),
+       #f0f0f0 calc(100%/44 - 1px), #f0f0f0 calc(100%/44)); }
+
+  /* event cards. cursor: pointer = clickable (view mode); grab once editing is on */
+  .grid-stack-item-content { border-radius: 3px; color: #fff; font-size: 11px;
+     padding: 4px 6px; overflow: hidden; box-sizing: border-box; cursor: pointer; }
+  #board.edit-on .grid-stack-item-content { cursor: grab; }
+  .ev-title { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+  .ev-meta { opacity: .9; font-size: 10px; }
+  .ev-orgs { font-weight: 700; }
+
+  .cat-exercise .grid-stack-item-content,.cat-exercise>.grid-stack-item-content { background:#e67c73; }
+  .cat-meal     >.grid-stack-item-content { background:#4285f4; }
+  .cat-lecture  >.grid-stack-item-content { background:#f6bf26; color:#3c3c3c; }
+  .cat-game     >.grid-stack-item-content { background:#0b8043; }
+  .cat-biggame  >.grid-stack-item-content { background:#7986cb; }
+  .cat-trip     >.grid-stack-item-content { background:#33b679; }
+  .cat-org      >.grid-stack-item-content { background:#f4511e; }
+  .margin       >.grid-stack-item-content { opacity:.45; font-style:italic; }
+
+  /* a span continues onto another row: flatten the cut edge + dashed seam */
+  .cut-r > .grid-stack-item-content { border-top-right-radius:0; border-bottom-right-radius:0;
+                                      border-right:2px dashed rgba(255,255,255,.85); }
+  .cut-l > .grid-stack-item-content { border-top-left-radius:0; border-bottom-left-radius:0;
+                                      border-left:2px dashed rgba(255,255,255,.85); }
+
+  /* fatter, always-visible resize grips so narrow boxes are still grabbable */
+  .grid-stack-item > .ui-resizable-e,
+  .grid-stack-item > .ui-resizable-w { width: 12px; }
+  .grid-stack-item > .ui-resizable-e { right: 0; cursor: ew-resize; }
+  .grid-stack-item > .ui-resizable-w { left: 0;  cursor: ew-resize; }
+  /* a visible white grip bar on each draggable edge */
+  .grid-stack-item > .ui-resizable-e::after,
+  .grid-stack-item > .ui-resizable-w::after {
+    content: ''; position: absolute; top: 4px; bottom: 4px; width: 3px;
+    background: rgba(255,255,255,.7); border-radius: 2px;
+  }
+  .grid-stack-item > .ui-resizable-e::after { right: 2px; }
+  .grid-stack-item > .ui-resizable-w::after { left: 2px; }
+  .cat-lecture > .ui-resizable-e::after,
+  .cat-lecture > .ui-resizable-w::after { background: rgba(60,60,60,.5); }
+
+  /* edit-mode toggle, pinned to the table's top-left corner */
+  .table-wrap { position: relative; }
+  .edit-toggle { position: absolute; top: 14px; left: 14px; z-index: 60; font: 12px system-ui;
+     padding: 5px 11px; border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #333;
+     cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); display: flex; align-items: center; }
+  .edit-toggle:hover { background: #f3f3f3; }
+  .edit-toggle.on { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+
+  /* details modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4);
+     display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-overlay[hidden] { display: none; }
+  .modal-box { background: #fff; border-radius: 10px; padding: 20px 24px; min-width: 320px;
+     max-width: 92vw; box-shadow: 0 12px 48px rgba(0,0,0,.3); position: relative; }
+  .modal-box h2 { margin: 0 0 14px; font-size: 18px; padding-right: 24px; }
+  .modal-close { position: absolute; top: 8px; right: 12px; border: none; background: none;
+     font-size: 24px; line-height: 1; cursor: pointer; color: #999; }
+  .modal-close:hover { color: #333; }
+  .m-row { display: flex; gap: 12px; padding: 6px 0; font-size: 13px; border-top: 1px solid #f0f0f0; }
+  .m-row:first-of-type { border-top: none; }
+  .m-key { width: 92px; flex: 0 0 92px; color: #888; }
+  .m-chip { display: inline-block; width: 11px; height: 11px; border-radius: 3px;
+     margin-right: 6px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Camp Planner — GridStack prototype</h1>
+  <div class="sub">Row&nbsp;=&nbsp;day (one grid each), 15-min columns + a trailing “next-day” runway.
+     <b>Click a slot</b> for details. Toggle <b>✎&nbsp;Úpravy</b> (top-left) to drag/resize; in edit mode <b>double-click</b> a slot for details.
+     Drag/resize past 05:00 into the runway to split onto the next day. Overlap lanes / axis / row cap are computed by hand.</div>
+  <div class="legend" id="legend"></div>
+</header>
+
+<div class="table-wrap">
+  <button id="editToggle" class="edit-toggle" title="Zapnout/vypnout úpravy">✎&nbsp;Úpravy</button>
+  <div id="board"></div>
+</div>
+
+<!-- slot details modal -->
+<div id="modal" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <button class="modal-close" id="modalClose" aria-label="Zavřít">×</button>
+    <h2 id="m-title"></h2>
+    <div class="m-row"><span class="m-key">Kategorie</span><span id="m-cat"></span></div>
+    <div class="m-row"><span class="m-key">Kdy</span><span id="m-when"></span></div>
+    <div class="m-row"><span class="m-key">Orgové</span><span id="m-orgs"></span></div>
+    <div class="m-row"><span class="m-key">Typ slotu</span><span id="m-role"></span></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // SLOTS (main / prep / cleanup — each with its own absolute start/end) are the
+  // single source of truth; the per-day grids are rebuilt from segments on every
+  // edit. Prep/cleanup are independent slots, draggable anywhere on their own.
+  const slots = buildSlots();
+  const slotById = {};
+  slots.forEach((s) => (slotById[s.id] = s));
+
+  // v12 escapes widget `content` as text by default (XSS safe). Opt into HTML.
+  GridStack.renderCB = (el, w) => { el.innerHTML = w.content; };
+
+  document.getElementById('legend').innerHTML = Object.entries(CATEGORIES)
+    .map(([k, c]) => `<span><i style="background:${c.color}"></i>${c.label}</span>`).join('');
+
+  const minToSlot = (m) => Math.round(m / SLOT_MIN);  // minutes-from-window → column
+  const board = document.getElementById('board');
+  const roleLabel = { prep: 'příprava', cleanup: 'úklid' };
+
+  // A small "next-day" runway past the 05:00 day boundary: drag/resize a box's edge into it to
+  // push the slot past the day's end; on release the re-slice splits it onto the next row (grow
+  // it further there). Time is continuous (24 h window), so the column→absolute map is linear.
+  // NOTE: we never manipulate the grid mid-gesture — doing so (grid.update inside on('drag'))
+  // breaks GridStack's drag engine. Commit happens on `change` after the gesture completes.
+  const SPILL = 4;                                    // 1 h of plain trailing runway
+  const COLS  = SLOT_COUNT + SPILL;
+  const colToAbs = (x, day) => day * DAY_MIN + WINDOW_START_MIN + x * SLOT_MIN;
+
+  // greedy overlap-lane assignment (one of the things GridStack won't do for us)
+  function assignLanes(items) {
+    const sorted = items.slice().sort((a, b) => a.lo - b.lo);
+    const laneEnds = [];
+    sorted.forEach((it) => {
+      let lane = laneEnds.findIndex((end) => end <= it.lo);
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(0); }
+      laneEnds[lane] = it.hi;
+      it.lane = lane;
+    });
+    return laneEnds.length;
+  }
+
+  let grids = [];
+  let segLookup = {};      // gs-id → { seg, act }
+  let editing = false;     // guard: ignore events caused by our own re-render
+  let queued = false;
+  let editEnabled = false; // drag/resize gated behind the edit-mode toggle (view mode by default)
+
+  function queueRender() {
+    if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; render(); }); }
+  }
+
+  // map a widget's final position back onto its slot, then re-render everything
+  function onEdit(node, day) {
+    if (editing || !node || !node.el) return;
+    const entry = segLookup[node.el.getAttribute('gs-id')];
+    if (!entry) return;                                  // theme band isn't editable
+    const x = node.x || 0, w = node.w || 1;
+    applySegmentEdit(entry.act, entry.seg, colToAbs(x, day), colToAbs(x + w, day));
+    queueRender();
+    // a real app would POST entry.act (id, sAbs, eAbs) to Flask here
+  }
+
+  function render() {
+    editing = true;
+    grids.forEach((g) => { try { g.destroy(false); } catch (e) {} });
+    grids = [];
+    segLookup = {};
+    board.innerHTML = '';
+
+    // shared time-axis header (we draw this ourselves)
+    const axis = document.createElement('div');
+    axis.className = 'axis';
+    let ticks = '<div class="label-w"></div><div class="ticks">';
+    const perHour = 60 / SLOT_MIN;                 // slots per hour (4 at 15-min)
+    // label the day hours; the trailing runway columns are left blank
+    for (let s = 0; s <= SLOT_COUNT; s += perHour) {
+      ticks += `<div class="tick" style="left:${(s / COLS) * 100}%">${fmt(s * SLOT_MIN)}</div>`;
+    }
+    axis.innerHTML = ticks + '</div>';
+    board.appendChild(axis);
+
+    const segments = buildSegments(slots);
+
+    DAYS.forEach((d, day) => {
+      const dayProgs = segments.filter((p) => p.day === day);
+
+      // every slot (main / prep / cleanup) packs into lanes by its own interval
+      dayProgs.forEach((p) => { p.lo = p.fromM; p.hi = p.toM; });
+      const laneCount = assignLanes(dayProgs);
+
+      const row = document.createElement('div');
+      row.className = 'day-row';
+      row.innerHTML = `<div class="label-w">${d.wd}<small>${d.date}</small></div>
+                       <div class="grid-host"><div class="grid-stack"></div></div>`;
+      board.appendChild(row);
+
+      const grid = GridStack.init({
+        column: COLS,                  // 88 day columns + spill runway (15-min slots)
+        cellHeight: 44,
+        margin: 2,
+        float: true,                   // keep items where placed (no upward gravity)
+        acceptWidgets: true,           // allow dragging widgets in from other day-grids
+        resizable: { handles: 'e,w' }, // resize = change duration (horizontal only)
+        alwaysShowResizeHandle: true,  // narrow boxes are otherwise hard to grab
+        disableDrag: !editEnabled,     // view mode by default; toggled by the edit button
+        disableResize: !editEnabled,
+        minRow: laneCount || 1,
+        maxRow: laneCount + 1,         // cap height: used lanes + at most ONE empty row
+      }, row.querySelector('.grid-stack'));
+      grids.push(grid);
+
+      // live time label while dragging/resizing (read-only — never touch the grid mid-gesture)
+      const liveTime = (el) => {
+        const n = el && el.gridstackNode; if (!n) return;
+        const t = el.querySelector('.ev-time');
+        if (t) t.textContent = fmtClock(colToAbs(n.x, day)) + '–' + fmtClock(colToAbs(n.x + n.w, day));
+      };
+      grid.on('drag', (ev, el) => liveTime(el));
+      grid.on('resize', (ev, el) => liveTime(el));
+
+      // commit move/resize on `change` (fires after the gesture completes); `dropped` = cross-grid.
+      // Dragging/resizing a box's edge into the 1-block runway extends it past 05:00 → splits.
+      grid.on('change', (ev, items) => (items || []).forEach((n) => onEdit(n, day)));
+      grid.on('dropped', (ev, prev, nn) => onEdit(nn, day));
+
+      // every slot is its own draggable widget (main, prep, cleanup alike)
+      dayProgs.forEach((p) => {
+        const x = minToSlot(p.fromM), w = Math.max(1, minToSlot(p.toM) - minToSlot(p.fromM));
+        const orgs = p.role === 'main' && p.orgs && p.orgs !== 'all'
+          ? ` · <span class="ev-orgs">${p.orgs}</span>` : '';
+        const left  = p.contBack ? '«&nbsp;' : '';
+        const right = p.contFwd  ? '&nbsp;»' : '';
+        // show the activity's true start–end on every segment; « » arrows mark continuation
+        const tStart = fmtClock(p.sAbs);
+        const tEnd   = fmtClock(p.eAbs);
+        const heading = p.role === 'main' ? `${p.title} ${p.emoji}` : `${roleLabel[p.role]}: ${p.title}`;
+        const id = 's' + p.segId;
+        const el = grid.addWidget({
+          x, y: p.lane, w, h: 1, id,
+          content: `<div class="ev-title">${left}${heading}${right}</div>` +
+                   `<div class="ev-meta"><span class="ev-time">${tStart}–${tEnd}</span>${orgs}</div>`,
+        });
+        el.classList.add('cat-' + p.cat);
+        if (p.role !== 'main') el.classList.add('margin');
+        if (p.contBack) el.classList.add('cut-l');
+        if (p.contFwd)  el.classList.add('cut-r');
+        segLookup[id] = { seg: p, act: slotById[p.id] };   // every slot edits independently
+      });
+    });
+    editing = false;
+  }
+
+  render();
+
+  // ---- edit-mode toggle: gate drag/resize on a button (view mode by default) -------------
+  const editBtn = document.getElementById('editToggle');
+  function applyEditMode() {
+    editBtn.classList.toggle('on', editEnabled);
+    editBtn.innerHTML = editEnabled ? '✓&nbsp;Úpravy zapnuty' : '✎&nbsp;Úpravy';
+    board.classList.toggle('edit-on', editEnabled);
+    grids.forEach((g) => { g.enableMove(editEnabled); g.enableResize(editEnabled); });
+  }
+  editBtn.addEventListener('click', () => { editEnabled = !editEnabled; applyEditMode(); });
+  applyEditMode();
+
+  // ---- details modal: single-click (view) / double-click (edit) opens it -----------------
+  const roleName = { main: 'hlavní program', prep: 'příprava', cleanup: 'úklid' };
+  const modal = document.getElementById('modal');
+  // sAbs/eAbs are absolute minutes; recover the calendar day + clock for a full datetime label
+  function fmtDateTime(abs) {
+    const dayIdx = Math.floor(abs / DAY_MIN);
+    const d = DAYS[dayIdx];
+    return (d ? `${d.wd} ${d.date}` : `den ${dayIdx}`) + ' ' + fmtClock(abs);
+  }
+  function openModal(id) {
+    const e = segLookup[id];
+    if (!e) return;
+    const a = e.act, c = CATEGORIES[a.cat] || {};
+    document.getElementById('m-title').textContent = (a.title + (a.emoji ? ' ' + a.emoji : '')).trim();
+    document.getElementById('m-cat').innerHTML =
+      `<span class="m-chip" style="background:${c.color || '#ccc'}"></span>${c.label || a.cat}`;
+    document.getElementById('m-when').textContent = `${fmtDateTime(a.sAbs)} → ${fmtDateTime(a.eAbs)}`;
+    document.getElementById('m-orgs').textContent =
+      a.orgs === 'all' ? 'všichni' : (a.orgs || '—');
+    document.getElementById('m-role').textContent = roleName[a.role] || a.role;
+    modal.hidden = false;
+  }
+  const closeModal = () => { modal.hidden = true; };
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+  // event delegation survives the per-edit re-render that rebuilds all widgets
+  const widgetId = (ev) => {
+    const el = ev.target.closest('.grid-stack-item');
+    return el ? el.getAttribute('gs-id') : null;
+  };
+  board.addEventListener('click',    (e) => { if (!editEnabled) { const id = widgetId(e); if (id) openModal(id); } });
+  board.addEventListener('dblclick', (e) => { if ( editEnabled) { const id = widgetId(e); if (id) openModal(id); } });
+})();
+</script>
+</body>
+</html>
