@@ -6,6 +6,7 @@
 <title>Camp Planner — vis-timeline mock</title>
 
 <!-- vis-timeline 7.7.3 from CDN (Apache-2.0 / MIT, free) -->
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link href="https://unpkg.com/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css" rel="stylesheet">
 <script src="https://unpkg.com/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"></script>
 <script src="./data.js"></script>
@@ -18,12 +19,30 @@
   .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
   .legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
-  #tl { margin: 12px; }
+  /* the timeline sticks to the top of the viewport once you scroll past the header/toolbar, so
+     the header scrolls away but the time-axis row stays pinned (the rows scroll INSIDE it).
+     vis forces an inline position:relative on this container, so the sticky is (re)applied from JS. */
+  #tl { margin: 0 12px 12px; position: sticky; top: 0; background: #fafafa; }
 
   /* one row per day */
   .vis-time-axis .vis-text { font-size: 11px; color: #888; }
   .vis-labelset .vis-label { font-weight: 600; }
   .vis-label .day-dom { font-weight: 400; color: #888; font-size: 11px; }
+  /* clear day separation: a thin line ALONE "sticks" to the bottom of the boxes and is easy to
+     miss, so add an alternating row tint (zebra) that reads even where boxes cover the row edge.
+     The tint is translucent so the vertical hour grid still shows through. */
+  .vis-foreground .vis-group:nth-child(even) { background: rgba(20,30,50,.05); }
+  .vis-labelset   .vis-label:nth-child(even) { background: #eceff4; }
+  .vis-foreground .vis-group,
+  .vis-labelset   .vis-label { border-bottom: 1px solid #c4cad3; }
+  /* highlight the day row (and its left label) under the cursor: subtle yellow wash + vibrant
+     top/bottom edge lines (inset box-shadow → no layout shift; shows through the boxes'
+     transparent top/bottom borders so the lines read across the whole row). */
+  .vis-foreground .vis-group.day-hover,
+  .vis-labelset   .vis-label.day-hover {
+    background: rgba(255,205,0,.15);
+    box-shadow: inset 0 2px 0 #444, inset 0 -2px 0 #444;
+  }
 
   /* event cards.
      Gaps between boxes are done with a TRANSPARENT BORDER, not vis's `margin.item` — that
@@ -35,9 +54,15 @@
      We must set an explicit colour (transparent) because vis's `.vis-item.vis-range` rule
      re-forces `border-style: solid`; left at the default `currentColor` it would paint a
      dark-gray border on the light lecture boxes. */
-  .vis-item { border: 2px solid transparent; background-clip: padding-box;
-              border-radius: 5px; color: #fff; font-size: 11px; }
+  .vis-item { border: 2px solid transparent; border-bottom-width: 3px; background-clip: padding-box;
+              border-radius: 5px; color: #fff; font-size: 11px;
+              min-height: 36px; box-sizing: border-box; }   /* normal / stacked height; +1px gap below */
+  /* a day with no overlaps: boxes are double height (vis grows the row to match) */
+  .vis-item.solo { min-height: 74px; }
   .vis-item .vis-item-content { padding: 2px 6px; width: 100%; box-sizing: border-box; }
+  /* centre the content vertically in the taller solo boxes */
+  .vis-item.solo .vis-item-content { height: 100%; display: flex; flex-direction: column;
+              justify-content: center; }
   .ev-title { font-weight: 600; }
   .ev-meta { opacity: .9; font-size: 10px; }
   .ev-orgs { font-weight: 700; }
@@ -68,13 +93,17 @@
   /* prep / cleanup slots: faded, independently placeable */
   .margin { opacity: .45; font-style: italic; }
 
-  /* edit-mode toggle, pinned to the table's top-left corner */
-  .table-wrap { position: relative; }
-  .edit-toggle { position: absolute; top: 14px; left: 14px; z-index: 60; font: 12px system-ui;
+  /* toolbar row above the table (edit toggle left, zoom right) */
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 12px 0; }
+  .edit-toggle { font: 12px system-ui;
      padding: 5px 11px; border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #333;
      cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); display: flex; align-items: center; }
   .edit-toggle:hover { background: #f3f3f3; }
   .edit-toggle.on { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  .zoom-ctrl { display: flex; gap: 4px; }
+  .zoom-ctrl button { width: 28px; height: 28px; font-size: 18px; line-height: 1; border: 1px solid #ccc;
+     border-radius: 6px; background: #fff; color: #333; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .zoom-ctrl button:hover { background: #f3f3f3; }
   /* cursor hints: pointer = clickable (view), move = draggable (edit) */
   #tl .vis-item { cursor: pointer; }
   #tl.edit-on .vis-item { cursor: move; }
@@ -104,10 +133,14 @@
   <div class="legend" id="legend"></div>
 </header>
 
-<div class="table-wrap">
+<div class="toolbar">
   <button id="editToggle" class="edit-toggle" title="Zapnout/vypnout úpravy">✎&nbsp;Úpravy</button>
-  <div id="tl"></div>
+  <div class="zoom-ctrl">
+    <button id="zoomOut" title="Oddálit (Ctrl + kolečko)">−</button>
+    <button id="zoomIn"  title="Přiblížit (Ctrl + kolečko)">+</button>
+  </div>
 </div>
+<div id="tl"></div>
 
 <!-- slot details modal -->
 <div id="modal" class="modal-overlay" hidden>
@@ -158,9 +191,25 @@
   const roleLabel = { prep: 'příprava', cleanup: 'úklid' };
 
   function render() {
-    items.clear();
     segLookup = {};
-    buildSegments(slots).forEach((s) => {
+    const segs = buildSegments(slots);
+    // Per-ITEM overlap detection: a box keeps DOUBLE ("solo") height unless it shares time
+    // with another box in the same row, in which case it drops to normal/half height so the
+    // overlapping pair can stack. Non-overlapping neighbours in the same row stay full height.
+    // (vis sizes the row to its content, so the row is as tall as its tallest stack.)
+    const overlaps = new Set(), byDay = {};
+    segs.forEach((s) => (byDay[s.day] || (byDay[s.day] = [])).push(s));
+    Object.values(byDay).forEach((arr) => {
+      for (let i = 0; i < arr.length; i++)
+        for (let j = i + 1; j < arr.length; j++)
+          if (arr[i].fromM < arr[j].toM && arr[j].fromM < arr[i].toM) {
+            overlaps.add(arr[i].segId); overlaps.add(arr[j].segId);
+          }
+    });
+    // Build ALL items first, then push them to the DataSet in ONE call. Adding items
+    // one-by-one makes vis fire an event (and schedule a redraw) per item — batching
+    // the add is the single biggest speed-up for the initial draw and every re-render.
+    const batch = segs.map((s) => {
       const orgs = s.role === 'main' && s.orgs && s.orgs !== 'all'
         ? ` · <span class="ev-orgs">${s.orgs}</span>` : '';
       // show the true start/end where they fall; "…" + arrow where the event is cut
@@ -170,44 +219,56 @@
       const tStart = fmtClock(s.sAbs);
       const tEnd   = fmtClock(s.eAbs);
       // prep/cleanup slots are faded and labelled with their role + activity title
-      const heading = s.role === 'main' ? `${s.title} ${s.emoji}` : `${roleLabel[s.role]}: ${s.title}`;
+      const heading = s.role === 'main' ? s.title : `${roleLabel[s.role]}: ${s.title}`;
       const id = 's' + s.segId;
+      segLookup[id] = { seg: s, act: slotById[s.id] };   // every slot is independently editable
       // data-id on the time span lets onMoving update it in the DOM directly (no DataSet churn)
-      const content =
-        `<div class="ev-title">${left}${heading}${right}</div>` +
-        `<div class="ev-meta"><span class="ev-time" data-id="${id}">${tStart}–${tEnd}</span>${orgs}</div>`;
-      items.add({
+      return {
         id, group: s.day,
         start: mToDate(s.fromM), end: mToDate(s.toM),
-        content,
-        className: 'cat-' + s.cat + (s.role !== 'main' ? ' margin' : '') +
+        content:
+          `<div class="ev-title">${left}${heading}${right}</div>` +
+          `<div class="ev-meta"><span class="ev-time" data-id="${id}">${tStart}–${tEnd}</span>${orgs}</div>`,
+        className: 'cat-' + s.cat + (overlaps.has(s.segId) ? '' : ' solo') +
+                   (s.role !== 'main' ? ' margin' : '') +
                    (s.contBack ? ' cut-l' : '') + (s.contFwd ? ' cut-r' : ''),
-        // no `title` → no static hover tooltip; live drag times come from tooltipOnItemUpdateTime
-      });
-      segLookup[id] = { seg: s, act: slotById[s.id] };   // every slot is independently editable
+      };
     });
+    items.clear();
+    items.add(batch);            // one bulk insert → one redraw, not 120
   }
   render();
 
   const timeline = new vis.Timeline(document.getElementById('tl'), items, groups, {
     stack: true,                 // <-- overlaps stack into sub-lanes within a day row
-    stackSubgroups: true,
+    stackSubgroups: false,       // we assign no subgroups, so skip the extra subgroup-stacking pass
     orientation: { axis: 'top' },
     min: winStart, max: winEnd,  // clamp to the camp-day window
     start: winStart, end: winEnd,
-    editable: { updateTime: true, updateGroup: true, overrideItems: false },
-    // drag/resize immediately, without having to click-select the item first
-    itemsAlwaysDraggable: { item: true, range: true },
+    // start in read-only VIEW mode (the edit-toggle button turns drag/resize on);
+    // constructing it this way avoids a second full render at startup.
+    editable: false,
+    itemsAlwaysDraggable: { item: false, range: false },
     // vis sanitizes item-content HTML by default, which STRIPS our class/data-* attributes
     // (so .ev-title/.ev-meta/.ev-time styling and the data-id hook were being removed). Our
     // content is trusted (we build it), so disable the sanitizer.
     xss: { disabled: true },
-    margin: { item: { horizontal: 0, vertical: 0 } },  // gaps come from a transparent CSS border (see .vis-item)
+    // BOTH gaps come purely from the 2px transparent CSS border (see .vis-item): vertical margin
+    // is 0 so a stacked gap is the same ~4px as a side-by-side gap (a non-zero margin would ADD to
+    // the border, making vertical gaps visibly bigger). Two 36px halves then equal one 72px full
+    // box exactly. Day separation comes from the zebra row tint, not from vertical spacing.
+    margin: { item: { horizontal: 0, vertical: 0 }, axis: 0 },
     zoomMin: 1000 * 60 * 60,     // 1h
     // all days share one reference date, so the top-tier date label ("Thu 1 January")
     // is meaningless noise — hide it and keep only the time-of-day ticks.
     showMajorLabels: false,
     format: { minorLabels: { hour: 'HH:mm' } },
+    zoomKey: 'ctrlKey',          // wheel alone scrolls; zoom only with Ctrl+wheel (+ buttons below)
+    // sticky time axis: bound the timeline to ~viewport height and scroll the day rows INSIDE it,
+    // so the top time-axis stays pinned while you scroll through the 16 days. Paired with the
+    // `position: sticky` on #tl, the header above scrolls away but the time row stays put.
+    verticalScroll: true,
+    maxHeight: Math.max(320, window.innerHeight - 24),
     snap: (date) => {            // snap drags to 15-min grid
       const ms = 15 * 60 * 1000;
       return new Date(Math.round(date / ms) * ms);
@@ -227,6 +288,11 @@
       const ns = winLo + Math.round((new Date(item.start).getTime() - winStart) / 60000);
       const ne = winLo + Math.round((new Date(item.end).getTime()   - winStart) / 60000);
       el.textContent = fmtClock(ns) + '–' + fmtClock(ne);
+      // NOTE: we deliberately do NOT morph box heights mid-drag. vis re-stacks the row during a
+      // drag using each item's CACHED measured height, and a CSS height change isn't re-measured
+      // until a full redraw (which would kill the drag). Toggling heights live therefore desynced
+      // vis's stacking from the visible sizes — leaving half-height gaps and bottom overflow. So
+      // the solo/half heights + re-stacking are applied on RELEASE (onMove → render()) instead.
     },
     // Intercept every drag/resize: map it onto the owning ACTIVITY (so both halves
     // of a span move together), cancel vis's own mutation, and re-render. Dragging
@@ -247,10 +313,13 @@
   // ---- edit-mode toggle: gate drag/resize on a button (view mode by default) -------------
   let editEnabled = false;
   const editBtn = document.getElementById('editToggle');
-  function applyEditMode() {
+  function syncEditUI() {
     editBtn.classList.toggle('on', editEnabled);
     editBtn.innerHTML = editEnabled ? '✓&nbsp;Úpravy zapnuty' : '✎&nbsp;Úpravy';
     document.getElementById('tl').classList.toggle('edit-on', editEnabled);
+  }
+  function applyEditMode() {
+    syncEditUI();
     // editable:false alone is NOT enough — itemsAlwaysDraggable keeps items draggable even then,
     // so it must be turned off too for a true read-only view mode.
     timeline.setOptions({
@@ -260,7 +329,33 @@
     render();   // re-add items so each picks up the new editability (vis won't refresh it in place)
   }
   editBtn.addEventListener('click', () => { editEnabled = !editEnabled; applyEditMode(); });
-  applyEditMode();                               // start in view mode
+  syncEditUI();   // init: UI only — timeline is already constructed in view mode, items already rendered
+
+  // zoom buttons (wheel-zoom needs Ctrl via zoomKey; these are the no-keyboard alternative)
+  document.getElementById('zoomIn').addEventListener('click', () => timeline.zoomIn(0.5));
+  document.getElementById('zoomOut').addEventListener('click', () => timeline.zoomOut(0.5));
+
+  // highlight the day row under the cursor (the row AND its left label). Group ids are 0..N in
+  // DAYS order, which matches the DOM order of the labels/rows, so we index by group id.
+  const tlEl = document.getElementById('tl');
+  // vis sets an inline position:relative on the container; re-assert sticky so the timeline pins
+  // to the viewport top (header scrolls away, time-axis row stays put).
+  tlEl.style.position = 'sticky';
+  tlEl.style.top = '0';
+  let hoveredGroup = null;
+  const clearHover = () => tlEl.querySelectorAll('.day-hover').forEach((el) => el.classList.remove('day-hover'));
+  tlEl.addEventListener('mousemove', (e) => {
+    const g = timeline.getEventProperties(e).group;
+    if (g === hoveredGroup) return;
+    hoveredGroup = g;
+    clearHover();
+    if (g == null) return;
+    const labels = tlEl.querySelectorAll('.vis-labelset .vis-label');
+    const rows   = tlEl.querySelectorAll('.vis-foreground .vis-group');
+    if (labels[g]) labels[g].classList.add('day-hover');
+    if (rows[g])   rows[g].classList.add('day-hover');
+  });
+  tlEl.addEventListener('mouseleave', () => { clearHover(); hoveredGroup = null; });
 
   // ---- details modal: single-click (view) / double-click (edit) opens it -----------------
   const roleName = { main: 'hlavní program', prep: 'příprava', cleanup: 'úklid' };
@@ -275,7 +370,7 @@
     const e = segLookup[id];
     if (!e) return;
     const a = e.act, c = CATEGORIES[a.cat] || {};
-    document.getElementById('m-title').textContent = (a.title + (a.emoji ? ' ' + a.emoji : '')).trim();
+    document.getElementById('m-title').textContent = a.title;
     document.getElementById('m-cat').innerHTML =
       `<span class="m-chip" style="background:${c.color || '#ccc'}"></span>${c.label || a.cat}`;
     document.getElementById('m-when').textContent = `${fmtDateTime(a.sAbs)} → ${fmtDateTime(a.eAbs)}`;

@@ -29,7 +29,7 @@
                 font-size: 10px; color: #999; border-left: 1px solid #eee; padding-left: 0; }
 
   /* one row per day */
-  .day-row { display: flex; align-items: stretch; border-top: 1px solid #eee; }
+  .day-row { display: flex; align-items: stretch; border-top: 2px solid #9aa3b2; }
   .day-row .label-w { display: flex; flex-direction: column; justify-content: center;
                       padding: 4px 8px; font-weight: 600; background: #fff; }
   .day-row .label-w small { font-weight: 400; color: #888; }
@@ -39,9 +39,10 @@
      repeating-linear-gradient(to right, transparent, transparent calc(100%/44 - 1px),
        #f0f0f0 calc(100%/44 - 1px), #f0f0f0 calc(100%/44)); }
 
-  /* event cards. cursor: pointer = clickable (view mode); grab once editing is on */
+  /* event cards. cursor: pointer = clickable (view mode); grab once editing is on.
+     Tight vertical padding keeps boxes short so more day-rows fit without scrolling. */
   .grid-stack-item-content { border-radius: 3px; color: #fff; font-size: 11px;
-     padding: 4px 6px; overflow: hidden; box-sizing: border-box; cursor: pointer; }
+     padding: 1px 6px; overflow: hidden; box-sizing: border-box; cursor: pointer; }
   #board.edit-on .grid-stack-item-content { cursor: grab; }
   .ev-title { font-weight: 600; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
   .ev-meta { opacity: .9; font-size: 10px; }
@@ -218,6 +219,17 @@
       // every slot (main / prep / cleanup) packs into lanes by its own interval
       dayProgs.forEach((p) => { p.lo = p.fromM; p.hi = p.toM; });
       const laneCount = assignLanes(dayProgs);
+      // Per-ITEM height: a slot that overlaps another is HALF height (1 cell) and stacks into
+      // its lane; a slot that overlaps nobody keeps FULL (double, 2-cell) height. A
+      // non-overlapping slot always lands in lane 0 (greedy packing leaves it free), so its
+      // 2-cell box never collides with the stacked items elsewhere in the row.
+      const overlapping = new Set();
+      for (let i = 0; i < dayProgs.length; i++)
+        for (let j = i + 1; j < dayProgs.length; j++)
+          if (dayProgs[i].lo < dayProgs[j].hi && dayProgs[j].lo < dayProgs[i].hi) {
+            overlapping.add(dayProgs[i]); overlapping.add(dayProgs[j]);
+          }
+      const rows = Math.max(2, laneCount);   // ≥2 so full-height (2-cell) boxes always fit
 
       const row = document.createElement('div');
       row.className = 'day-row';
@@ -227,7 +239,7 @@
 
       const grid = GridStack.init({
         column: COLS,                  // 88 day columns + spill runway (15-min slots)
-        cellHeight: 44,
+        cellHeight: 32,                // shorter rows → more days visible at once
         margin: 2,
         float: true,                   // keep items where placed (no upward gravity)
         acceptWidgets: true,           // allow dragging widgets in from other day-grids
@@ -235,8 +247,8 @@
         alwaysShowResizeHandle: true,  // narrow boxes are otherwise hard to grab
         disableDrag: !editEnabled,     // view mode by default; toggled by the edit button
         disableResize: !editEnabled,
-        minRow: laneCount || 1,
-        maxRow: laneCount + 1,         // cap height: used lanes + at most ONE empty row
+        minRow: rows,
+        maxRow: rows + 1,              // cap height: used rows + at most ONE empty row
       }, row.querySelector('.grid-stack'));
       grids.push(grid);
 
@@ -264,10 +276,11 @@
         // show the activity's true start–end on every segment; « » arrows mark continuation
         const tStart = fmtClock(p.sAbs);
         const tEnd   = fmtClock(p.eAbs);
-        const heading = p.role === 'main' ? `${p.title} ${p.emoji}` : `${roleLabel[p.role]}: ${p.title}`;
+        const heading = p.role === 'main' ? p.title : `${roleLabel[p.role]}: ${p.title}`;
         const id = 's' + p.segId;
+        const full = !overlapping.has(p);          // overlaps nobody → full (double) height
         const el = grid.addWidget({
-          x, y: p.lane, w, h: 1, id,
+          x, y: full ? 0 : p.lane, w, h: full ? 2 : 1, id,
           content: `<div class="ev-title">${left}${heading}${right}</div>` +
                    `<div class="ev-meta"><span class="ev-time">${tStart}–${tEnd}</span>${orgs}</div>`,
         });

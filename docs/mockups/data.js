@@ -7,8 +7,9 @@
  * identical, realistic data.
  *
  * NOTE: Google Calendar's iCal export carries no per-event colour/category, so
- * `cat` here is INFERRED by keyword (meals/lectures/exercise/org recognised by
- * name; everything else defaults to `game`). Times stored as UTC in the export
+ * `cat` here was INFERRED by keyword (jídlo/přednáška/rozcvička/org recognised by
+ * name; everything else defaults to `hra-fyzicka`). The values are the category
+ * keys used by CATEGORIES below (and by the seed-demo CLI). Times stored as UTC in the export
  * were converted to Europe/Prague (UTC+2, July DST); the one all-day event was
  * dropped (per the no-allDay decision).
  *
@@ -28,13 +29,13 @@ const DAY_MIN          = 24 * 60;  // 1440
 
 // Category → Google-Calendar-like colors (mirrors what we use today).
 const CATEGORIES = {
-  exercise: { label: 'Rozcvička',     color: '#e67c73', text: '#fff' }, // flamingo
-  meal:     { label: 'Jídlo',         color: '#4285f4', text: '#fff' }, // blueberry
-  lecture:  { label: 'Přednáška',     color: '#f6bf26', text: '#3c3c3c' }, // banana
-  game:     { label: 'Hra',           color: '#0b8043', text: '#fff' }, // basil
-  biggame:  { label: 'Velká hra',     color: '#7986cb', text: '#fff' }, // lavender
-  trip:     { label: 'Výlet / blok',  color: '#33b679', text: '#fff' }, // sage
-  org:      { label: 'Orgování',      color: '#f4511e', text: '#fff' }, // tangerine
+  'rozcvicka':      { label: 'Rozcvička',      color: '#e67c73', text: '#fff' }, // flamingo
+  'jidlo':          { label: 'Jídlo',          color: '#4285f4', text: '#fff' }, // blueberry
+  'prednaska':      { label: 'Přednáška',      color: '#f6bf26', text: '#3c3c3c' }, // banana
+  'hra-fyzicka':    { label: 'Fyzická hra',    color: '#0b8043', text: '#fff' }, // basil
+  'hra-premysleci': { label: 'Přemýšlecí hra', color: '#7986cb', text: '#fff' }, // lavender
+  'hra-klidna':     { label: 'Klidná hra',     color: '#33b679', text: '#fff' }, // sage
+  'org':            { label: 'Orgování',       color: '#f4511e', text: '#fff' }, // tangerine
 };
 
 // Day 0 of the camp = midnight of this date; absolute minutes are measured from here.
@@ -65,121 +66,121 @@ const DAYS = [
 // `cat` is inferred by keyword (iCal carries no colour). Optional per-event
 // `prep`/`cleanup: { start, end }` ISO datetimes add independent prep/cleanup slots.
 const EVENTS = [
-  { t: 'Seznamky', start: '2026-07-04T14:30', end: '2026-07-04T18:00', cat: 'game', emoji: '🫱🫲🤝', orgs: 'Á+L' },
-  { t: 'S paní v lese', start: '2026-07-04T18:00', end: '2026-07-05T08:00', cat: 'trip', emoji: '🏞️🌲🌜😴', orgs: 'O,V' },
-  { t: 'Přednáška', start: '2026-07-05T08:30', end: '2026-07-05T10:15', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Ptáčata', start: '2026-07-05T10:30', end: '2026-07-05T12:30', cat: 'game', emoji: '🏃‍♀️🏃‍♂️‍➡️🦆🐓🦃🦅🕊️🦢🦜🦩🐦‍🔥🪿🐦‍⬛🦚🦉🦤🐦🐧🐥', orgs: 'O' },
-  { t: 'Obíííídek', start: '2026-07-05T12:30', end: '2026-07-05T14:15', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-05T14:30', end: '2026-07-05T16:15', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Stratego', start: '2026-07-05T16:30', end: '2026-07-05T19:15', cat: 'game', emoji: '🤔👉👎☠️👍👌', orgs: 'K,M' },
-  { t: 'Vééééča', start: '2026-07-05T19:30', end: '2026-07-05T20:45', cat: 'meal', emoji: '', orgs: '' },
-  { t: 'Banáni', start: '2026-07-05T22:00', end: '2026-07-06T02:30', cat: 'game', emoji: '🧄🧅🥕🍌🏃‍♀️‍➡️🏃‍♂️‍➡️🧑‍🤝‍🧑', orgs: 'K,B,O' },
-  { t: 'Fyzcvička', start: '2026-07-06T08:00', end: '2026-07-06T08:30', cat: 'exercise', emoji: '', orgs: '' },
-  { t: 'Snída', start: '2026-07-06T08:30', end: '2026-07-06T09:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-06T09:00', end: '2026-07-06T10:45', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Život', start: '2026-07-06T10:45', end: '2026-07-06T14:00', cat: 'biggame', emoji: '👩‍🍼👶👧👩‍🎓🧑‍🦱👨‍💻💑👨‍👩‍👧‍👦👴☠️', orgs: 'H,L,V' },
-  { t: 'Obíííídek', start: '2026-07-06T14:00', end: '2026-07-06T15:45', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-06T15:45', end: '2026-07-06T17:30', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Divadla', start: '2026-07-06T17:30', end: '2026-07-06T20:30', cat: 'biggame', emoji: '🏃‍♂️‍➡️🏃‍♀️‍➡️📑👑👗🦺🪭🎭', orgs: 'Á,M,B' },
-  { t: 'Vééééča', start: '2026-07-06T20:30', end: '2026-07-06T21:45', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-06T21:00', end: '2026-07-06T21:30', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Začátek trifidů', start: '2026-07-06T22:00', end: '2026-07-06T23:00', cat: 'biggame', emoji: '🧣🕶️', orgs: 'V,O,L' },
-  { t: 'Trifidí dopoledne', start: '2026-07-07T08:30', end: '2026-07-07T12:30', cat: 'biggame', emoji: '👩‍🦯‍➡️👨‍🦯‍➡️🧗‍♀️🪂🏞️🏃‍♂️‍➡️🔪🤾‍♀️', orgs: '' },
-  { t: 'Snída', start: '2026-07-07T09:00', end: '2026-07-07T09:30', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Obíííídek', start: '2026-07-07T12:30', end: '2026-07-07T14:15', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Trifidí odpo', start: '2026-07-07T14:15', end: '2026-07-07T17:15', cat: 'biggame', emoji: '👃👂😛💻📖', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-07T17:15', end: '2026-07-07T19:00', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Trifidi zakončení', start: '2026-07-07T20:15', end: '2026-07-07T21:45', cat: 'biggame', emoji: '📖🐉🧌🧞‍♀️😴🛏️', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-07T22:30', end: '2026-07-07T23:00', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Snída', start: '2026-07-08T08:00', end: '2026-07-08T08:30', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Trifidí reflexe', start: '2026-07-08T08:00', end: '2026-07-08T09:00', cat: 'org', emoji: '', orgs: 'V,O,L' },
-  { t: 'Anotovat výlety', start: '2026-07-08T09:00', end: '2026-07-08T09:45', cat: 'org', emoji: '', orgs: 'H,J,M' },
-  { t: 'Přednáška', start: '2026-07-08T09:00', end: '2026-07-08T10:45', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Barvičky', start: '2026-07-08T10:45', end: '2026-07-08T12:15', cat: 'game', emoji: '🏃‍♂️‍➡️🏃‍♀️‍➡️🔫🟥🟨🟩🟦🟪', orgs: 'J,M' },
-  { t: 'Obíííídek', start: '2026-07-08T12:30', end: '2026-07-08T14:15', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-08T13:15', end: '2026-07-08T13:45', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Obchodka', start: '2026-07-08T14:15', end: '2026-07-08T16:45', cat: 'game', emoji: '🤝💰💴💵💶💷💳🪙', orgs: 'V,J,K' },
-  { t: 'Přednáška', start: '2026-07-08T16:45', end: '2026-07-08T18:30', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Empatická +Ohýnek večeře', start: '2026-07-08T18:30', end: '2026-07-08T23:00', cat: 'meal', emoji: '🧑‍🤝‍🧑🤔🤝🧀🌭🔥🎸🎶', orgs: 'L,Á' },
-  { t: 'Snída', start: '2026-07-09T08:30', end: '2026-07-09T09:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Výlet', start: '2026-07-09T09:00', end: '2026-07-09T18:00', cat: 'trip', emoji: '🚶‍♀️‍➡️🚶‍♂️‍➡️🧭🗺️⛰️🛤️🏞️🌄🧺', orgs: 'H,J,M' },
-  { t: 'Vééééča', start: '2026-07-09T18:15', end: '2026-07-09T19:30', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-09T18:45', end: '2026-07-09T19:15', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Vědomostní kvíz', start: '2026-07-09T19:30', end: '2026-07-09T22:00', cat: 'biggame', emoji: '🤔🔬🎥📚📐🌌🏛️❔❕', orgs: 'Á,L,M' },
-  { t: 'Přednáška', start: '2026-07-10T08:00', end: '2026-07-10T09:45', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Tvořko', start: '2026-07-10T09:45', end: '2026-07-10T12:15', cat: 'biggame', emoji: '🪡🧶🛠️🖌️🖍️✒️', orgs: 'H,L' },
-  { t: 'Obíííídek', start: '2026-07-10T12:15', end: '2026-07-10T14:00', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'NLH +Elementi', start: '2026-07-10T14:00', end: '2026-07-10T17:30', cat: 'trip', emoji: '🧰🔥💧🪵🪨➡️🤔🎲🃏', orgs: 'Á +L,J,B' },
-  { t: 'Přednáška', start: '2026-07-10T17:30', end: '2026-07-10T19:15', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Vééééča', start: '2026-07-10T19:15', end: '2026-07-10T20:30', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-10T19:45', end: '2026-07-10T20:15', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Spink před moc', start: '2026-07-10T22:00', end: '2026-07-10T23:15', cat: 'org', emoji: '😴💤', orgs: '' },
-  { t: 'MocV1', start: '2026-07-11T00:00', end: '2026-07-12T00:00', cat: 'biggame', emoji: '🕰️🏃‍♀️‍➡️', orgs: '' },
-  { t: 'Fukční', start: '2026-07-11T08:00', end: '2026-07-11T10:15', cat: 'game', emoji: '🏃‍♀️‍➡️🏃‍♂️‍➡️📏📐📈📉', orgs: 'H,P' },
-  { t: 'Přednáška', start: '2026-07-11T10:15', end: '2026-07-11T12:00', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-11T13:45', end: '2026-07-11T15:30', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Salónky', start: '2026-07-11T15:30', end: '2026-07-11T19:00', cat: 'game', emoji: '🚪🧮🤔➕➖✖️➗', orgs: 'J,K' },
-  { t: 'Plížící', start: '2026-07-11T21:00', end: '2026-07-11T23:15', cat: 'game', emoji: '🤫🙈🔍🔦🌲🌙', orgs: 'K,J' },
-  { t: 'Fyzcvička', start: '2026-07-12T08:00', end: '2026-07-12T08:30', cat: 'exercise', emoji: '', orgs: '' },
-  { t: 'Snída', start: '2026-07-12T08:30', end: '2026-07-12T09:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-12T09:00', end: '2026-07-12T10:45', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Roboti vymýšlení', start: '2026-07-12T10:45', end: '2026-07-12T12:45', cat: 'lecture', emoji: '🤖🤔👅', orgs: 'J,B' },
-  { t: 'Roboti 1. předvádění', start: '2026-07-12T12:45', end: '2026-07-12T13:15', cat: 'org', emoji: '🤖💃🕺📸', orgs: 'J,B' },
-  { t: 'Obíííídek', start: '2026-07-12T13:15', end: '2026-07-12T15:00', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Roboti předvádění', start: '2026-07-12T15:00', end: '2026-07-12T17:00', cat: 'org', emoji: '🤖📋👩‍💼👨‍💼', orgs: 'J,B' },
-  { t: 'Šifrovačka', start: '2026-07-12T17:30', end: '2026-07-13T04:00', cat: 'game', emoji: '📝🤔🔍🔦🚶‍♀️‍➡️🚶‍♂️‍➡️🎒', orgs: 'Á,K,P' },
-  { t: 'Fyzcvička', start: '2026-07-13T09:00', end: '2026-07-13T09:30', cat: 'exercise', emoji: '', orgs: '' },
-  { t: 'Snída', start: '2026-07-13T09:30', end: '2026-07-13T10:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-13T10:00', end: '2026-07-13T11:45', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Směnkovací', start: '2026-07-13T11:45', end: '2026-07-13T14:00', cat: 'game', emoji: '🤸‍♀️💪🤝💵', orgs: 'V,H,M' },
-  { t: 'Obíííídek', start: '2026-07-13T14:15', end: '2026-07-13T16:00', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Edge', start: '2026-07-13T16:00', end: '2026-07-13T18:45', cat: 'game', emoji: '💀➡️🔄️🎼💣🏀', orgs: 'V,J,P' },
-  { t: 'Přednáška', start: '2026-07-13T20:15', end: '2026-07-13T22:00', cat: 'lecture', emoji: '👩‍🏫👩‍🎓📐📒', orgs: '' },
-  { t: 'Noc, kdy se spí', start: '2026-07-13T22:00', end: '2026-07-14T07:00', cat: 'game', emoji: '😴💤🌑🌒🌓🌔🌕🌖🌗🌘🛏️', orgs: 'L' },
-  { t: 'Fyzcvička', start: '2026-07-14T07:00', end: '2026-07-14T07:30', cat: 'exercise', emoji: '', orgs: '' },
-  { t: 'Snída', start: '2026-07-14T07:30', end: '2026-07-14T08:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Náboj', start: '2026-07-14T08:00', end: '2026-07-14T12:15', cat: 'game', emoji: '💻📝📐📈🧮☢️♾️🚀👩‍🎓👨‍🎓', orgs: 'P,K,Á' },
-  { t: 'Obíííídek', start: '2026-07-14T12:30', end: '2026-07-14T14:15', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-14T13:15', end: '2026-07-14T13:45', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Grandswang', start: '2026-07-14T14:30', end: '2026-07-15T08:00', cat: 'biggame', emoji: '', orgs: 'O,B' },
-  { t: 'GP', start: '2026-07-14T16:30', end: '2026-07-14T18:15', cat: 'game', emoji: '', orgs: 'P,O' },
-  { t: 'Vééééča', start: '2026-07-14T18:15', end: '2026-07-14T19:00', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Grafohra', start: '2026-07-14T19:00', end: '2026-07-14T22:00', cat: 'game', emoji: '', orgs: 'K,L,P' },
-  { t: 'Večeře 2.0', start: '2026-07-14T22:00', end: '2026-07-14T22:45', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-14T23:00', end: '2026-07-15T00:30', cat: 'lecture', emoji: '', orgs: '' },
-  { t: 'Swang', start: '2026-07-15T00:30', end: '2026-07-15T03:30', cat: 'biggame', emoji: '', orgs: 'O,J' },
-  { t: 'Fyzcvička', start: '2026-07-15T10:00', end: '2026-07-15T10:30', cat: 'exercise', emoji: '', orgs: '' },
-  { t: 'Snída', start: '2026-07-15T10:30', end: '2026-07-15T11:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Mamuti', start: '2026-07-15T11:00', end: '2026-07-15T13:30', cat: 'biggame', emoji: '', orgs: 'L,J,V' },
-  { t: 'Mamutí oběd', start: '2026-07-15T13:30', end: '2026-07-15T16:30', cat: 'meal', emoji: '', orgs: 'L,J,V' },
-  { t: 'Přednáška', start: '2026-07-15T16:30', end: '2026-07-15T18:15', cat: 'lecture', emoji: '', orgs: '' },
-  { t: 'Vééééča', start: '2026-07-15T18:30', end: '2026-07-15T19:45', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-15T19:00', end: '2026-07-15T19:30', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Příprava kačera', start: '2026-07-15T19:30', end: '2026-07-15T20:00', cat: 'org', emoji: '', orgs: '' },
-  { t: 'Kačer', start: '2026-07-15T20:00', end: '2026-07-16T01:00', cat: 'biggame', emoji: '', orgs: 'H (Á,B,L)' },
-  { t: 'Přednáška', start: '2026-07-16T08:00', end: '2026-07-16T09:45', cat: 'lecture', emoji: '', orgs: '' },
-  { t: 'Byrokracie', start: '2026-07-16T09:45', end: '2026-07-16T13:00', cat: 'org', emoji: '', orgs: 'V,B,(K,J)' },
-  { t: 'Obíííídek', start: '2026-07-16T13:00', end: '2026-07-16T14:45', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-16T14:45', end: '2026-07-16T16:30', cat: 'lecture', emoji: '', orgs: '' },
-  { t: 'Hra na velkém území + véča', start: '2026-07-16T16:30', end: '2026-07-16T22:45', cat: 'biggame', emoji: '', orgs: 'H,B,P' },
-  { t: 'Vééééča (pro orgy)', start: '2026-07-16T19:00', end: '2026-07-16T20:15', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'OVčko', start: '2026-07-16T21:00', end: '2026-07-16T23:00', cat: 'game', emoji: '', orgs: 'M' },
-  { t: 'Přednáška', start: '2026-07-17T08:00', end: '2026-07-17T09:45', cat: 'lecture', emoji: '', orgs: '' },
-  { t: 'Jezero', start: '2026-07-17T09:45', end: '2026-07-17T12:45', cat: 'trip', emoji: '', orgs: 'J,B,V' },
-  { t: 'Obíííídek', start: '2026-07-17T12:45', end: '2026-07-17T14:30', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Jezero reflexe', start: '2026-07-17T14:30', end: '2026-07-17T15:30', cat: 'org', emoji: '', orgs: '' },
-  { t: 'Fiodpo', start: '2026-07-17T15:30', end: '2026-07-17T19:45', cat: 'game', emoji: '', orgs: 'V,H,K,P' },
-  { t: 'Vééééča', start: '2026-07-17T19:45', end: '2026-07-17T21:00', cat: 'meal', emoji: '🥗🌮', orgs: '' },
-  { t: 'Orgokokodák', start: '2026-07-17T20:15', end: '2026-07-17T20:45', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Gamebook', start: '2026-07-17T21:30', end: '2026-07-18T00:30', cat: 'biggame', emoji: '', orgs: 'H,J,Á,V-rit' },
-  { t: 'Fyzcvička', start: '2026-07-18T09:00', end: '2026-07-18T09:30', cat: 'exercise', emoji: '', orgs: '' },
-  { t: 'Snída', start: '2026-07-18T09:30', end: '2026-07-18T10:00', cat: 'meal', emoji: '🍳🥓🥞', orgs: '' },
-  { t: 'Přednáška', start: '2026-07-18T10:00', end: '2026-07-18T11:45', cat: 'lecture', emoji: '', orgs: '' },
-  { t: 'Obíííídek', start: '2026-07-18T12:00', end: '2026-07-18T13:00', cat: 'meal', emoji: '🍗🥩🍛🥘', orgs: '' },
-  { t: 'Vzpomínkovka', start: '2026-07-18T13:00', end: '2026-07-18T17:00', cat: 'game', emoji: '', orgs: 'J,O' },
-  { t: 'Orgokokodák', start: '2026-07-18T17:15', end: '2026-07-18T18:00', cat: 'org', emoji: '🛋️🕰️🎉🧹', orgs: '' },
-  { t: 'Žraut', start: '2026-07-18T18:00', end: '2026-07-19T08:00', cat: 'biggame', emoji: '', orgs: 'L,M' },
-  { t: 'Úklid', start: '2026-07-19T08:00', end: '2026-07-19T14:00', cat: 'org', emoji: '', orgs: 'K,P' },
+  { t: 'Seznamky 🫱🫲🤝', start: '2026-07-04T14:30', end: '2026-07-04T18:00', cat: 'hra-fyzicka', orgs: 'Á+L' },
+  { t: 'S paní v lese 🏞️🌲🌜😴', start: '2026-07-04T18:00', end: '2026-07-05T08:00', cat: 'hra-klidna', orgs: 'O,V' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-05T08:30', end: '2026-07-05T10:15', cat: 'prednaska', orgs: '' },
+  { t: 'Ptáčata 🏃‍♀️🏃‍♂️‍➡️🦆🐓🦃🦅🕊️🦢🦜🦩🐦‍🔥🪿🐦‍⬛🦚🦉🦤🐦🐧🐥', start: '2026-07-05T10:30', end: '2026-07-05T12:30', cat: 'hra-fyzicka', orgs: 'O' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-05T12:30', end: '2026-07-05T14:15', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-05T14:30', end: '2026-07-05T16:15', cat: 'prednaska', orgs: '' },
+  { t: 'Stratego 🤔👉👎☠️👍👌', start: '2026-07-05T16:30', end: '2026-07-05T19:15', cat: 'hra-fyzicka', orgs: 'K,M' },
+  { t: 'Vééééča', start: '2026-07-05T19:30', end: '2026-07-05T20:45', cat: 'jidlo', orgs: '' },
+  { t: 'Banáni 🧄🧅🥕🍌🏃‍♀️‍➡️🏃‍♂️‍➡️🧑‍🤝‍🧑', start: '2026-07-05T22:00', end: '2026-07-06T02:30', cat: 'hra-fyzicka', orgs: 'K,B,O' },
+  { t: 'Fyzcvička', start: '2026-07-06T08:00', end: '2026-07-06T08:30', cat: 'rozcvicka', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-06T08:30', end: '2026-07-06T09:00', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-06T09:00', end: '2026-07-06T10:45', cat: 'prednaska', orgs: '' },
+  { t: 'Život 👩‍🍼👶👧👩‍🎓🧑‍🦱👨‍💻💑👨‍👩‍👧‍👦👴☠️', start: '2026-07-06T10:45', end: '2026-07-06T14:00', cat: 'hra-premysleci', orgs: 'H,L,V' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-06T14:00', end: '2026-07-06T15:45', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-06T15:45', end: '2026-07-06T17:30', cat: 'prednaska', orgs: '' },
+  { t: 'Divadla 🏃‍♂️‍➡️🏃‍♀️‍➡️📑👑👗🦺🪭🎭', start: '2026-07-06T17:30', end: '2026-07-06T20:30', cat: 'hra-premysleci', orgs: 'Á,M,B' },
+  { t: 'Vééééča 🥗🌮', start: '2026-07-06T20:30', end: '2026-07-06T21:45', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-06T21:00', end: '2026-07-06T21:30', cat: 'org', orgs: '' },
+  { t: 'Začátek trifidů 🧣🕶️', start: '2026-07-06T22:00', end: '2026-07-06T23:00', cat: 'hra-premysleci', orgs: 'V,O,L' },
+  { t: 'Trifidí dopoledne 👩‍🦯‍➡️👨‍🦯‍➡️🧗‍♀️🪂🏞️🏃‍♂️‍➡️🔪🤾‍♀️', start: '2026-07-07T08:30', end: '2026-07-07T12:30', cat: 'hra-premysleci', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-07T09:00', end: '2026-07-07T09:30', cat: 'jidlo', orgs: '' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-07T12:30', end: '2026-07-07T14:15', cat: 'jidlo', orgs: '' },
+  { t: 'Trifidí odpo 👃👂😛💻📖', start: '2026-07-07T14:15', end: '2026-07-07T17:15', cat: 'hra-premysleci', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-07T17:15', end: '2026-07-07T19:00', cat: 'prednaska', orgs: '' },
+  { t: 'Trifidi zakončení 📖🐉🧌🧞‍♀️😴🛏️', start: '2026-07-07T20:15', end: '2026-07-07T21:45', cat: 'hra-premysleci', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-07T22:30', end: '2026-07-07T23:00', cat: 'org', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-08T08:00', end: '2026-07-08T08:30', cat: 'jidlo', orgs: '' },
+  { t: 'Trifidí reflexe', start: '2026-07-08T08:00', end: '2026-07-08T09:00', cat: 'org', orgs: 'V,O,L' },
+  { t: 'Anotovat výlety', start: '2026-07-08T09:00', end: '2026-07-08T09:45', cat: 'org', orgs: 'H,J,M' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-08T09:00', end: '2026-07-08T10:45', cat: 'prednaska', orgs: '' },
+  { t: 'Barvičky 🏃‍♂️‍➡️🏃‍♀️‍➡️🔫🟥🟨🟩🟦🟪', start: '2026-07-08T10:45', end: '2026-07-08T12:15', cat: 'hra-fyzicka', orgs: 'J,M' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-08T12:30', end: '2026-07-08T14:15', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-08T13:15', end: '2026-07-08T13:45', cat: 'org', orgs: '' },
+  { t: 'Obchodka 🤝💰💴💵💶💷💳🪙', start: '2026-07-08T14:15', end: '2026-07-08T16:45', cat: 'hra-fyzicka', orgs: 'V,J,K' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-08T16:45', end: '2026-07-08T18:30', cat: 'prednaska', orgs: '' },
+  { t: 'Empatická +Ohýnek večeře 🧑‍🤝‍🧑🤔🤝🧀🌭🔥🎸🎶', start: '2026-07-08T18:30', end: '2026-07-08T23:00', cat: 'jidlo', orgs: 'L,Á' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-09T08:30', end: '2026-07-09T09:00', cat: 'jidlo', orgs: '' },
+  { t: 'Výlet 🚶‍♀️‍➡️🚶‍♂️‍➡️🧭🗺️⛰️🛤️🏞️🌄🧺', start: '2026-07-09T09:00', end: '2026-07-09T18:00', cat: 'hra-klidna', orgs: 'H,J,M' },
+  { t: 'Vééééča 🥗🌮', start: '2026-07-09T18:15', end: '2026-07-09T19:30', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-09T18:45', end: '2026-07-09T19:15', cat: 'org', orgs: '' },
+  { t: 'Vědomostní kvíz 🤔🔬🎥📚📐🌌🏛️❔❕', start: '2026-07-09T19:30', end: '2026-07-09T22:00', cat: 'hra-premysleci', orgs: 'Á,L,M' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-10T08:00', end: '2026-07-10T09:45', cat: 'prednaska', orgs: '' },
+  { t: 'Tvořko 🪡🧶🛠️🖌️🖍️✒️', start: '2026-07-10T09:45', end: '2026-07-10T12:15', cat: 'hra-premysleci', orgs: 'H,L' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-10T12:15', end: '2026-07-10T14:00', cat: 'jidlo', orgs: '' },
+  { t: 'NLH +Elementi 🧰🔥💧🪵🪨➡️🤔🎲🃏', start: '2026-07-10T14:00', end: '2026-07-10T17:30', cat: 'hra-klidna', orgs: 'Á +L,J,B' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-10T17:30', end: '2026-07-10T19:15', cat: 'prednaska', orgs: '' },
+  { t: 'Vééééča 🥗🌮', start: '2026-07-10T19:15', end: '2026-07-10T20:30', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-10T19:45', end: '2026-07-10T20:15', cat: 'org', orgs: '' },
+  { t: 'Spink před moc 😴💤', start: '2026-07-10T22:00', end: '2026-07-10T23:15', cat: 'org', orgs: '' },
+  { t: 'MocV1 🕰️🏃‍♀️‍➡️', start: '2026-07-11T00:00', end: '2026-07-12T00:00', cat: 'hra-premysleci', orgs: '' },
+  { t: 'Fukční 🏃‍♀️‍➡️🏃‍♂️‍➡️📏📐📈📉', start: '2026-07-11T08:00', end: '2026-07-11T10:15', cat: 'hra-fyzicka', orgs: 'H,P' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-11T10:15', end: '2026-07-11T12:00', cat: 'prednaska', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-11T13:45', end: '2026-07-11T15:30', cat: 'prednaska', orgs: '' },
+  { t: 'Salónky 🚪🧮🤔➕➖✖️➗', start: '2026-07-11T15:30', end: '2026-07-11T19:00', cat: 'hra-fyzicka', orgs: 'J,K' },
+  { t: 'Plížící 🤫🙈🔍🔦🌲🌙', start: '2026-07-11T21:00', end: '2026-07-11T23:15', cat: 'hra-fyzicka', orgs: 'K,J' },
+  { t: 'Fyzcvička', start: '2026-07-12T08:00', end: '2026-07-12T08:30', cat: 'rozcvicka', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-12T08:30', end: '2026-07-12T09:00', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-12T09:00', end: '2026-07-12T10:45', cat: 'prednaska', orgs: '' },
+  { t: 'Roboti vymýšlení 🤖🤔👅', start: '2026-07-12T10:45', end: '2026-07-12T12:45', cat: 'prednaska', orgs: 'J,B' },
+  { t: 'Roboti 1. předvádění 🤖💃🕺📸', start: '2026-07-12T12:45', end: '2026-07-12T13:15', cat: 'org', orgs: 'J,B' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-12T13:15', end: '2026-07-12T15:00', cat: 'jidlo', orgs: '' },
+  { t: 'Roboti předvádění 🤖📋👩‍💼👨‍💼', start: '2026-07-12T15:00', end: '2026-07-12T17:00', cat: 'org', orgs: 'J,B' },
+  { t: 'Šifrovačka 📝🤔🔍🔦🚶‍♀️‍➡️🚶‍♂️‍➡️🎒', start: '2026-07-12T17:30', end: '2026-07-13T04:00', cat: 'hra-fyzicka', orgs: 'Á,K,P' },
+  { t: 'Fyzcvička', start: '2026-07-13T09:00', end: '2026-07-13T09:30', cat: 'rozcvicka', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-13T09:30', end: '2026-07-13T10:00', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-13T10:00', end: '2026-07-13T11:45', cat: 'prednaska', orgs: '' },
+  { t: 'Směnkovací 🤸‍♀️💪🤝💵', start: '2026-07-13T11:45', end: '2026-07-13T14:00', cat: 'hra-fyzicka', orgs: 'V,H,M' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-13T14:15', end: '2026-07-13T16:00', cat: 'jidlo', orgs: '' },
+  { t: 'Edge 💀➡️🔄️🎼💣🏀', start: '2026-07-13T16:00', end: '2026-07-13T18:45', cat: 'hra-fyzicka', orgs: 'V,J,P' },
+  { t: 'Přednáška 👩‍🏫👩‍🎓📐📒', start: '2026-07-13T20:15', end: '2026-07-13T22:00', cat: 'prednaska', orgs: '' },
+  { t: 'Noc, kdy se spí 😴💤🌑🌒🌓🌔🌕🌖🌗🌘🛏️', start: '2026-07-13T22:00', end: '2026-07-14T07:00', cat: 'hra-fyzicka', orgs: 'L' },
+  { t: 'Fyzcvička', start: '2026-07-14T07:00', end: '2026-07-14T07:30', cat: 'rozcvicka', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-14T07:30', end: '2026-07-14T08:00', cat: 'jidlo', orgs: '' },
+  { t: 'Náboj 💻📝📐📈🧮☢️♾️🚀👩‍🎓👨‍🎓', start: '2026-07-14T08:00', end: '2026-07-14T12:15', cat: 'hra-fyzicka', orgs: 'P,K,Á' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-14T12:30', end: '2026-07-14T14:15', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-14T13:15', end: '2026-07-14T13:45', cat: 'org', orgs: '' },
+  { t: 'Grandswang', start: '2026-07-14T14:30', end: '2026-07-15T08:00', cat: 'hra-premysleci', orgs: 'O,B' },
+  { t: 'GP', start: '2026-07-14T16:30', end: '2026-07-14T18:15', cat: 'hra-fyzicka', orgs: 'P,O' },
+  { t: 'Vééééča 🥗🌮', start: '2026-07-14T18:15', end: '2026-07-14T19:00', cat: 'jidlo', orgs: '' },
+  { t: 'Grafohra', start: '2026-07-14T19:00', end: '2026-07-14T22:00', cat: 'hra-fyzicka', orgs: 'K,L,P' },
+  { t: 'Večeře 2.0 🥗🌮', start: '2026-07-14T22:00', end: '2026-07-14T22:45', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška', start: '2026-07-14T23:00', end: '2026-07-15T00:30', cat: 'prednaska', orgs: '' },
+  { t: 'Swang', start: '2026-07-15T00:30', end: '2026-07-15T03:30', cat: 'hra-premysleci', orgs: 'O,J' },
+  { t: 'Fyzcvička', start: '2026-07-15T10:00', end: '2026-07-15T10:30', cat: 'rozcvicka', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-15T10:30', end: '2026-07-15T11:00', cat: 'jidlo', orgs: '' },
+  { t: 'Mamuti', start: '2026-07-15T11:00', end: '2026-07-15T13:30', cat: 'hra-premysleci', orgs: 'L,J,V' },
+  { t: 'Mamutí oběd', start: '2026-07-15T13:30', end: '2026-07-15T16:30', cat: 'jidlo', orgs: 'L,J,V' },
+  { t: 'Přednáška', start: '2026-07-15T16:30', end: '2026-07-15T18:15', cat: 'prednaska', orgs: '' },
+  { t: 'Vééééča 🥗🌮', start: '2026-07-15T18:30', end: '2026-07-15T19:45', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-15T19:00', end: '2026-07-15T19:30', cat: 'org', orgs: '' },
+  { t: 'Příprava kačera', start: '2026-07-15T19:30', end: '2026-07-15T20:00', cat: 'org', orgs: '' },
+  { t: 'Kačer', start: '2026-07-15T20:00', end: '2026-07-16T01:00', cat: 'hra-premysleci', orgs: 'H (Á,B,L)' },
+  { t: 'Přednáška', start: '2026-07-16T08:00', end: '2026-07-16T09:45', cat: 'prednaska', orgs: '' },
+  { t: 'Byrokracie', start: '2026-07-16T09:45', end: '2026-07-16T13:00', cat: 'org', orgs: 'V,B,(K,J)' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-16T13:00', end: '2026-07-16T14:45', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška', start: '2026-07-16T14:45', end: '2026-07-16T16:30', cat: 'prednaska', orgs: '' },
+  { t: 'Hra na velkém území + véča', start: '2026-07-16T16:30', end: '2026-07-16T22:45', cat: 'hra-premysleci', orgs: 'H,B,P' },
+  { t: 'Vééééča (pro orgy) 🥗🌮', start: '2026-07-16T19:00', end: '2026-07-16T20:15', cat: 'jidlo', orgs: '' },
+  { t: 'OVčko', start: '2026-07-16T21:00', end: '2026-07-16T23:00', cat: 'hra-fyzicka', orgs: 'M' },
+  { t: 'Přednáška', start: '2026-07-17T08:00', end: '2026-07-17T09:45', cat: 'prednaska', orgs: '' },
+  { t: 'Jezero', start: '2026-07-17T09:45', end: '2026-07-17T12:45', cat: 'hra-klidna', orgs: 'J,B,V' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-17T12:45', end: '2026-07-17T14:30', cat: 'jidlo', orgs: '' },
+  { t: 'Jezero reflexe', start: '2026-07-17T14:30', end: '2026-07-17T15:30', cat: 'org', orgs: '' },
+  { t: 'Fiodpo', start: '2026-07-17T15:30', end: '2026-07-17T19:45', cat: 'hra-fyzicka', orgs: 'V,H,K,P' },
+  { t: 'Vééééča 🥗🌮', start: '2026-07-17T19:45', end: '2026-07-17T21:00', cat: 'jidlo', orgs: '' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-17T20:15', end: '2026-07-17T20:45', cat: 'org', orgs: '' },
+  { t: 'Gamebook', start: '2026-07-17T21:30', end: '2026-07-18T00:30', cat: 'hra-premysleci', orgs: 'H,J,Á,V-rit' },
+  { t: 'Fyzcvička', start: '2026-07-18T09:00', end: '2026-07-18T09:30', cat: 'rozcvicka', orgs: '' },
+  { t: 'Snída 🍳🥓🥞', start: '2026-07-18T09:30', end: '2026-07-18T10:00', cat: 'jidlo', orgs: '' },
+  { t: 'Přednáška', start: '2026-07-18T10:00', end: '2026-07-18T11:45', cat: 'prednaska', orgs: '' },
+  { t: 'Obíííídek 🍗🥩🍛🥘', start: '2026-07-18T12:00', end: '2026-07-18T13:00', cat: 'jidlo', orgs: '' },
+  { t: 'Vzpomínkovka', start: '2026-07-18T13:00', end: '2026-07-18T17:00', cat: 'hra-fyzicka', orgs: 'J,O' },
+  { t: 'Orgokokodák 🛋️🕰️🎉🧹', start: '2026-07-18T17:15', end: '2026-07-18T18:00', cat: 'org', orgs: '' },
+  { t: 'Žraut', start: '2026-07-18T18:00', end: '2026-07-19T08:00', cat: 'hra-premysleci', orgs: 'L,M' },
+  { t: 'Úklid', start: '2026-07-19T08:00', end: '2026-07-19T14:00', cat: 'org', orgs: 'K,P' },
 ];
 
 
@@ -219,12 +220,12 @@ function absMin(iso) {                        // 'YYYY-MM-DDTHH:MM' (local, naiv
 // its own absolute start/end and can live anywhere. All slots of one event share
 // `actId` (for org assignment / audit grouping). The DB would store these datetimes
 // verbatim; the renderers only ever see the derived absolute minutes.
-// Slot: {id, actId, role:'main'|'prep'|'cleanup', sAbs, eAbs, title, cat, emoji, orgs}
+// Slot: {id, actId, role:'main'|'prep'|'cleanup', sAbs, eAbs, title, cat, orgs}  (emoji is part of title)
 function buildSlots() {
   const slots = [];
   let actId = 0;
   EVENTS.forEach((p) => {
-    const base = { actId, title: p.t, cat: p.cat, emoji: p.emoji || '', orgs: p.orgs || '' };
+    const base = { actId, title: p.t, cat: p.cat, orgs: p.orgs || '' };
     slots.push({ id: 'm' + actId, role: 'main', sAbs: absMin(p.start), eAbs: absMin(p.end), ...base });
     if (p.prep)    slots.push({ id: 'p' + actId, role: 'prep',    sAbs: absMin(p.prep.start),    eAbs: absMin(p.prep.end),    ...base });
     if (p.cleanup) slots.push({ id: 'c' + actId, role: 'cleanup', sAbs: absMin(p.cleanup.start), eAbs: absMin(p.cleanup.end), ...base });
@@ -239,7 +240,7 @@ function buildSlots() {
 //   {segId, id, day, fromM, toM,   // fromM/toM = minutes within that row's window
 //    contBack, contFwd,            // clipped on the left / right (continues …)
 //    isStart, isEnd,               // segment holds the program's true start / end
-//    sAbs, eAbs, title, cat, emoji, orgs, allDay, prep, cleanup}
+//    sAbs, eAbs, title, cat, orgs}  (emoji is part of title)
 function buildSegments(slots) {
   const segs = [];
   let segId = 0;
@@ -261,7 +262,7 @@ function buildSegments(slots) {
         contBack: lo > p.sAbs + 0.5, contFwd: hi < p.eAbs - 0.5,
         isStart: Math.abs(lo - p.sAbs) < 0.5, isEnd: Math.abs(hi - p.eAbs) < 0.5,
         sAbs: p.sAbs, eAbs: p.eAbs,
-        title: p.title, cat: p.cat, emoji: p.emoji, orgs: p.orgs,
+        title: p.title, cat: p.cat, orgs: p.orgs,
       });
     }
   });
