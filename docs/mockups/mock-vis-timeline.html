@@ -13,16 +13,13 @@
 
 <style>
   body { font: 13px/1.4 system-ui, sans-serif; margin: 0; background: #fafafa; color: #222; }
-  header { padding: 14px 18px; background: #fff; border-bottom: 1px solid #e3e3e3; }
+  header { position: relative; padding: 14px 18px; background: #fff; border-bottom: 1px solid #e3e3e3; }
   h1 { font-size: 16px; margin: 0 0 4px; }
   .sub { color: #666; font-size: 12px; }
   .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
   .legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
-  /* the timeline sticks to the top of the viewport once you scroll past the header/toolbar, so
-     the header scrolls away but the time-axis row stays pinned (the rows scroll INSIDE it).
-     vis forces an inline position:relative on this container, so the sticky is (re)applied from JS. */
-  #tl { margin: 0 12px 12px; position: sticky; top: 0; background: #fafafa; }
+  #tl { margin: 12px; }
 
   /* one row per day */
   .vis-time-axis .vis-text { font-size: 11px; color: #888; }
@@ -85,16 +82,25 @@
   .vis-item.vis-selected { outline: 2px solid rgba(0,0,0,.75); outline-offset: -2px; box-shadow: none; }
 
   /* a span continues onto another row: flatten the cut edge + dashed seam */
-  .vis-item.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0;
-                    border-right: 2px dashed rgba(255,255,255,.85); }
   .vis-item.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0;
                     border-left: 2px dashed rgba(255,255,255,.85); }
+  .vis-item.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  /* the right seam sits exactly AT the panel edge and a border-right gets clipped by overflow,
+     so draw it as a pseudo element inset 2px from the right instead. */
+  .vis-item.cut-r::after { content: ''; position: absolute; top: 0; bottom: 0; right: 2px; width: 0;
+                           border-left: 2px dashed rgba(255,255,255,.85); pointer-events: none; }
 
   /* prep / cleanup slots: faded, independently placeable */
   .margin { opacity: .45; font-style: italic; }
 
-  /* toolbar row above the table (edit toggle left, zoom right) */
-  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 12px 0; }
+  /* day/night background items: fill the whole row, drop the card chrome. vis gives items
+     z-index:1; drop these to -1 so the gradient sits BEHIND the foreground group layer — letting
+     vis's row-divider borders and the day-hover highlight show on top — while the program boxes
+     (z-index:1) still paint above the gradient. */
+  .vis-item.daynight { border: 0; border-radius: 0; min-height: 0; z-index: -1; opacity: .6; }
+
+  /* controls pinned to the header's top-right corner (no separate toolbar row → saves vertical space) */
+  .controls { position: absolute; top: 12px; right: 14px; display: flex; align-items: center; gap: 8px; }
   .edit-toggle { font: 12px system-ui;
      padding: 5px 11px; border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #333;
      cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); display: flex; align-items: center; }
@@ -127,19 +133,19 @@
 </head>
 <body>
 <header>
+  <div class="controls">
+    <button id="editToggle" class="edit-toggle" title="Zapnout/vypnout úpravy">✎&nbsp;Úpravy</button>
+    <div class="zoom-ctrl">
+      <button id="zoomOut" title="Oddálit (Ctrl + kolečko)">−</button>
+      <button id="zoomIn"  title="Přiblížit (Ctrl + kolečko)">+</button>
+    </div>
+  </div>
   <h1>Camp Planner — vis-timeline prototype</h1>
   <div class="sub">Row&nbsp;=&nbsp;day, time&nbsp;→&nbsp;horizontal. <b>Click a slot</b> for details. Toggle <b>✎&nbsp;Úpravy</b>
-     (top-left) to drag/resize; in edit mode <b>double-click</b> a slot for details. Overlaps auto-stack into sub-lanes.</div>
+     (top-right) to drag/resize; in edit mode <b>double-click</b> a slot for details. Overlaps auto-stack into sub-lanes.</div>
   <div class="legend" id="legend"></div>
 </header>
 
-<div class="toolbar">
-  <button id="editToggle" class="edit-toggle" title="Zapnout/vypnout úpravy">✎&nbsp;Úpravy</button>
-  <div class="zoom-ctrl">
-    <button id="zoomOut" title="Oddálit (Ctrl + kolečko)">−</button>
-    <button id="zoomIn"  title="Přiblížit (Ctrl + kolečko)">+</button>
-  </div>
-</div>
 <div id="tl"></div>
 
 <!-- slot details modal -->
@@ -175,6 +181,54 @@
   const winStart = REF + WINDOW_START_MIN * 60000;
   const winEnd   = REF + WINDOW_END_MIN   * 60000;
   const mToDate = (minFromWindow) => new Date(winStart + minFromWindow * 60000);
+
+  // ---- day/night background gradient -------------------------------------------------------
+  // Shade each day row by the sun's altitude at the camp location, so night/dawn/day/dusk read
+  // at a glance. Config: location + the program's clock offset. The camp clock runs ahead of the
+  // location's wall-clock by `tzOffsetHours` (CEST = UTC+2 in summer) + `shiftHours` (the program
+  // shift; +1 here → camp 06:00 = 05:00 CEST). So camp-clock = UTC + tzOffsetHours + shiftHours.
+  const DAYNIGHT = { lat: 50.8075392, lng: 14.6796128, tzOffsetHours: 2, shiftHours: 1 };
+  // Compact solar-altitude (radians) for an instant — derived from SunCalc (MIT, © Vladimir Agafonkin).
+  const sunAltitude = (() => {
+    const rad = Math.PI / 180, dayMs = 86400000, J1970 = 2440588, J2000 = 2451545, e = rad * 23.4397;
+    const toDays = (d) => d / dayMs - 0.5 + J1970 - J2000;
+    return (date, lat, lng) => {
+      const lw = rad * -lng, phi = rad * lat, d = toDays(date);
+      const M = rad * (357.5291 + 0.98560028 * d);                                    // solar mean anomaly
+      const L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI; // ecliptic longitude
+      const dec = Math.asin(Math.sin(e) * Math.sin(L));                               // declination
+      const ra = Math.atan2(Math.sin(L) * Math.cos(e), Math.cos(L));                  // right ascension
+      const H = rad * (280.16 + 360.9856235 * d) - lw - ra;                           // hour angle
+      return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
+    };
+  })();
+  // altitude (rad) → colour, smoothly ramping night→day across the twilight band (−12°…+3°)
+  function dnColor(altRad) {
+    const a = altRad * 180 / Math.PI;
+    const t = Math.max(0, Math.min(1, (a + 12) / 15));
+    const night = [26, 34, 58], day = [255, 250, 230];               // #1a223a → #fffae6
+    const c = night.map((n, i) => Math.round(n + (day[i] - n) * t));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  }
+  // one full-width background item per day-row, its gradient sampled from the sun every 20 min
+  function dayNightBackgrounds() {
+    const [Y, Mo, D] = CAMP_START.split('-').map(Number);
+    const offMs = (DAYNIGHT.tzOffsetHours + DAYNIGHT.shiftHours) * 3600000;  // camp-clock = UTC + off
+    return DAYS.map((_, i) => {
+      const midnightUTC = Date.UTC(Y, Mo - 1, D + i);                        // 00:00 camp-date, UTC
+      const stops = [];
+      for (let m = 0; m <= DAY_MIN; m += 20) {
+        const campMs = (WINDOW_START_MIN + m) * 60000;                       // camp ms after midnight
+        const instant = new Date(midnightUTC + campMs - offMs);             // → real UTC instant
+        stops.push(`${dnColor(sunAltitude(instant, DAYNIGHT.lat, DAYNIGHT.lng))} ${(m / DAY_MIN * 100).toFixed(1)}%`);
+      }
+      return {
+        id: 'bg' + i, group: i, type: 'background', start: winStart, end: winEnd,
+        className: 'daynight', style: `background: linear-gradient(to right, ${stops.join(',')})`,
+      };
+    });
+  }
+  const bgItems = dayNightBackgrounds();
 
   // groups = days (rows)
   const groups = new vis.DataSet(DAYS.map((d, i) => ({
@@ -235,7 +289,7 @@
       };
     });
     items.clear();
-    items.add(batch);            // one bulk insert → one redraw, not 120
+    items.add(bgItems.concat(batch));   // day/night backgrounds + program items, in one bulk insert
   }
   render();
 
@@ -264,11 +318,6 @@
     showMajorLabels: false,
     format: { minorLabels: { hour: 'HH:mm' } },
     zoomKey: 'ctrlKey',          // wheel alone scrolls; zoom only with Ctrl+wheel (+ buttons below)
-    // sticky time axis: bound the timeline to ~viewport height and scroll the day rows INSIDE it,
-    // so the top time-axis stays pinned while you scroll through the 16 days. Paired with the
-    // `position: sticky` on #tl, the header above scrolls away but the time row stays put.
-    verticalScroll: true,
-    maxHeight: Math.max(320, window.innerHeight - 24),
     snap: (date) => {            // snap drags to 15-min grid
       const ms = 15 * 60 * 1000;
       return new Date(Math.round(date / ms) * ms);
@@ -335,13 +384,10 @@
   document.getElementById('zoomIn').addEventListener('click', () => timeline.zoomIn(0.5));
   document.getElementById('zoomOut').addEventListener('click', () => timeline.zoomOut(0.5));
 
+
   // highlight the day row under the cursor (the row AND its left label). Group ids are 0..N in
   // DAYS order, which matches the DOM order of the labels/rows, so we index by group id.
   const tlEl = document.getElementById('tl');
-  // vis sets an inline position:relative on the container; re-assert sticky so the timeline pins
-  // to the viewport top (header scrolls away, time-axis row stays put).
-  tlEl.style.position = 'sticky';
-  tlEl.style.top = '0';
   let hoveredGroup = null;
   const clearHover = () => tlEl.querySelectorAll('.day-hover').forEach((el) => el.classList.remove('day-hover'));
   tlEl.addEventListener('mousemove', (e) => {

@@ -19,10 +19,10 @@
  * rows with time running left→right.
  * ==========================================================================*/
 
-// Camp day window: full 24 h, 05:00 → 05:00 next day. Days tile with NO gap, so the
-// whole night (incl. 03:00–05:00) is always shown at the right end of each day row.
-const WINDOW_START_MIN = 5 * 60;   // 05:00
-const WINDOW_END_MIN   = 29 * 60;  // 05:00 next day (05:00 + 24 h)
+// Camp day window: full 24 h, 04:00 → 04:00 next day. Days tile with NO gap, so the
+// whole night (incl. 02:00–04:00) is always shown at the right end of each day row.
+const WINDOW_START_MIN = 4 * 60;   // 04:00
+const WINDOW_END_MIN   = 28 * 60;  // 04:00 next day (04:00 + 24 h)
 const SLOT_MIN         = 15;       // 15-min grid resolution (GridStack columns)
 const SLOT_COUNT       = (WINDOW_END_MIN - WINDOW_START_MIN) / SLOT_MIN; // 96
 const DAY_MIN          = 24 * 60;  // 1440
