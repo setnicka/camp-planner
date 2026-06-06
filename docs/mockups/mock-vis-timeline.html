@@ -25,81 +25,78 @@
   .vis-time-axis .vis-text { font-size: 11px; color: #888; }
   .vis-labelset .vis-label { font-weight: 600; }
   .vis-label .day-dom { font-weight: 400; color: #888; font-size: 11px; }
-  /* clear day separation: a thin line ALONE "sticks" to the bottom of the boxes and is easy to
-     miss, so add an alternating row tint (zebra) that reads even where boxes cover the row edge.
-     The tint is translucent so the vertical hour grid still shows through. */
+  /* zebra row tint marks day boundaries even under boxes */
   .vis-foreground .vis-group:nth-child(even) { background: rgba(20,30,50,.05); }
   .vis-labelset   .vis-label:nth-child(even) { background: #eceff4; }
   .vis-foreground .vis-group,
   .vis-labelset   .vis-label { border-bottom: 1px solid #c4cad3; }
-  /* highlight the day row (and its left label) under the cursor: subtle yellow wash + vibrant
-     top/bottom edge lines (inset box-shadow → no layout shift; shows through the boxes'
-     transparent top/bottom borders so the lines read across the whole row). */
-  .vis-foreground .vis-group.day-hover,
-  .vis-labelset   .vis-label.day-hover {
+  /* hovered row + its left label (pure CSS): row via :hover; label paired by position via :has(),
+     one rule per row index (≤20 days) since the label is in a separate panel subtree */
+  .vis-foreground .vis-group:hover,
+  #tl:has(.vis-foreground .vis-group:nth-child(1):hover) .vis-labelset .vis-label:nth-child(1),
+  #tl:has(.vis-foreground .vis-group:nth-child(2):hover) .vis-labelset .vis-label:nth-child(2),
+  #tl:has(.vis-foreground .vis-group:nth-child(3):hover) .vis-labelset .vis-label:nth-child(3),
+  #tl:has(.vis-foreground .vis-group:nth-child(4):hover) .vis-labelset .vis-label:nth-child(4),
+  #tl:has(.vis-foreground .vis-group:nth-child(5):hover) .vis-labelset .vis-label:nth-child(5),
+  #tl:has(.vis-foreground .vis-group:nth-child(6):hover) .vis-labelset .vis-label:nth-child(6),
+  #tl:has(.vis-foreground .vis-group:nth-child(7):hover) .vis-labelset .vis-label:nth-child(7),
+  #tl:has(.vis-foreground .vis-group:nth-child(8):hover) .vis-labelset .vis-label:nth-child(8),
+  #tl:has(.vis-foreground .vis-group:nth-child(9):hover) .vis-labelset .vis-label:nth-child(9),
+  #tl:has(.vis-foreground .vis-group:nth-child(10):hover) .vis-labelset .vis-label:nth-child(10),
+  #tl:has(.vis-foreground .vis-group:nth-child(11):hover) .vis-labelset .vis-label:nth-child(11),
+  #tl:has(.vis-foreground .vis-group:nth-child(12):hover) .vis-labelset .vis-label:nth-child(12),
+  #tl:has(.vis-foreground .vis-group:nth-child(13):hover) .vis-labelset .vis-label:nth-child(13),
+  #tl:has(.vis-foreground .vis-group:nth-child(14):hover) .vis-labelset .vis-label:nth-child(14),
+  #tl:has(.vis-foreground .vis-group:nth-child(15):hover) .vis-labelset .vis-label:nth-child(15),
+  #tl:has(.vis-foreground .vis-group:nth-child(16):hover) .vis-labelset .vis-label:nth-child(16),
+  #tl:has(.vis-foreground .vis-group:nth-child(17):hover) .vis-labelset .vis-label:nth-child(17),
+  #tl:has(.vis-foreground .vis-group:nth-child(18):hover) .vis-labelset .vis-label:nth-child(18),
+  #tl:has(.vis-foreground .vis-group:nth-child(19):hover) .vis-labelset .vis-label:nth-child(19),
+  #tl:has(.vis-foreground .vis-group:nth-child(20):hover) .vis-labelset .vis-label:nth-child(20) {
     background: rgba(255,205,0,.15);
     box-shadow: inset 0 2px 0 #444, inset 0 -2px 0 #444;
   }
 
-  /* event cards.
-     Gaps between boxes are done with a TRANSPARENT BORDER, not vis's `margin.item` — that
-     margin feeds vis's stacking/collision math, so a non-zero value makes time-adjacent boxes
-     look overlapping and forces spurious extra lanes. A border is purely visual: with
-     `box-sizing: border-box` (vis sets this on `.vis-range`) the box still fits its allotted
-     slot, so stacking is unaffected. `background-clip: padding-box` stops the fill from
-     bleeding under the transparent border, leaving a real gap.
-     We must set an explicit colour (transparent) because vis's `.vis-item.vis-range` rule
-     re-forces `border-style: solid`; left at the default `currentColor` it would paint a
-     dark-gray border on the light lecture boxes. */
-  .vis-item { border: 2px solid transparent; border-bottom-width: 3px; background-clip: padding-box;
+  /* event cards. Box gaps = 2px transparent border (NOT margin.item, which inflates collision math);
+     background-clip:padding-box keeps the fill inside it; `border` not `none` (vis forces border-style:solid). */
+  .vis-item { border: 2px solid transparent; background-clip: padding-box;
               border-radius: 5px; color: #fff; font-size: 11px;
-              min-height: 36px; box-sizing: border-box; }   /* normal / stacked height; +1px gap below */
-  /* a day with no overlaps: boxes are double height (vis grows the row to match) */
-  .vis-item.solo { min-height: 74px; }
+              min-height: 36px; box-sizing: border-box; }   /* normal / stacked half-height */
+  .vis-item.solo { min-height: 74px; }                      /* no overlap in the row → double height */
   .vis-item .vis-item-content { padding: 2px 6px; width: 100%; box-sizing: border-box; }
-  /* centre the content vertically in the taller solo boxes */
   .vis-item.solo .vis-item-content { height: 100%; display: flex; flex-direction: column;
               justify-content: center; }
   .ev-title { font-weight: 600; }
   .ev-meta { opacity: .9; font-size: 10px; }
   .ev-orgs { font-weight: 700; }
 
-  /* category colors — `.vis-item.cat-*` so they keep winning when an item is selected
-     (vis's .vis-item.vis-selected would otherwise force a yellow background) */
-  /* use `background-color` (longhand), NOT the `background` shorthand: the shorthand resets
-     `background-clip` to `border-box`, which would undo the padding-box clip above and make the
-     fill bleed under the transparent gap-border (boxes would touch again). */
-  .vis-item.cat-exercise { background-color:#e67c73; }
-  .vis-item.cat-meal     { background-color:#4285f4; }
-  .vis-item.cat-lecture  { background-color:#f6bf26; color:#3c3c3c; }
-  .vis-item.cat-game     { background-color:#0b8043; }
-  .vis-item.cat-biggame  { background-color:#7986cb; }
-  .vis-item.cat-trip     { background-color:#33b679; }
-  .vis-item.cat-org      { background-color:#f4511e; }
+  /* category colours (.vis-item.cat-*) are generated from CATEGORIES at runtime — see the IIFE */
 
-  /* selected: keep the category colour, mark it with an outline (no layout shift,
-     readable on any background — unlike vis's default yellow fill) */
-  .vis-item.vis-selected { outline: 2px solid rgba(0,0,0,.75); outline-offset: -2px; box-shadow: none; }
+  /* selection: recolour the gap-border (matches box geometry; overrides vis's gold default) */
+  .vis-item.vis-selected { border-color: rgba(0,0,0,.8); box-shadow: none; }
 
   /* a span continues onto another row: flatten the cut edge + dashed seam */
   .vis-item.cut-l { border-top-left-radius: 0; border-bottom-left-radius: 0;
                     border-left: 2px dashed rgba(255,255,255,.85); }
   .vis-item.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-  /* the right seam sits exactly AT the panel edge and a border-right gets clipped by overflow,
-     so draw it as a pseudo element inset 2px from the right instead. */
+  /* right seam via pseudo-element (a border-right gets clipped at the panel edge) */
   .vis-item.cut-r::after { content: ''; position: absolute; top: 0; bottom: 0; right: 2px; width: 0;
                            border-left: 2px dashed rgba(255,255,255,.85); pointer-events: none; }
 
   /* prep / cleanup slots: faded, independently placeable */
   .margin { opacity: .45; font-style: italic; }
 
-  /* day/night background items: fill the whole row, drop the card chrome. vis gives items
-     z-index:1; drop these to -1 so the gradient sits BEHIND the foreground group layer — letting
-     vis's row-divider borders and the day-hover highlight show on top — while the program boxes
-     (z-index:1) still paint above the gradient. */
-  .vis-item.daynight { border: 0; border-radius: 0; min-height: 0; z-index: -1; opacity: .6; }
+  /* day/night gradient: full-row background behind everything (z-index:-1); toggle fades opacity */
+  .vis-item.daynight { border: 0; border-radius: 0; min-height: 0; z-index: -1;
+                       transition: opacity .35s ease; }
+  #tl.dn-hidden .vis-item.daynight { opacity: 0; }
+  /* hour grid lines between gradient (-1) and boxes (1): dissolve vis's transform'd .vis-content
+     stacking context (a no-op with page scroll) so the grid panel at z-index:0 sits between them */
+  .vis-panel.vis-center > .vis-content { transform: none !important; }
+  .vis-panel.vis-background.vis-vertical { z-index: 0; }
+  .vis-time-axis .vis-grid.vis-vertical { border-color: #9aa3b2; opacity: .25; }
 
-  /* controls pinned to the header's top-right corner (no separate toolbar row → saves vertical space) */
+  /* controls pinned top-right (no toolbar row → saves vertical space) */
   .controls { position: absolute; top: 12px; right: 14px; display: flex; align-items: center; gap: 8px; }
   .edit-toggle { font: 12px system-ui;
      padding: 5px 11px; border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #333;
@@ -110,7 +107,7 @@
   .zoom-ctrl button { width: 28px; height: 28px; font-size: 18px; line-height: 1; border: 1px solid #ccc;
      border-radius: 6px; background: #fff; color: #333; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   .zoom-ctrl button:hover { background: #f3f3f3; }
-  /* cursor hints: pointer = clickable (view), move = draggable (edit) */
+  /* cursor: pointer = clickable (view), move = draggable (edit) */
   #tl .vis-item { cursor: pointer; }
   #tl.edit-on .vis-item { cursor: move; }
 
@@ -134,6 +131,7 @@
 <body>
 <header>
   <div class="controls">
+    <button id="dayNightToggle" class="edit-toggle" title="Zapnout/vypnout pozadí den/noc">🌙&nbsp;Den/noc</button>
     <button id="editToggle" class="edit-toggle" title="Zapnout/vypnout úpravy">✎&nbsp;Úpravy</button>
     <div class="zoom-ctrl">
       <button id="zoomOut" title="Oddálit (Ctrl + kolečko)">−</button>
@@ -162,33 +160,40 @@
 
 <script>
 (function () {
-  // SLOTS (main / prep / cleanup — each with its own absolute start/end) are the
-  // single source of truth; segments are derived for display and every edit maps
-  // back onto a slot. Prep/cleanup are independent slots, editable on their own.
+  // SLOTS (main/prep/cleanup, each with own start/end) are the source of truth; SEGMENTS are
+  // derived per-row for display and every edit maps back onto a slot.
   const slots = buildSlots();
   const slotById = {};
   slots.forEach((s) => (slotById[s.id] = s));
+  const tlEl = document.getElementById('tl');
 
-  // legend
+  // legend + per-category box colours — both generated from CATEGORIES so colour lives in ONE place
   document.getElementById('legend').innerHTML = Object.entries(CATEGORIES)
     .map(([k, c]) => `<span><i style="background:${c.color}"></i>${c.label}</span>`).join('');
+  document.head.insertAdjacentHTML('beforeend', '<style>' + Object.entries(CATEGORIES)
+    .map(([k, c]) => `.vis-item.cat-${k}{background-color:${c.color};color:${c.text}}`).join('') + '</style>');
 
-  // All days share ONE reference date so the time-of-day aligns across rows.
-  // The actual day is encoded by the GROUP, not the date.
-  // Use LOCAL midnight (not Date.UTC): vis-timeline renders the axis in local time, so the
-  // item timestamps must be local too, or the boxes sit 1 h off from the axis labels.
-  const REF = new Date(2026, 0, 1, 0, 0).getTime(); // local midnight ref
+  // CAMP_START parsed once (camp day 0) — reused for REF below and the day/night gradient.
+  const [campY, campMo, campD] = CAMP_START.split('-').map(Number);
+
+  // Shared reference day for all rows (the day is the GROUP, not the date). REF is an abstract
+  // rendering canvas — derived from CAMP_START for one date origin + the camp's DST regime; never
+  // use it for real-instant math (the sun math uses CAMP_START separately). Local midnight: vis
+  // renders the axis in local time, so item timestamps must be local too.
+  const REF = new Date(campY, campMo - 1, campD, 0, 0).getTime();
   const winStart = REF + WINDOW_START_MIN * 60000;
   const winEnd   = REF + WINDOW_END_MIN   * 60000;
   const mToDate = (minFromWindow) => new Date(winStart + minFromWindow * 60000);
+  // inverse of mToDate for a row: vis Date + group → absolute camp minutes. vis passes Date objects,
+  // so .getTime() is safe.
+  const dateToAbs = (date, group) =>
+    group * DAY_MIN + WINDOW_START_MIN + Math.round((date.getTime() - winStart) / 60000);
 
   // ---- day/night background gradient -------------------------------------------------------
-  // Shade each day row by the sun's altitude at the camp location, so night/dawn/day/dusk read
-  // at a glance. Config: location + the program's clock offset. The camp clock runs ahead of the
-  // location's wall-clock by `tzOffsetHours` (CEST = UTC+2 in summer) + `shiftHours` (the program
-  // shift; +1 here → camp 06:00 = 05:00 CEST). So camp-clock = UTC + tzOffsetHours + shiftHours.
-  const DAYNIGHT = { lat: 50.8075392, lng: 14.6796128, tzOffsetHours: 2, shiftHours: 1 };
-  // Compact solar-altitude (radians) for an instant — derived from SunCalc (MIT, © Vladimir Agafonkin).
+  // Shade each row by sun altitude. camp-clock = UTC + tzOffsetHours (CEST=+2) + shiftHours
+  // (+1 → camp 06:00 = 05:00 CEST). `show` = default toggle state.
+  const DAYNIGHT = { lat: 50.8075392, lng: 14.6796128, tzOffsetHours: 2, shiftHours: 1, show: true };
+  // Solar altitude (radians) for an instant — derived from SunCalc (MIT, © Vladimir Agafonkin).
   const sunAltitude = (() => {
     const rad = Math.PI / 180, dayMs = 86400000, J1970 = 2440588, J2000 = 2451545, e = rad * 23.4397;
     const toDays = (d) => d / dayMs - 0.5 + J1970 - J2000;
@@ -202,26 +207,29 @@
       return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
     };
   })();
-  // altitude (rad) → colour, smoothly ramping night→day across the twilight band (−12°…+3°)
+  // altitude → deep-navy overlay, opacity ramping 1 (night) → 0 (day) across the twilight band
   function dnColor(altRad) {
     const a = altRad * 180 / Math.PI;
-    const t = Math.max(0, Math.min(1, (a + 12) / 15));
-    const night = [26, 34, 58], day = [255, 250, 230];               // #1a223a → #fffae6
-    const c = night.map((n, i) => Math.round(n + (day[i] - n) * t));
-    return `rgb(${c[0]},${c[1]},${c[2]})`;
+    const t = Math.max(0, Math.min(1, (a + 12) / 15));               // 0 = night, 1 = day
+    return `rgba(24,34,62,${(1 - t).toFixed(2)})`;                   // #18223e deep navy
   }
-  // one full-width background item per day-row, its gradient sampled from the sun every 20 min
+  // one full-width background item per row, its gradient sampled from the sun every 20 min
   function dayNightBackgrounds() {
-    const [Y, Mo, D] = CAMP_START.split('-').map(Number);
     const offMs = (DAYNIGHT.tzOffsetHours + DAYNIGHT.shiftHours) * 3600000;  // camp-clock = UTC + off
     return DAYS.map((_, i) => {
-      const midnightUTC = Date.UTC(Y, Mo - 1, D + i);                        // 00:00 camp-date, UTC
-      const stops = [];
+      const midnightUTC = Date.UTC(campY, campMo - 1, campD + i);            // 00:00 camp-date, UTC
+      const samples = [];
       for (let m = 0; m <= DAY_MIN; m += 20) {
         const campMs = (WINDOW_START_MIN + m) * 60000;                       // camp ms after midnight
         const instant = new Date(midnightUTC + campMs - offMs);             // → real UTC instant
-        stops.push(`${dnColor(sunAltitude(instant, DAYNIGHT.lat, DAYNIGHT.lng))} ${(m / DAY_MIN * 100).toFixed(1)}%`);
+        samples.push({ c: dnColor(sunAltitude(instant, DAYNIGHT.lat, DAYNIGHT.lng)), p: m / DAY_MIN * 100 });
       }
+      // emit a stop only where the colour changes (flat day/night runs collapse to their endpoints):
+      // ~73 → ~17 stops, same look, far cheaper to repaint
+      const stops = samples
+        .filter((s, k) => k === 0 || k === samples.length - 1 ||
+                          s.c !== samples[k - 1].c || s.c !== samples[k + 1].c)
+        .map((s) => `${s.c} ${s.p.toFixed(1)}%`);
       return {
         id: 'bg' + i, group: i, type: 'background', start: winStart, end: winEnd,
         className: 'daynight', style: `background: linear-gradient(to right, ${stops.join(',')})`,
@@ -236,21 +244,18 @@
     content: `${d.wd} <span class="day-dom">${d.date}</span>`,
   })));
 
-  // items — rebuilt from per-day SEGMENTS on every edit. A multi-day activity
-  // (Noční bojovka, Po 22:00 → Út 07:30) appears as one segment on each row, and
-  // `segLookup` maps each segment item back to its segment + owning activity.
+  // program items derived from per-day SEGMENTS, rebuilt on every edit; segLookup maps item id →
+  // segment + owning slot.
   const items = new vis.DataSet();
+  items.add(bgItems);   // day/night gradients are static → add ONCE; render() never re-adds them
   let segLookup = {};
-
-  const roleLabel = { prep: 'příprava', cleanup: 'úklid' };
+  let dayNightOn = DAYNIGHT.show;
+  const ROLE = { main: 'hlavní program', prep: 'příprava', cleanup: 'úklid' };  // role → Czech label
 
   function render() {
     segLookup = {};
     const segs = buildSegments(slots);
-    // Per-ITEM overlap detection: a box keeps DOUBLE ("solo") height unless it shares time
-    // with another box in the same row, in which case it drops to normal/half height so the
-    // overlapping pair can stack. Non-overlapping neighbours in the same row stay full height.
-    // (vis sizes the row to its content, so the row is as tall as its tallest stack.)
+    // overlap → half height so the pair stacks; non-overlapping boxes keep double ("solo") height
     const overlaps = new Set(), byDay = {};
     segs.forEach((s) => (byDay[s.day] || (byDay[s.day] = [])).push(s));
     Object.values(byDay).forEach((arr) => {
@@ -260,22 +265,17 @@
             overlaps.add(arr[i].segId); overlaps.add(arr[j].segId);
           }
     });
-    // Build ALL items first, then push them to the DataSet in ONE call. Adding items
-    // one-by-one makes vis fire an event (and schedule a redraw) per item — batching
-    // the add is the single biggest speed-up for the initial draw and every re-render.
+    // build all items, then add in ONE call (per-item adds each fire an event + redraw)
     const batch = segs.map((s) => {
       const orgs = s.role === 'main' && s.orgs && s.orgs !== 'all'
         ? ` · <span class="ev-orgs">${s.orgs}</span>` : '';
-      // show the true start/end where they fall; "…" + arrow where the event is cut
-      const left  = s.contBack ? '«&nbsp;' : '';
+      const left  = s.contBack ? '«&nbsp;' : '';   // « » mark continuation onto another row
       const right = s.contFwd  ? '&nbsp;»' : '';
-      // show the activity's true start–end on every segment; the « » arrows mark continuation
-      const tStart = fmtClock(s.sAbs);
+      const tStart = fmtClock(s.sAbs);             // the activity's true start–end, on every segment
       const tEnd   = fmtClock(s.eAbs);
-      // prep/cleanup slots are faded and labelled with their role + activity title
-      const heading = s.role === 'main' ? s.title : `${roleLabel[s.role]}: ${s.title}`;
+      const heading = s.role === 'main' ? s.title : `${ROLE[s.role]}: ${s.title}`;
       const id = 's' + s.segId;
-      segLookup[id] = { seg: s, act: slotById[s.id] };   // every slot is independently editable
+      segLookup[id] = { seg: s, act: slotById[s.id] };
       // data-id on the time span lets onMoving update it in the DOM directly (no DataSet churn)
       return {
         id, group: s.day,
@@ -288,74 +288,51 @@
                    (s.contBack ? ' cut-l' : '') + (s.contFwd ? ' cut-r' : ''),
       };
     });
-    items.clear();
-    items.add(bgItems.concat(batch));   // day/night backgrounds + program items, in one bulk insert
+    // replace only the program items; leave the static gradients (id 'bg*') so vis doesn't repaint them
+    items.remove(items.getIds({ filter: (it) => !String(it.id).startsWith('bg') }));
+    items.add(batch);
   }
   render();
 
-  const timeline = new vis.Timeline(document.getElementById('tl'), items, groups, {
-    stack: true,                 // <-- overlaps stack into sub-lanes within a day row
-    stackSubgroups: false,       // we assign no subgroups, so skip the extra subgroup-stacking pass
-    orientation: { axis: 'top' },
+  const timeline = new vis.Timeline(tlEl, items, groups, {
+    stack: true,                 // overlaps stack into sub-lanes within a day row
+    stackSubgroups: false,       // no subgroups → skip the extra stacking pass
+    groupOrder: 'id',            // rows in day order (group id 0..N), not insertion-dependent
+    orientation: { axis: 'both' }, // time axis at top AND bottom
     min: winStart, max: winEnd,  // clamp to the camp-day window
     start: winStart, end: winEnd,
-    // start in read-only VIEW mode (the edit-toggle button turns drag/resize on);
-    // constructing it this way avoids a second full render at startup.
-    editable: false,
+    editable: false,             // start read-only; the edit toggle turns drag/resize on
     itemsAlwaysDraggable: { item: false, range: false },
-    // vis sanitizes item-content HTML by default, which STRIPS our class/data-* attributes
-    // (so .ev-title/.ev-meta/.ev-time styling and the data-id hook were being removed). Our
-    // content is trusted (we build it), so disable the sanitizer.
-    xss: { disabled: true },
-    // BOTH gaps come purely from the 2px transparent CSS border (see .vis-item): vertical margin
-    // is 0 so a stacked gap is the same ~4px as a side-by-side gap (a non-zero margin would ADD to
-    // the border, making vertical gaps visibly bigger). Two 36px halves then equal one 72px full
-    // box exactly. Day separation comes from the zebra row tint, not from vertical spacing.
+    xss: { disabled: true },     // vis strips our class/data-* attrs otherwise; our content is trusted
+    // margin 0: gaps come from the border, so a stacked gap matches a side-by-side one. axis:0 drops trailing space
     margin: { item: { horizontal: 0, vertical: 0 }, axis: 0 },
-    zoomMin: 1000 * 60 * 60,     // 1h
-    // all days share one reference date, so the top-tier date label ("Thu 1 January")
-    // is meaningless noise — hide it and keep only the time-of-day ticks.
-    showMajorLabels: false,
+    zoomMin: 1000 * 60 * 60 * 2, // 2h
+    showCurrentTime: false,      // meaningless on this abstract time-of-day axis
+    showMajorLabels: false,      // all days share one ref date → the date label is noise
     format: { minorLabels: { hour: 'HH:mm' } },
-    zoomKey: 'ctrlKey',          // wheel alone scrolls; zoom only with Ctrl+wheel (+ buttons below)
-    snap: (date) => {            // snap drags to 15-min grid
-      const ms = 15 * 60 * 1000;
+    zoomKey: 'ctrlKey',          // wheel scrolls; zoom only with Ctrl+wheel (or the buttons)
+    snap: (date) => {            // snap drags to the SLOT_MIN grid (15 min)
+      const ms = SLOT_MIN * 60 * 1000;
       return new Date(Math.round(date / ms) * ms);
     },
-    // live in-box time during drag/resize: update the DOM text DIRECTLY (never mutate
-    // item.content — that redraws the item and kills the in-progress drag). The data-id on
-    // the .ev-time span lets us find the dragged element without touching vis's DataSet.
+    // live in-box time during drag: write the .ev-time DOM text directly (mutating item.content kills
+    // the drag). Heights are not morphed mid-drag — reapplied on release via render().
     onMoving: (item, callback) => {
-      callback(item);                            // allow the move; don't mutate the item
-      // auto-select the dragged item (selection only toggles a class — safe mid-drag)
+      callback(item);
       if (timeline.getSelection().indexOf(item.id) === -1) timeline.setSelection([item.id]);
       if (!segLookup[item.id]) return;
       const el = document.querySelector('.ev-time[data-id="' + item.id + '"]');
       if (!el) return;
-      // item.start/end may be a Date OR a number/string here → normalise via new Date()
-      const winLo = item.group * DAY_MIN + WINDOW_START_MIN;
-      const ns = winLo + Math.round((new Date(item.start).getTime() - winStart) / 60000);
-      const ne = winLo + Math.round((new Date(item.end).getTime()   - winStart) / 60000);
-      el.textContent = fmtClock(ns) + '–' + fmtClock(ne);
-      // NOTE: we deliberately do NOT morph box heights mid-drag. vis re-stacks the row during a
-      // drag using each item's CACHED measured height, and a CSS height change isn't re-measured
-      // until a full redraw (which would kill the drag). Toggling heights live therefore desynced
-      // vis's stacking from the visible sizes — leaving half-height gaps and bottom overflow. So
-      // the solo/half heights + re-stacking are applied on RELEASE (onMove → render()) instead.
+      el.textContent = fmtClock(dateToAbs(item.start, item.group)) + '–' + fmtClock(dateToAbs(item.end, item.group));
     },
-    // Intercept every drag/resize: map it onto the owning ACTIVITY (so both halves
-    // of a span move together), cancel vis's own mutation, and re-render. Dragging
-    // a segment past 03:00 / onto another row makes the activity spill to the next day.
+    // map the drag/resize onto the owning slot (both halves move together), cancel vis's mutation,
+    // re-render. Dragging past the day end spills onto the next day.
     onMove: (item, callback) => {
       const e = segLookup[item.id];
-      if (!e) { callback(null); return; }       // safety: only real slots are editable
-      const winLo = item.group * DAY_MIN + WINDOW_START_MIN;
-      const newStartAbs = winLo + Math.round((item.start.getTime() - winStart) / 60000);
-      const newEndAbs   = winLo + Math.round((item.end.getTime()   - winStart) / 60000);
-      applySegmentEdit(e.act, e.seg, newStartAbs, newEndAbs);
-      callback(null);                            // activity model is the source of truth
-      render();                                  // re-slice → both halves stay linked
-      // a real app would POST e.act (id, sAbs, eAbs) to Flask here
+      if (!e) { callback(null); return; }
+      applySegmentEdit(e.act, e.seg, dateToAbs(item.start, item.group), dateToAbs(item.end, item.group), SLOT_MIN);
+      callback(null);
+      render();
     },
   });
 
@@ -365,48 +342,38 @@
   function syncEditUI() {
     editBtn.classList.toggle('on', editEnabled);
     editBtn.innerHTML = editEnabled ? '✓&nbsp;Úpravy zapnuty' : '✎&nbsp;Úpravy';
-    document.getElementById('tl').classList.toggle('edit-on', editEnabled);
+    tlEl.classList.toggle('edit-on', editEnabled);
   }
   function applyEditMode() {
     syncEditUI();
-    // editable:false alone is NOT enough — itemsAlwaysDraggable keeps items draggable even then,
-    // so it must be turned off too for a true read-only view mode.
+    // editable:false isn't enough — itemsAlwaysDraggable keeps items draggable, so disable it too
     timeline.setOptions({
       editable: editEnabled ? { updateTime: true, updateGroup: true, overrideItems: false } : false,
       itemsAlwaysDraggable: editEnabled ? { item: true, range: true } : { item: false, range: false },
     });
-    render();   // re-add items so each picks up the new editability (vis won't refresh it in place)
+    render();   // re-add items so each picks up the new editability
   }
   editBtn.addEventListener('click', () => { editEnabled = !editEnabled; applyEditMode(); });
-  syncEditUI();   // init: UI only — timeline is already constructed in view mode, items already rendered
+  syncEditUI();
+
+  // ---- day/night toggle: flip a CSS class on #tl that fades the gradient's opacity -------
+  const dnBtn = document.getElementById('dayNightToggle');
+  function syncDayNightUI() {
+    dnBtn.classList.toggle('on', dayNightOn);
+    tlEl.classList.toggle('dn-hidden', !dayNightOn);
+  }
+  dnBtn.addEventListener('click', () => { dayNightOn = !dayNightOn; syncDayNightUI(); });
+  syncDayNightUI();
 
   // zoom buttons (wheel-zoom needs Ctrl via zoomKey; these are the no-keyboard alternative)
   document.getElementById('zoomIn').addEventListener('click', () => timeline.zoomIn(0.5));
   document.getElementById('zoomOut').addEventListener('click', () => timeline.zoomOut(0.5));
 
-
-  // highlight the day row under the cursor (the row AND its left label). Group ids are 0..N in
-  // DAYS order, which matches the DOM order of the labels/rows, so we index by group id.
-  const tlEl = document.getElementById('tl');
-  let hoveredGroup = null;
-  const clearHover = () => tlEl.querySelectorAll('.day-hover').forEach((el) => el.classList.remove('day-hover'));
-  tlEl.addEventListener('mousemove', (e) => {
-    const g = timeline.getEventProperties(e).group;
-    if (g === hoveredGroup) return;
-    hoveredGroup = g;
-    clearHover();
-    if (g == null) return;
-    const labels = tlEl.querySelectorAll('.vis-labelset .vis-label');
-    const rows   = tlEl.querySelectorAll('.vis-foreground .vis-group');
-    if (labels[g]) labels[g].classList.add('day-hover');
-    if (rows[g])   rows[g].classList.add('day-hover');
-  });
-  tlEl.addEventListener('mouseleave', () => { clearHover(); hoveredGroup = null; });
+  // (row + label hover highlight is pure CSS — see the :hover/:has() rule)
 
   // ---- details modal: single-click (view) / double-click (edit) opens it -----------------
-  const roleName = { main: 'hlavní program', prep: 'příprava', cleanup: 'úklid' };
   const modal = document.getElementById('modal');
-  // sAbs/eAbs are absolute minutes; recover the calendar day + clock for a full datetime label
+  // absolute minutes → "Wd D. M. HH:MM"
   function fmtDateTime(abs) {
     const dayIdx = Math.floor(abs / DAY_MIN);
     const d = DAYS[dayIdx];
@@ -422,7 +389,7 @@
     document.getElementById('m-when').textContent = `${fmtDateTime(a.sAbs)} → ${fmtDateTime(a.eAbs)}`;
     document.getElementById('m-orgs').textContent =
       a.orgs === 'all' ? 'všichni' : (a.orgs || '—');
-    document.getElementById('m-role').textContent = roleName[a.role] || a.role;
+    document.getElementById('m-role').textContent = ROLE[a.role] || a.role;
     modal.hidden = false;
   }
   const closeModal = () => { modal.hidden = true; };
