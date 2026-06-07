@@ -1,0 +1,66 @@
+{% extends layout %}
+{% block title %}{{ user.username }} – Uživatelé{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('auth.users') }}">← Všichni uživatelé</a></p>
+  <h1>{{ user.username }} <small class="cp-subtitle">{{ user.display_name }}</small></h1>
+
+  <section class="cp-section">
+    <h2>Profil</h2>
+    <form class="cp-form" method="post" action="{{ url_for('auth.update_profile', user_id=user.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Uživatelské jméno <input name="username" value="{{ user.username }}" required></label>
+      <label>Zobrazované jméno <input name="display_name" value="{{ user.display_name }}" required></label>
+      <label>Nové heslo <input name="password" type="password" placeholder="ponechte prázdné pro zachování stávajícího"></label>
+      <label class="cp-check">
+        <input type="checkbox" name="is_admin" value="1"
+               {{ 'checked' if user.is_admin else '' }} {{ 'disabled' if is_self else '' }}>
+        Admin (plný přístup ke všemu)
+      </label>
+      {% if is_self %}<p class="cp-muted"><small>Nemůžete změnit vlastní oprávnění administrátora.</small></p>{% endif %}
+      <button type="submit">Uložit</button>
+    </form>
+  </section>
+
+  <section class="cp-section">
+    <h2>Oprávnění k akcím</h2>
+    {% if user.is_admin %}
+      <p class="cp-muted"><small>Tento uživatel je admin – níže uvedená oprávnění se ignorují, dokud je adminem.</small></p>
+    {% endif %}
+    <table class="cp-table">
+      <thead><tr><th>Role</th><th>Rozsah</th><th></th></tr></thead>
+      <tbody>
+        {% for grant in user.camp_roles %}
+          <tr>
+            <td>{{ grant.role.value }}</td>
+            <td>{{ '*' if grant.camp_id is none else camp_slugs[grant.camp_id] }}</td>
+            <td class="cp-actions">
+              <form method="post" action="{{ url_for('auth.remove_grant', user_id=user.id, grant_id=grant.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="cp-danger">Odebrat</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="cp-muted">Zatím žádná oprávnění.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Přidat oprávnění</h3>
+    <form class="cp-form cp-form-inline" method="post" action="{{ url_for('auth.add_grant', user_id=user.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Role
+        <select name="role">
+          {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Akce
+        <select name="camp_id">
+          <option value="">* (všechny akce)</option>
+          {% for c in camps %}<option value="{{ c.id }}">{{ c.slug }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit">Přidat oprávnění</button>
+    </form>
+  </section>
+{% endblock %}

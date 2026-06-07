@@ -1,5 +1,20 @@
 {% extends layout %}
 {% block title %}Akce – Camp Planner{% endblock %}
 {% block content %}
-  Vítejte v Campl Planeru
+  <h1>Akce</h1>
+  {% if can_create_camp() %}
+    <p><em>Můžete vytvářet nové akce a spravovat uživatele.</em></p>
+  {% endif %}
+  {% if camps %}
+    <ul>
+      {% for camp in camps %}
+        <li>
+          {{ camp.name }}
+          {% if can_edit(camp) %}<small>(lze upravovat)</small>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Nemáte přístup k žádné akci{% if not identity.is_authenticated %} – nejste přihlášeni{% endif %}.</p>
+  {% endif %}
 {% endblock %}

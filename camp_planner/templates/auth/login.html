@@ -1,0 +1,12 @@
+{% extends layout %}
+{% block title %}Login – Camp Planner{% endblock %}
+{% block content %}
+  <h1>Login</h1>
+  <form class="cp-form" method="post" action="{{ url_for('auth.login') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Uživatelské jméno <input name="username" autofocus required></label>
+    <label>Heslo <input name="password" type="password" required></label>
+    <button type="submit">Login</button>
+  </form>
+{% endblock %}
