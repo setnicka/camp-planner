@@ -1,0 +1,40 @@
+/* Camp Planner standalone shell (chrome): body reset, top nav, flash bar, main
+ * padding — for full.html, when we own the whole page. An embedding host loads only
+ * content.css, not this. Uses the variables from content.css (loaded alongside). */
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+.cp-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--cp-border);
+}
+
+.cp-nav a { text-decoration: none; color: var(--cp-accent); }
+.cp-nav .cp-user { margin-left: auto; color: var(--cp-muted); }
+.cp-nav form { margin: 0; }
+.cp-nav button {            /* keep the nav clean: logout reads as a link, not a button */
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--cp-accent);
+  cursor: pointer;
+}
+.cp-nav button:hover { text-decoration: underline; }
+
+.cp-flashes {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  list-style: none;
+  background: #fff8e1;
+  border-bottom: 1px solid var(--cp-border);
+}
+
+main { padding: 1rem; }

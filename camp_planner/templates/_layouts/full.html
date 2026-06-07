@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Camp Planner{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/content.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/standalone.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav class="cp-nav">
+    <a href="{{ url_for('main.index') }}">Camp Planner</a>
+  </nav>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul class="cp-flashes">
+        {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+  <main>{% block content %}{% endblock %}</main>
+  <script src="{{ url_for('main.static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
