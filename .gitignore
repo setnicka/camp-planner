@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# uv
+uv.lock
+
+# Flask / instance
+instance/
+*.sqlite
+*.sqlite3
+*.db
+
+# Env
+.env
+
+# Editors
+.vscode/
+.idea/
