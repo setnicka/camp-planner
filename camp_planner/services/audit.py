@@ -29,7 +29,6 @@ def record(
     entity_id: int | None,
     action: AuditAction,
     activity_id: int | None = None,
-    message: str | None = None,
     changes: dict | None = None,
 ) -> None:
     """Stage an audit row on the current session (does not commit).
@@ -46,10 +45,27 @@ def record(
             entity_id=entity_id,
             action=action,
             author=identity.author,
-            message=message,
             changes=to_jsonable_python(changes) if changes else None,
         )
     )
+
+
+def apply_patch(target, payload, fields) -> dict[str, list]:
+    """Apply a partial pydantic patch to an ORM row, returning the audit diff.
+
+    For each name in `fields`: if it was actually sent (in payload.model_fields_set)
+    and its value differs from the row's, set it and record `{field: [old, new]}`.
+    Returns the (possibly empty) diff so the caller can skip a no-op audit/commit.
+    """
+    changes: dict[str, list] = {}
+    for field in fields:
+        if field not in payload.model_fields_set:
+            continue
+        old, new = getattr(target, field), getattr(payload, field)
+        if old != new:
+            changes[field] = [old, new]
+            setattr(target, field, new)
+    return changes
 
 
 def list_audit(

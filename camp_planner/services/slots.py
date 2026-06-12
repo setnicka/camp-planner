@@ -98,8 +98,8 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
     # One batch-level summary, then a per-slot row grouped under each slot's activity, so
     # an activity's history shows exactly which of its slots were added/moved/removed.
     audit.record(camp_id=camp.id, entity_type=EntityType.timeline, entity_id=None, action=AuditAction.update,
-                 message=f"{len(payload.moves)} přesunuto, {len(payload.creates)} přidáno, "
-                         f"{len(retyped)} přetypováno, {len(payload.deletes)} smazáno")
+                 changes={"moved": len(payload.moves), "created": len(payload.creates),
+                          "retyped": len(retyped), "deleted": len(payload.deletes)})
     for slot in created:
         audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
                      entity_id=slot.id, action=AuditAction.create,
@@ -111,6 +111,8 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
             changes["start_at"] = [old_start, slot.start_at]
         if slot.end_at != old_end:
             changes["end_at"] = [old_end, slot.end_at]
+        if not changes:
+            continue  # a no-op move (identical times) → no audit row
         audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
                      entity_id=slot.id, action=AuditAction.update, changes=changes)
     for slot, old_role in retyped:

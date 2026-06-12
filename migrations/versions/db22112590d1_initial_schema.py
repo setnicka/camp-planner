@@ -161,7 +161,6 @@ def upgrade():
     sa.Column('entity_id', sa.Integer(), nullable=True),
     sa.Column('action', sa.Enum('create', 'update', 'delete', name='audit_action', native_enum=False), nullable=False),
     sa.Column('author', sa.String(length=255), nullable=True),
-    sa.Column('message', sa.String(length=500), nullable=True),
     sa.Column('changes', sa.JSON(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['activity_id'], ['activities.id'], ondelete='SET NULL'),

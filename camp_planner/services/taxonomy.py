@@ -60,16 +60,20 @@ def serialize(camp: Camp) -> dict:
 def _reconcile(
     camp: Camp, current: list, items: list, *, model, apply_fn: Callable,
     unique_of: Callable, dup_msg: Callable[[str], str], entity_type: EntityType,
-    block_delete: Callable | None = None,
+    display: Callable, block_delete: Callable | None = None,
 ) -> None:
     """Sync `current` rows to match `items` (schema-validated models, in final order).
     Raises errors.Invalid (after rollback) on a duplicate or a blocked delete.
 
-    unique_of(obj) is the row's unique value (an in-list repeat → dup_msg). block_delete(obj)
-    may veto removing a row (e.g. a category still used by activities)."""
+    unique_of(obj) is the row's unique value (an in-list repeat → dup_msg). display(obj) is
+    a human-readable line per row, captured before/after into the audit diff (so add /
+    remove / rename / reorder / field edits all show). block_delete(obj) may veto removing a
+    row (e.g. a category still used by activities)."""
     existing = {obj.id: obj for obj in current}
+    before = [display(obj) for obj in current]  # snapshot before apply_fn mutates kept rows
     seen: set[int] = set()
     seen_unique: set = set()
+    final: list = []
     for idx, item in enumerate(items):
         obj = existing.get(item.id)
         if obj is None:
@@ -83,14 +87,17 @@ def _reconcile(
             db.session.rollback()
             raise errors.Invalid(dup_msg(value))
         seen_unique.add(value)
+        final.append(obj)
     for oid, obj in existing.items():
         if oid not in seen:
             if block_delete and (error := block_delete(obj)):
                 db.session.rollback()
                 raise errors.Invalid(error)
             db.session.delete(obj)
-    audit.record(camp_id=camp.id, entity_type=entity_type, entity_id=None,
-                 action=AuditAction.update, message="seznam uložen")
+    after = [display(obj) for obj in final]
+    if before != after:
+        audit.record(camp_id=camp.id, entity_type=entity_type, entity_id=None,
+                     action=AuditAction.update, changes={"items": [before, after]})
     try:
         db.session.commit()
     except IntegrityError:  # unique-constraint backstop (race / in-place swap)
@@ -126,6 +133,7 @@ def save_categories(camp: Camp, items: list[CategoryIn]) -> list[dict]:
         camp, list(camp.categories), items, model=Category, apply_fn=_apply_category,
         unique_of=lambda o: o.key,
         dup_msg=lambda v: f'Klíč kategorie „{v}“ se v seznamu opakuje.',
+        display=lambda o: f"{o.label} [{o.key}] {o.color}",
         block_delete=_block_category_delete, entity_type=EntityType.category,
     )
     return categories(camp)
@@ -136,6 +144,7 @@ def save_orgs(camp: Camp, items: list[OrgIn]) -> list[dict]:
         camp, list(camp.orgs), items, model=Org, apply_fn=_apply_org,
         unique_of=lambda o: o.initials,
         dup_msg=lambda v: f'Iniciály „{v}“ se v seznamu opakují.',
+        display=lambda o: f"{o.initials} {o.name}",
         entity_type=EntityType.org,
     )
     return orgs(camp)
@@ -146,6 +155,7 @@ def save_tags(camp: Camp, items: list[TagDefIn]) -> list[dict]:
         camp, list(camp.tags), items, model=Tag, apply_fn=_apply_tag,
         unique_of=lambda o: o.name,
         dup_msg=lambda v: f'Tag „{v}“ se v seznamu opakuje.',
+        display=lambda o: f"{o.name} [{o.kind.value}]" + (" 📌" if o.pinned else ""),
         entity_type=EntityType.tag,
     )
     return tags(camp)

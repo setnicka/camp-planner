@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
     from camp_planner.schemas import TodoCreate, TodoUpdate
 
+# Fields a PATCH may change (audit-diff order).
+_EDITABLE = ("title", "note", "due_date", "is_done")
+
 
 def list_todos_overview(camp: Camp) -> dict:
     """Every todo across the camp's activities (camp-wide TODO page), each carrying its
@@ -32,25 +35,24 @@ def create_todo(activity: Activity, payload: TodoCreate) -> dict:
     db.session.add(todo)
     db.session.flush()
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.todo,
-                 entity_id=todo.id, action=AuditAction.create)
+                 entity_id=todo.id, action=AuditAction.create, changes={"title": [None, todo.title]})
     db.session.commit()
     return {"todo": serialize.todo(todo)}
 
 
 def update_todo(todo: Todo, payload: TodoUpdate) -> dict:
-    # Only the fields the client actually sent (exclude_unset) are applied.
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(todo, field, value)
-    audit.record(camp_id=todo.activity.camp_id, activity_id=todo.activity_id, entity_type=EntityType.todo,
-                 entity_id=todo.id, action=AuditAction.update)
-    db.session.commit()
+    changes = audit.apply_patch(todo, payload, _EDITABLE)
+    if changes:
+        audit.record(camp_id=todo.activity.camp_id, activity_id=todo.activity_id, entity_type=EntityType.todo,
+                     entity_id=todo.id, action=AuditAction.update, changes=changes)
+        db.session.commit()
     return {"todo": serialize.todo(todo)}
 
 
 def delete_todo(todo: Todo) -> dict:
-    todo_id, activity = todo.id, todo.activity
+    todo_id, activity, title = todo.id, todo.activity, todo.title
     db.session.delete(todo)
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.todo,
-                 entity_id=todo_id, action=AuditAction.delete)
+                 entity_id=todo_id, action=AuditAction.delete, changes={"title": [title, None]})
     db.session.commit()
     return {"id": todo_id}

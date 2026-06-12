@@ -666,7 +666,6 @@ class AuditEntryOut(BaseModel):
     entity_type: EntityType
     entity_id: int | None
     activity_id: int | None
-    message: str | None
     changes: dict | None
 
 

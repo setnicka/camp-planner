@@ -11,9 +11,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from camp_planner.extensions import db
-from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag
+from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, OrgRole
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import TagKind
+from camp_planner.models.common import czech_sort_key
 from camp_planner.services import audit, errors, serialize, timeline
 
 if TYPE_CHECKING:
@@ -46,15 +47,7 @@ def update_activity(activity: Activity, payload: ActivityUpdate) -> dict:
     if "category_id" in payload.model_fields_set:
         _check_category(activity.camp, payload.category_id)
 
-    changes: dict[str, list] = {}
-    for field in _EDITABLE:
-        if field not in payload.model_fields_set:
-            continue
-        old, new = getattr(activity, field), getattr(payload, field)
-        if old != new:
-            changes[field] = [old, new]
-            setattr(activity, field, new)
-
+    changes = audit.apply_patch(activity, payload, _EDITABLE)
     if changes:
         audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.activity,
                      entity_id=activity.id, action=AuditAction.update, changes=changes)
@@ -72,8 +65,7 @@ def delete_activity(activity: Activity) -> dict:
     activity_id, camp_id, title = activity.id, activity.camp_id, activity.title
     db.session.delete(activity)
     audit.record(camp_id=camp_id, activity_id=None, entity_type=EntityType.activity,
-                 entity_id=activity_id, action=AuditAction.delete,
-                 message=f"smazána akce „{title}“")
+                 entity_id=activity_id, action=AuditAction.delete, changes={"title": [title, None]})
     db.session.commit()
     return {"id": activity_id}
 
@@ -128,17 +120,27 @@ def merge_activities(source: Activity, target: Activity) -> dict:
 
 def set_orgs(activity: Activity, payload: ActivityOrgsIn) -> dict:
     """Replace the activity's garant/helper orgs with the submitted set."""
-    org_ids = {o.id for o in activity.camp.orgs}
-    new: list[ActivityAssignment] = []
+    initials = {o.id: o.initials for o in activity.camp.orgs}
+    new_pairs: list[tuple] = []
     for item in payload.orgs:  # schema already rejected (org_id, role) duplicates
-        if item.org_id not in org_ids:
+        if item.org_id not in initials:
             raise errors.Invalid("Orgové: neznámý org této akce.")
-        new.append(ActivityAssignment(org_id=item.org_id, role=item.role))
+        new_pairs.append((item.org_id, item.role))
 
-    activity.assignments = new  # delete-orphan removes the previous rows
-    audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.assignment,
-                 entity_id=None, action=AuditAction.update, message="orgové akce uloženi")
-    db.session.commit()
+    # per-role before/after initials (czech-sorted), only the roles that changed
+    current_pairs = {(a.org_id, a.role) for a in activity.assignments}
+    by_role = lambda pairs, role: sorted((initials[oid] for oid, r in pairs if r == role), key=czech_sort_key)  # noqa: E731
+    changes: dict[str, list] = {}
+    for role in OrgRole:
+        before, after = by_role(current_pairs, role), by_role(new_pairs, role)
+        if before != after:
+            changes[role.value] = [before, after]
+
+    if changes:  # unchanged → no reassignment (avoids delete-orphan churn) and no audit row
+        activity.assignments = [ActivityAssignment(org_id=oid, role=role) for oid, role in new_pairs]
+        audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.assignment,
+                     entity_id=None, action=AuditAction.update, changes=changes)
+        db.session.commit()
     return {"orgs": [serialize.assignment(a) for a in activity.assignments]}
 
 
@@ -166,28 +168,49 @@ def _normalize_tag_value(kind: TagKind, value: str | None) -> str | None:
     return value  # text: free-form
 
 
+def _tag_audit_value(value: str | None) -> str:
+    """A tag's per-activity value as it reads in the audit diff: the value itself, or '✓'
+    when the tag is applied without one (a label, or a cleared field). Absence is None."""
+    return value if value not in (None, "") else "✓"
+
+
 def set_tags(activity: Activity, payload: TagsIn) -> dict:
     """Replace the activity's tags (with per-tag value) with the submitted set."""
     tags_by_id = {t.id: t for t in activity.camp.tags}
-    new: list[ActivityTag] = []
+    old = {at.tag_id: at.value for at in activity.tags}
+    new: dict[int, str | None] = {}
     for item in payload.tags:  # schema already rejected duplicate tag_ids
         tag = tags_by_id.get(item.tag_id)
         if tag is None:
             raise errors.Invalid("Tagy: neznámý tag této akce.")
-        new.append(ActivityTag(tag_id=item.tag_id,
-                               value=_normalize_tag_value(tag.kind, item.value)))
+        new[item.tag_id] = _normalize_tag_value(tag.kind, item.value)
 
-    activity.tags = new  # delete-orphan removes the previous links
+    if new == old:
+        return {"tags": [serialize.tag_link(t) for t in activity.tags]}  # unchanged → no write
+
+    activity.tags = [ActivityTag(tag_id=tid, value=val) for tid, val in new.items()]  # delete-orphan drops old links
+    # field-level diff keyed by tag name: value (or ✓) when applied, None when absent.
+    changes: dict[str, list] = {}
+    for tag_id in old.keys() | new.keys():
+        before = _tag_audit_value(old[tag_id]) if tag_id in old else None
+        after = _tag_audit_value(new[tag_id]) if tag_id in new else None
+        if before != after:
+            name = tags_by_id[tag_id].name if tag_id in tags_by_id else f"tag#{tag_id}"
+            changes[name] = [before, after]
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.tag,
-                 entity_id=None, action=AuditAction.update, message="tagy akce uloženy")
+                 entity_id=None, action=AuditAction.update, changes=changes)
     db.session.commit()
     return {"tags": [serialize.tag_link(t) for t in activity.tags]}
 
 
 def set_tag_value(link: ActivityTag, payload: TagValueUpdate) -> dict:
     """Update a single applied tag's value (validated against the tag's kind)."""
-    link.value = _normalize_tag_value(link.tag.kind, payload.value)
+    old = link.value
+    new = _normalize_tag_value(link.tag.kind, payload.value)
+    if old == new:
+        return {"tag": serialize.tag_link(link)}  # unchanged → no write
+    link.value = new
     audit.record(camp_id=link.activity.camp_id, activity_id=link.activity_id, entity_type=EntityType.tag,
-                 entity_id=link.tag_id, action=AuditAction.update, message="hodnota tagu")
+                 entity_id=link.tag_id, action=AuditAction.update, changes={link.tag.name: [old, new]})
     db.session.commit()
     return {"tag": serialize.tag_link(link)}

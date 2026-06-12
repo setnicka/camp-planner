@@ -67,7 +67,6 @@ class AuditLog(Base):
     action: Mapped[AuditAction] = mapped_column(portable_enum(AuditAction, "audit_action"))
 
     author: Mapped[str | None] = mapped_column(String(255), index=True)  # host-provided identity
-    message: Mapped[str | None] = mapped_column(String(500))   # optional commit message
     changes: Mapped[dict | None] = mapped_column(JSON)         # {field: [before, after]}
 
     created_at: Mapped[datetime] = mapped_column(default=func.now(), index=True)
