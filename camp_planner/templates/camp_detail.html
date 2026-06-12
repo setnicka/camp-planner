@@ -1,0 +1,48 @@
+{% extends layout %}
+{% block title %}{{ camp.name }} – detail{% endblock %}
+
+{% block head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}
+
+{% block content %}
+  <h1>{{ camp.name }} <span class="cp-subtitle">detail</span></h1>
+  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a></p>
+
+  {% set may_edit = can_edit(camp) %}
+
+  <section class="cp-section">
+    <table class="cp-params">
+      <tr><th>Slug</th><td><code>{{ camp.slug }}</code></td></tr>
+      <tr><th>Trvání</th><td>{{ camp.start_date.isoformat() }} — {{ end_date.isoformat() }} ({{ camp.length_days }} dní)</td></tr>
+      <tr><th>Časové pásmo</th><td>{{ tz_label }}</td></tr>
+      <tr><th>Začátek dne</th><td>{{ camp.window_start_min }} min od půlnoci</td></tr>
+      <tr><th>Krok mřížky</th><td>{{ camp.snap_minutes }} min</td></tr>
+      {% if camp.latitude is not none and camp.longitude is not none %}
+        <tr><th>Poloha</th><td>
+          <a href="https://mapy.com/zakladni?source=coor&amp;id={{ camp.longitude }},{{ camp.latitude }}&amp;x={{ camp.longitude }}&amp;y={{ camp.latitude }}&amp;z=16"
+             target="_blank" rel="noopener">{{ camp.latitude }}, {{ camp.longitude }}</a>
+        </td></tr>
+      {% endif %}
+    </table>
+    {% if may_edit %}<p><a href="{{ url_for('main.camp_edit', slug=camp.slug) }}">✎ Upravit parametry</a></p>{% endif %}
+  </section>
+
+  {# Taxonomy lists are rendered + edited entirely by settings.js from the JSON
+     below. The pencil toggles edit mode (add / rename / drag-reorder / delete);
+     Save batches the whole list to the REST endpoint. #}
+  {% macro tax_section(name, heading) %}
+    <section class="cp-section" data-tax="{{ name }}">
+      <h2>{{ heading }} {% if may_edit %}<button type="button" class="cp-edit-toggle" data-edit-toggle title="Upravit">✎</button>{% endif %}</h2>
+      <div data-tax-flash class="cp-flash-area" aria-live="polite"></div>
+      <div data-tax-body></div>
+    </section>
+  {% endmacro %}
+  {{ tax_section("categories", "Kategorie") }}
+  {{ tax_section("orgs", "Orgové") }}
+  {{ tax_section("tags", "Tagy") }}
+
+  <script id="cp-tax-data" type="application/json">{{ tax_data | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='js/settings.js') }}"></script>
+{% endblock %}

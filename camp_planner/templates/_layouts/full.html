@@ -1,3 +1,4 @@
+{% from "_macros.html" import csrf -%}
 <!doctype html>
 <html lang="cs">
 <head>
@@ -17,8 +18,8 @@
     {% if identity.is_authenticated %}
       <span class="cp-user">{{ identity.display_name }}</span>
       {% if auth_enabled %}
-        <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          {{ csrf() }}
           <button type="submit">Logout</button>
         </form>
       {% endif %}
@@ -34,7 +35,6 @@
     {% endif %}
   {% endwith %}
   <main>{% block content %}{% endblock %}</main>
-  <script src="{{ url_for('main.static', filename='js/app.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

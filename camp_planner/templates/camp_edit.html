@@ -1,0 +1,23 @@
+{% extends layout %}
+{% from "_macros.html" import csrf, errors_list, camp_fields %}
+{% block title %}{{ camp.name }} – úprava{% endblock %}
+{% block content %}
+  <h1>{{ camp.name }} <span class="cp-subtitle">úprava parametrů</span></h1>
+  <p><a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">← zpět na detail</a></p>
+
+  {{ errors_list(errors) }}
+
+  <form class="cp-form" method="post" action="{{ url_for('main.camp_edit_save', slug=camp.slug) }}">
+    {{ csrf() }}
+    {% if can_edit_camp_meta(camp) %}
+      <label>Název<input name="name" value="{{ values.get('name', '') }}" required></label>
+      <label>Slug<input name="slug" value="{{ values.get('slug', '') }}" required></label>
+    {% else %}
+      {# Editors can't change name/slug — shown read-only and not submitted. #}
+      <label>Název<span class="cp-static">{{ camp.name }}</span></label>
+      <label>Slug<span class="cp-static">{{ camp.slug }}</span></label>
+    {% endif %}
+    {{ camp_fields(values, timezones, tz_fixed, snap_choices) }}
+    <button type="submit">Uložit</button>
+  </form>
+{% endblock %}

@@ -1,4 +1,5 @@
 {% extends layout %}
+{% from "_macros.html" import csrf %}
 {% block title %}Uživatelé – Camp Planner{% endblock %}
 {% block content %}
   <h1>Uživatelé</h1>
@@ -24,7 +25,7 @@
             {% if u.id != current_user_id %}
               <form method="post" action="{{ url_for('auth.delete_user', user_id=u.id) }}"
                     onsubmit="return confirm('Smazat uživatele {{ u.username }}?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {{ csrf() }}
                 <button type="submit" class="cp-danger">Smazat</button>
               </form>
             {% endif %}
@@ -37,7 +38,7 @@
   <section class="cp-section">
     <h2>Vytvořit uživatele</h2>
     <form class="cp-form" method="post" action="{{ url_for('auth.create_user') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ csrf() }}
       <label>Uživatelské jméno <input name="username" required></label>
       <label>Zobrazované jméno <input name="display_name"></label>
       <label>Heslo <input name="password" type="password" required></label>

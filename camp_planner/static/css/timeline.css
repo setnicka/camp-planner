@@ -1,0 +1,77 @@
+/* Page-scoped styles for the camp timeline view (read-only Phase 1).
+ * Ported from the vis-timeline mockup (docs/mockups/mock-vis-timeline.html).
+ * Linked only on the timeline page; the embed-shared component styles stay in content.css.
+ * Category colours (.vis-item.cat-<key>) are injected at runtime by timeline.js. */
+
+.cp-tl-head { display: flex; align-items: baseline; gap: 1rem; }
+.cp-tl-head h1 { margin: 0; }
+
+#cp-timeline { margin: 12px 0; }
+.cp-tl-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
+.cp-tl-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.cp-tl-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+
+/* controls bar (day/night toggle + zoom) */
+.cp-tl-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+.cp-tl-btn {
+  font: inherit; font-size: 13px; padding: 0.3rem 0.7rem; cursor: pointer;
+  border: 1px solid var(--cp-border); border-radius: 6px; background: #fff; color: #333;
+}
+.cp-tl-btn:hover { background: #f3f3f3; }
+.cp-tl-btn.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.cp-tl-zoom { display: inline-flex; gap: 4px; }
+.cp-tl-zoom .cp-tl-btn { width: 2rem; padding: 0.3rem 0; text-align: center; font-size: 16px; line-height: 1; }
+
+/* day/night gradient: full-row background behind everything; toggle fades it out */
+#cp-timeline .vis-item.cp-daynight {
+  border: 0; border-radius: 0; min-height: 0; z-index: -1; transition: opacity 0.35s ease;
+}
+#cp-timeline.dn-hidden .vis-item.cp-daynight { opacity: 0; }
+/* let the hour grid sit between the gradient (-1) and the event boxes */
+#cp-timeline .vis-panel.vis-center > .vis-content { transform: none !important; }
+#cp-timeline .vis-panel.vis-background.vis-vertical { z-index: 0; }
+
+/* one row per day */
+#cp-timeline .vis-time-axis .vis-text { font-size: 11px; color: #888; }
+#cp-timeline .vis-labelset .vis-label { font-weight: 600; }
+#cp-timeline .vis-label .day-dom { font-weight: 400; color: #888; font-size: 11px; }
+/* zebra row tint marks day boundaries even under boxes */
+#cp-timeline .vis-foreground .vis-group:nth-child(even) { background: rgba(20, 30, 50, .05); }
+#cp-timeline .vis-labelset .vis-label:nth-child(even) { background: #eceff4; }
+#cp-timeline .vis-foreground .vis-group,
+#cp-timeline .vis-labelset .vis-label { border-bottom: 1px solid #c4cad3; }
+
+/* event cards. Box gaps = 2px transparent border (NOT margin.item, which inflates collision
+   math); background-clip:padding-box keeps the fill inside it. */
+#cp-timeline .vis-item {
+  border: 2px solid transparent; background-clip: padding-box; border-radius: 5px;
+  color: #fff; font-size: 11px; min-height: 36px; box-sizing: border-box; cursor: pointer;
+}
+#cp-timeline .vis-item.solo { min-height: 74px; }   /* no overlap in the row → double height */
+#cp-timeline .vis-item .vis-item-content { padding: 2px 6px; width: 100%; box-sizing: border-box; }
+#cp-timeline .vis-item.solo .vis-item-content {
+  height: 100%; display: flex; flex-direction: column; justify-content: center;
+}
+#cp-timeline .ev-title { font-weight: 600; }
+#cp-timeline .ev-meta { opacity: .9; font-size: 10px; }
+#cp-timeline .ev-orgs { font-weight: 700; }
+
+/* selection: recolour the gap-border */
+#cp-timeline .vis-item.vis-selected { border-color: rgba(0, 0, 0, .8); box-shadow: none; }
+
+/* a span continues onto another row: flatten the cut edge + dashed seam */
+#cp-timeline .vis-item.cut-l {
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+  border-left: 2px dashed rgba(255, 255, 255, .85);
+}
+#cp-timeline .vis-item.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#cp-timeline .vis-item.cut-r::after {
+  content: ''; position: absolute; top: 0; bottom: 0; right: 2px; width: 0;
+  border-left: 2px dashed rgba(255, 255, 255, .85); pointer-events: none;
+}
+
+/* prep / cleanup slots: faded, independently placeable */
+#cp-timeline .vis-item.margin { opacity: .45; font-style: italic; }
+
+/* hour grid lines visible between the (future) background and the boxes */
+#cp-timeline .vis-time-axis .vis-grid.vis-vertical { border-color: #9aa3b2; opacity: .25; }

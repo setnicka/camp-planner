@@ -3,14 +3,15 @@
 {% block content %}
   <h1>Akce</h1>
   {% if can_create_camp() %}
-    <p><em>Můžete vytvářet nové akce a spravovat uživatele.</em></p>
+    <p><a href="{{ url_for('main.camp_new') }}">+ Vytvořit akci</a></p>
   {% endif %}
   {% if camps %}
-    <ul>
+    <ul class="cp-camp-list">
       {% for camp in camps %}
         <li>
-          {{ camp.name }}
-          {% if can_edit(camp) %}<small>(lze upravovat)</small>{% endif %}
+          <a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
+          <span class="cp-muted">{{ camp.start_date.isoformat() }}</span>
+          · <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">detail</a>
         </li>
       {% endfor %}
     </ul>

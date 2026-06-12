@@ -1,0 +1,43 @@
+{% extends layout %}
+{% from "_macros.html" import csrf, errors_list, camp_fields %}
+{% block title %}Nová akce – Camp Planner{% endblock %}
+{% block content %}
+  <h1>Nová akce</h1>
+
+  {{ errors_list(errors) }}
+
+  <form class="cp-form" method="post" action="{{ url_for('main.camp_create') }}">
+    {{ csrf() }}
+
+    <label>Název<input name="name" value="{{ values.get('name', '') }}" required></label>
+    <label>Slug
+      <span class="cp-field">
+        <input name="slug" value="{{ values.get('slug', '') }}" placeholder="napr-smf-2026">
+        <small class="cp-hint">jméno akce v URL, nepovinné – odvodí se z názvu</small>
+      </span></label>
+
+    <h2 class="cp-form-section">Nastavení <small class="cp-hint">(lze změnit dodatečně)</small></h2>
+    {{ camp_fields(values, timezones, tz_fixed, snap_choices) }}
+
+    {% if copy_sources %}
+      <h2 class="cp-form-section">Předvyplnění <small class="cp-hint">(lze udělat jen při vytváření akce)</small></h2>
+      <label>Převzít z akce
+        <select name="copy_from">
+          <option value="">— nepřebírat (prázdné) —</option>
+          {% for c in copy_sources %}
+            <option value="{{ c.slug }}" {{ 'selected' if values.get('copy_from') == c.slug }}>{{ c.name }}</option>
+          {% endfor %}
+        </select></label>
+      <div class="cp-copy-parts">
+        <label class="cp-inline-check"><input type="checkbox" name="copy_categories"
+               {{ 'checked' if (not submitted) or values.get('copy_categories') }}> Kategorie</label>
+        <label class="cp-inline-check"><input type="checkbox" name="copy_orgs"
+               {{ 'checked' if (not submitted) or values.get('copy_orgs') }}> Orgy</label>
+        <label class="cp-inline-check"><input type="checkbox" name="copy_tags"
+               {{ 'checked' if (not submitted) or values.get('copy_tags') }}> Tagy</label>
+      </div>
+    {% endif %}
+
+    <button type="submit">Vytvořit akci</button>
+  </form>
+{% endblock %}

@@ -1,0 +1,51 @@
+{# Shared form macros. csrf_token is a Flask Jinja global, available in macros. #}
+
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro errors_list(errors) %}
+  {% if errors %}
+    <ul class="cp-flashes">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% endif %}
+{% endmacro %}
+
+{% macro tz_select(current, timezones, tz_fixed) %}
+  <select name="timezone">
+    <optgroup label="Pevný posun">
+      {% for label, value in tz_fixed %}
+        <option value="{{ value }}" {{ 'selected' if current == value }}>{{ label }}</option>
+      {% endfor %}
+    </optgroup>
+    <optgroup label="Oblasti">
+      {% for tz in timezones %}
+        <option value="{{ tz }}" {{ 'selected' if current == tz }}>{{ tz }}</option>
+      {% endfor %}
+    </optgroup>
+  </select>
+{% endmacro %}
+
+{# Scheduling/location parameters shared by the create and edit camp forms.
+   `values` is always fully populated by the view — defaults live there, not here. #}
+{% macro camp_fields(values, timezones, tz_fixed, snap_choices) %}
+  <label>Začátek<input type="date" name="start_date" value="{{ values.get('start_date', '') }}" required></label>
+  <label>Počet dní<input type="number" name="length_days" min="1" value="{{ values.get('length_days', '') }}"></label>
+  <label>Časové pásmo{{ tz_select(values.get('timezone'), timezones, tz_fixed) }}</label>
+  <label>Začátek dne (min)
+    <input type="number" name="window_start_min" min="0" max="1439"
+           value="{{ values.get('window_start_min', '') }}"></label>
+  <label>Krok mřížky (min)
+    <select name="snap_minutes">
+      {% for m in snap_choices %}
+        <option value="{{ m }}" {{ 'selected' if values.get('snap_minutes')|int == m }}>{{ m }}</option>
+      {% endfor %}
+    </select></label>
+  <label>Souřadnice
+    <span class="cp-field">
+      <span class="cp-inputs">
+        <input type="number" step="any" name="latitude" placeholder="50.0878"
+               value="{{ values.get('latitude', '') }}">
+        <input type="number" step="any" name="longitude" placeholder="14.4036"
+               value="{{ values.get('longitude', '') }}">
+      </span>
+      <small class="cp-hint">nepovinné – pro stínování den/noc</small>
+    </span></label>
+{% endmacro %}

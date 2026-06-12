@@ -14,26 +14,72 @@
 .cp-section { margin: 1.75rem 0; }
 .cp-subtitle { font-size: 0.6em; font-weight: normal; color: var(--cp-muted); }
 
-/* Forms: .cp-form stacks fields in a grid; add .cp-form-inline for a horizontal row. */
-.cp-form { display: grid; gap: 0.8rem; max-width: 26rem; }
-.cp-form-inline { display: flex; align-items: end; flex-wrap: wrap; max-width: none; }
-.cp-form label { display: grid; gap: 0.25rem; font-weight: 500; }
-.cp-form input, .cp-form select {
-  padding: 0.4rem 0.5rem; border: 1px solid var(--cp-border); border-radius: 4px; font: inherit;
+/* Read-only parameter table (camp detail page): condensed, label left. */
+.cp-params { border-collapse: collapse; }
+.cp-params th {
+  text-align: left; font-weight: normal; color: var(--cp-muted);
+  padding: 0.15rem 1.2rem 0.15rem 0; white-space: nowrap; vertical-align: top;
 }
-/* A checkbox row stays horizontal despite the stacked-label grid above. */
-.cp-form label.cp-check { display: flex; align-items: center; gap: 0.45rem; font-weight: normal; }
+.cp-params td { padding: 0.15rem 0; }
 
-/* Buttons: primary (form submits) and a compact red action button (.cp-danger). */
-.cp-form button {
-  font: inherit; padding: 0.4rem 0.9rem; border: 1px solid var(--cp-accent);
-  border-radius: 4px; background: var(--cp-accent); color: #fff; cursor: pointer;
+/* Forms. .cp-form is a 2-column grid; labels are display:contents, so caption and
+   input land in separate columns — captions auto-size to the longest one and every
+   input lines up. align-items:baseline keeps a caption level with its input's text
+   line even when a hint sits below it. */
+.cp-form { display: grid; grid-template-columns: max-content 1fr; align-items: baseline; gap: 0.6rem 0.8rem; max-width: 36rem; }
+.cp-form label { display: contents; font-weight: 500; }
+.cp-form button { grid-column: 1 / -1; justify-self: start; }
+.cp-form .cp-static { color: var(--cp-muted); font-weight: normal; }
+/* A field whose input carries a hint: input + hint stacked in the value column. */
+.cp-form .cp-field { display: flex; flex-direction: column; gap: 0.2rem; }
+.cp-form .cp-hint { color: var(--cp-muted); font-weight: normal; font-size: 0.85em; }
+/* Two inputs sharing one value column on a single line (e.g. lat/lon coordinates). */
+.cp-form .cp-inputs { display: flex; gap: 0.5rem; }
+.cp-form .cp-inputs input { flex: 1; min-width: 0; }
+/* A row of checkboxes in the value column (e.g. which taxonomies to copy). Placed in
+   column 2 so it sits under the field above it. */
+.cp-form .cp-copy-parts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 0.25rem 1.2rem; }
+.cp-form .cp-inline-check { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: normal; }
+.cp-form input[type="checkbox"] { padding: 0; border: 0; width: auto; }
+/* A checkbox row spans both columns (box + text together). */
+.cp-form label.cp-check { display: flex; align-items: center; gap: 0.45rem; font-weight: normal; grid-column: 1 / -1; }
+/* Section heading inside a .cp-form: spans both columns and rules off a group of
+   fields, while the single shared grid keeps every input aligned across sections. */
+.cp-form .cp-form-section {
+  grid-column: 1 / -1; margin: 0.6rem 0 0; padding-top: 0.9rem;
+  border-top: 1px solid var(--cp-border); font-size: 1.05rem; font-weight: 600;
 }
-.cp-danger {
-  font: inherit; padding: 0.2rem 0.55rem; border-radius: 4px;
-  border: 1px solid #c5221f; background: #c5221f; color: #fff; cursor: pointer;
+
+/* Inline add form: a horizontal row of stacked label-over-input fields. */
+.cp-form-inline { display: flex; align-items: end; flex-wrap: wrap; gap: 0.8rem; max-width: none; }
+.cp-form-inline label { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; }
+.cp-form-inline label.cp-check { flex-direction: row; align-items: center; }
+.cp-form-inline button { grid-column: auto; }
+
+/* Inputs: one shared chrome, form/table variants differ only in padding.
+   font-weight resets the 500 inherited from .cp-form labels. */
+.cp-form input, .cp-form select, .cp-table input, .cp-table select {
+  border: 1px solid var(--cp-border); border-radius: 4px;
+  font: inherit; font-weight: normal; box-sizing: border-box;
 }
-.cp-form button:hover, .cp-danger:hover { filter: brightness(1.08); }
+.cp-form input, .cp-form select { padding: 0.4rem 0.5rem; }
+.cp-table input, .cp-table select { padding: 0.3rem 0.4rem; }
+.cp-table input:not([type=color]):not([type=checkbox]) { width: 100%; }
+
+/* Buttons: one shared chrome (white), then an accent-filled group for primary
+   actions; the variants below only resize and recolour. */
+.cp-form button, .cp-danger, .cp-edit-toggle, .cp-edit-actions button {
+  font: inherit; border: 1px solid var(--cp-border); border-radius: 4px;
+  background: #fff; color: #333; cursor: pointer;
+}
+.cp-form button, .cp-edit-toggle.on, .cp-edit-actions .cp-primary {
+  background: var(--cp-accent); border-color: var(--cp-accent); color: #fff;
+}
+.cp-form button { padding: 0.4rem 0.9rem; }
+.cp-danger { padding: 0.2rem 0.55rem; background: #c5221f; border-color: #c5221f; color: #fff; }
+.cp-edit-toggle { padding: 0.05rem 0.45rem; font-size: 0.9rem; vertical-align: middle; }
+.cp-edit-actions button { padding: 0.35rem 0.8rem; }
+.cp-form button:hover, .cp-danger:hover, .cp-edit-actions button:hover { filter: brightness(1.08); }
 
 /* Tables */
 .cp-table { border-collapse: collapse; width: 100%; max-width: 46rem; }
@@ -49,5 +95,22 @@
   color: var(--cp-muted);
 }
 .cp-table tbody tr:hover { background: #fafafa; }
-.cp-table form { margin: 0; }
+.cp-table form { margin: 0; display: inline; }
 .cp-actions { text-align: right; width: 1%; white-space: nowrap; }
+.cp-swatch { display: inline-block; width: 1rem; height: 1rem; border-radius: 3px; vertical-align: middle; margin-right: 0.4rem; }
+
+/* Taxonomy editor (settings.js) */
+.cp-drag { cursor: grab; user-select: none; color: var(--cp-muted); }
+tr.cp-dragging { opacity: 0.5; }
+.cp-edit-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+
+/* Client-side flash banners (AJAX save feedback), shown under a section heading.
+   Start hidden; .cp-flash-show fades/slides them in, and removing it fades out. */
+.cp-flash {
+  padding: 0.5rem 0.75rem; border-radius: 4px; margin: 0.4rem 0;
+  background: #e7f4ec; border: 1px solid var(--cp-accent);
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.cp-flash.cp-flash-show { opacity: 1; transform: none; }
+.cp-flash-error { background: #fdecea; border-color: #c5221f; }

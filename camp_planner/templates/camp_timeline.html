@@ -1,0 +1,31 @@
+{% extends layout %}
+{% block title %}{{ camp.name }} – timeline{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet"
+        href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/timeline.css') }}">
+{% endblock %}
+
+{% block content %}
+  <div class="cp-tl-head">
+    <h1>{{ camp.name }}</h1>
+    <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Detail</a>
+  </div>
+
+  <div class="cp-tl-bar">
+    <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc">🌙 Den/noc</button>
+    <span class="cp-tl-zoom">
+      <button type="button" id="cp-zoom-out" class="cp-tl-btn" title="Oddálit (Ctrl + kolečko)">−</button>
+      <button type="button" id="cp-zoom-in" class="cp-tl-btn" title="Přiblížit (Ctrl + kolečko)">+</button>
+    </span>
+  </div>
+
+  <div id="cp-timeline"></div>
+  <script id="cp-timeline-data" type="application/json">{{ timeline | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/timeline.js') }}"></script>
+{% endblock %}

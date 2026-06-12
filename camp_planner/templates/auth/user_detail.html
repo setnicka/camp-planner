@@ -1,4 +1,5 @@
 {% extends layout %}
+{% from "_macros.html" import csrf %}
 {% block title %}{{ user.username }} – Uživatelé{% endblock %}
 {% block content %}
   <p><a href="{{ url_for('auth.users') }}">← Všichni uživatelé</a></p>
@@ -7,7 +8,7 @@
   <section class="cp-section">
     <h2>Profil</h2>
     <form class="cp-form" method="post" action="{{ url_for('auth.update_profile', user_id=user.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ csrf() }}
       <label>Uživatelské jméno <input name="username" value="{{ user.username }}" required></label>
       <label>Zobrazované jméno <input name="display_name" value="{{ user.display_name }}" required></label>
       <label>Nové heslo <input name="password" type="password" placeholder="ponechte prázdné pro zachování stávajícího"></label>
@@ -35,7 +36,7 @@
             <td>{{ '*' if grant.camp_id is none else camp_slugs[grant.camp_id] }}</td>
             <td class="cp-actions">
               <form method="post" action="{{ url_for('auth.remove_grant', user_id=user.id, grant_id=grant.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {{ csrf() }}
                 <button type="submit" class="cp-danger">Odebrat</button>
               </form>
             </td>
@@ -48,7 +49,7 @@
 
     <h3>Přidat oprávnění</h3>
     <form class="cp-form cp-form-inline" method="post" action="{{ url_for('auth.add_grant', user_id=user.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ csrf() }}
       <label>Role
         <select name="role">
           {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
