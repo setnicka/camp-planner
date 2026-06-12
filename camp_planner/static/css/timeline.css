@@ -3,16 +3,33 @@
  * Linked only on the timeline page; the embed-shared component styles stay in content.css.
  * Category colours (.vis-item.cat-<key>) are injected at runtime by timeline.js. */
 
+/* left column (title + legend) vs right column (control bars), top-aligned so the
+   legend sits right under the title instead of floating beside the 2-row buttons */
+.cp-tl-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.cp-tl-left { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
 .cp-tl-head { display: flex; align-items: baseline; gap: 1rem; }
 .cp-tl-head h1 { margin: 0; }
+.cp-tl-bars { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
 
 #cp-timeline { margin: 12px 0; }
-.cp-tl-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }
-.cp-tl-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.cp-tl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
+.cp-tl-help { margin: 0; font-size: 12px; color: #666; line-height: 1.35; }
+
+/* vis renders the slot tooltip (item `title`) as a global div.vis-tooltip. vis injects
+   its own CSS via JS at runtime (after this file), so !important is needed to win. */
+div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
+/* legend entries double as the category filter: clickable chips, highlighted when active */
+.cp-tl-legend-item {
+  display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px;
+  padding: 0.1rem 0.45rem; border: 1px solid transparent; border-radius: 999px;
+  background: none; color: inherit; cursor: pointer;
+}
+.cp-tl-legend-item:hover { background: #f1f5fc; border-color: var(--cp-border); }
+.cp-tl-legend-item.on { background: #e8f0fe; border-color: #1a73e8; font-weight: 600; }
 .cp-tl-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
 
-/* controls bar (day/night toggle + zoom) */
-.cp-tl-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+/* controls bar (day/night toggle + zoom; second row = edit buttons) */
+.cp-tl-bar { display: flex; align-items: center; gap: 0.5rem; }
 .cp-tl-btn {
   font: inherit; font-size: 13px; padding: 0.3rem 0.7rem; cursor: pointer;
   border: 1px solid var(--cp-border); border-radius: 6px; background: #fff; color: #333;
@@ -21,6 +38,30 @@
 .cp-tl-btn.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
 .cp-tl-zoom { display: inline-flex; gap: 4px; }
 .cp-tl-zoom .cp-tl-btn { width: 2rem; padding: 0.3rem 0; text-align: center; font-size: 16px; line-height: 1; }
+.cp-tl-filter-label { font-size: 12px; font-weight: 600; color: #555; }
+.cp-tl-select {
+  font: inherit; font-size: 13px; padding: 0.25rem 0.4rem; max-width: 16rem;
+  border: 1px solid var(--cp-border); border-radius: 6px; background: #fff; color: #333;
+}
+
+/* filter row under the legend: org chips + activity picker on one line */
+.cp-tl-frow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; }
+.cp-tl-frow .cp-tl-select { margin-left: 0.2rem; }   /* small gap after the "Hra:" label */
+.cp-tl-chip {
+  font: inherit; font-size: 12px; font-weight: 600; min-width: 1.6rem; padding: 0.1rem 0.45rem; cursor: pointer;
+  border: 1px solid var(--cp-border); border-radius: 999px; background: #fff; color: #333;
+}
+.cp-tl-chip:hover { background: #f1f5fc; }
+/* active org chip, coloured by relation: reddish = garant/pomocník, blueish = účast na slotu
+   (an active chip always carries a mode-* class, which supplies the background) */
+.cp-tl-chip.on { color: #fff; }
+.cp-tl-chip.mode-garant { background: #d64541; border-color: #d64541; }
+.cp-tl-chip.mode-attending { background: #1a73e8; border-color: #1a73e8; }
+/* names the active org relation after the org chips (same reddish/blueish as the chip); a fixed
+   reserved width keeps the "Hra:" picker from shifting as the label appears/clears */
+.cp-tl-orgmode { display: inline-block; min-width: 7.5rem; margin-left: 0.3rem;
+  font-size: 12px; font-style: italic; color: #1a73e8; }   /* default = účast blue */
+.cp-tl-orgmode.mode-garant { color: #d64541; }             /* garant overrides to red */
 
 /* day/night gradient: full-row background behind everything; toggle fades it out */
 #cp-timeline .vis-item.cp-daynight {
@@ -41,13 +82,16 @@
 #cp-timeline .vis-foreground .vis-group,
 #cp-timeline .vis-labelset .vis-label { border-bottom: 1px solid #c4cad3; }
 
+/* row hover (highlight the hovered day row + its left-panel label) is injected by
+   timeline.js, one :has() rule per day, so camp length isn't capped. */
+
 /* event cards. Box gaps = 2px transparent border (NOT margin.item, which inflates collision
    math); background-clip:padding-box keeps the fill inside it. */
 #cp-timeline .vis-item {
   border: 2px solid transparent; background-clip: padding-box; border-radius: 5px;
   color: #fff; font-size: 11px; min-height: 36px; box-sizing: border-box; cursor: pointer;
 }
-#cp-timeline .vis-item.solo { min-height: 74px; }   /* no overlap in the row → double height */
+#cp-timeline .vis-item.solo { min-height: 78px; }   /* no overlap in the row → double height */
 #cp-timeline .vis-item .vis-item-content { padding: 2px 6px; width: 100%; box-sizing: border-box; }
 #cp-timeline .vis-item.solo .vis-item-content {
   height: 100%; display: flex; flex-direction: column; justify-content: center;
@@ -73,5 +117,79 @@
 /* prep / cleanup slots: faded, independently placeable */
 #cp-timeline .vis-item.margin { opacity: .45; font-style: italic; }
 
+/* display filter: slots not matching the active filter fade to 0.75 (and prep/cleanup,
+   already at .45, fade further so a dimmed margin slot never reads brighter than baseline) */
+#cp-timeline .vis-item.cp-dim { opacity: .22; }
+#cp-timeline .vis-item.margin.cp-dim { opacity: .12; }
+
 /* hour grid lines visible between the (future) background and the boxes */
 #cp-timeline .vis-time-axis .vis-grid.vis-vertical { border-color: #9aa3b2; opacity: .25; }
+
+/* midnight day-boundary marker (vis custom time); static, not draggable */
+#cp-timeline .vis-custom-time.midnight {
+  background-color: #9aa3b2; width: 2px; pointer-events: none; cursor: default;
+}
+
+/* --- editing (Phase 2) --------------------------------------------------- */
+.cp-tl-save.cp-tl-btn { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.cp-tl-save.cp-tl-btn:disabled,
+.cp-tl-btn:disabled { opacity: .5; cursor: default; }
+
+/* edit mode: clearly mark the whole timetable (orange ring) + the active toggle.
+   double-tap shouldn't trigger the browser's zoom gesture while editing. */
+#cp-timeline.cp-editing {
+  touch-action: manipulation;
+  box-shadow: 0 0 0 3px #f59e0b; border-radius: 5px;
+}
+#cp-timeline.cp-editing .vis-item[class*="cat-"] { cursor: move; }
+#cp-edit-toggle.on { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.cp-tl-edit.editing::before {
+  content: "✏️ Režim úprav"; align-self: center; margin-right: 0.25rem;
+  font-size: 12px; font-weight: 600; color: #b45309;
+}
+
+/* placeholder while the activity-picker modal is open; new (unsaved) slot dashed */
+#cp-timeline .vis-item.cp-placeholder {
+  background: repeating-linear-gradient(45deg, #cfd6e0, #cfd6e0 6px, #dde3ec 6px, #dde3ec 12px);
+  color: #3c3c3c; border-color: #9aa3b2;
+}
+#cp-timeline .vis-item.cp-new { border-color: #1a73e8; border-style: dashed; }
+
+/* unsaved-changes counter + its popover list */
+.cp-tl-changes { background: #fef7e0; border-color: #f1d592; color: #715200; }
+.cp-tl-changes:hover { background: #fcefc6; }
+.cp-changes-panel {
+  position: fixed; z-index: 1000; width: min(560px, 92vw); max-height: 50vh; overflow: auto;
+  background: #fff; border: 1px solid var(--cp-border); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25); padding: 0.4rem;
+}
+.cp-change-row { font-size: 12px; padding: 0.3rem 0.4rem; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+.cp-change-row:last-child { border-bottom: 0; }
+
+/* floating action bar over the selected slot */
+.cp-tl-actions { position: fixed; z-index: 1000; display: flex; gap: 4px; }
+.cp-tl-actions[hidden] { display: none; }  /* beat the display:flex so hidden actually hides */
+.cp-tl-orgs, .cp-tl-detail, .cp-tl-retype, .cp-tl-del {
+  font: inherit; font-size: 13px; padding: 0.35rem 0.7rem; cursor: pointer; color: #fff;
+  border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.3);
+}
+.cp-tl-orgs { background: #1a73e8; border: 1px solid #1565c0; }
+.cp-tl-orgs:hover { background: #1565c0; }
+.cp-tl-detail { background: #5f6368; border: 1px solid #494c50; }
+.cp-tl-detail:hover { background: #494c50; }
+.cp-tl-retype { background: #6f42c1; border: 1px solid #59359c; }
+.cp-tl-retype:hover { background: #59359c; }
+.cp-tl-del { background: #d33b2c; border: 1px solid #b52d20; }
+.cp-tl-del:hover { background: #b52d20; }
+
+/* activity-picker modal */
+/* Generic modal scaffold, chips, search/list and modal buttons now live in
+   components.css (shared with the activity-detail page). Only timeline-specific
+   modal bits remain here. */
+
+/* slot-type selector inside the activity picker (between the tabs and the panes) */
+.cp-modal-role { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.8rem 0.9rem 0; }
+.cp-modal-role-label { font-size: 13px; color: #555; }
+/* the conflict dialog's list of options */
+.cp-conflict-opts { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.cp-conflict-opts li { margin: 0.15rem 0; }

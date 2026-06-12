@@ -4,28 +4,68 @@
 {% block head %}
   <link rel="stylesheet"
         href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/timeline.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
 
 {% block content %}
-  <div class="cp-tl-head">
-    <h1>{{ camp.name }}</h1>
-    <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Detail</a>
-  </div>
-
-  <div class="cp-tl-bar">
-    <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc">🌙 Den/noc</button>
-    <span class="cp-tl-zoom">
-      <button type="button" id="cp-zoom-out" class="cp-tl-btn" title="Oddálit (Ctrl + kolečko)">−</button>
-      <button type="button" id="cp-zoom-in" class="cp-tl-btn" title="Přiblížit (Ctrl + kolečko)">+</button>
-    </span>
+  {# left column = title + legend (stacked); right = control bars. all top-aligned #}
+  <div class="cp-tl-top">
+    <div class="cp-tl-left">
+      <div class="cp-tl-head">
+        <h1>{{ camp.name }}</h1>
+        <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Detail</a>
+      </div>
+      {# legend injected here (under the title) by timeline.js, before the help below #}
+      {% if can_edit(camp) %}
+      <p class="cp-tl-help"><small>Pro přiřazení orgů do slotu <b>klikni na jednotlivé sloty</b>.
+        Pro editaci časů slotů přepni do editačního módu, pak: <b>dvojklik</b> na prázdném místě
+        vytvoří <b>nový slot</b>, kliknutí na slot vyvolá <b>nabídku</b>, tažení slot <b>přesune nebo
+        zmenší/zvětší</b>.</small></p>
+      {% endif %}
+    </div>
+    <div class="cp-tl-bars">
+      <div class="cp-tl-bar">
+        <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc">🌙 Den/noc</button>
+        <span class="cp-tl-zoom">
+          <button type="button" id="cp-zoom-out" class="cp-tl-btn" title="Oddálit (Ctrl + kolečko)">−</button>
+          <button type="button" id="cp-zoom-in" class="cp-tl-btn" title="Přiblížit (Ctrl + kolečko)">+</button>
+        </span>
+      </div>
+      {% if can_edit(camp) %}
+      <div class="cp-tl-bar cp-tl-edit">
+        <button type="button" id="cp-edit-toggle" class="cp-tl-btn" title="Upravit sloty a časy">✏️ Upravit sloty a časy</button>
+        <button type="button" id="cp-undo" class="cp-tl-btn" title="Zpět (Ctrl+Z)" hidden>↶ Zpět</button>
+        <button type="button" id="cp-redo" class="cp-tl-btn" title="Vpřed (Ctrl+Y)" hidden>↷ Vpřed</button>
+        <button type="button" id="cp-changes" class="cp-tl-btn cp-tl-changes" title="Zobrazit neuložené změny" hidden>0 změn</button>
+        <button type="button" id="cp-save" class="cp-tl-btn cp-tl-save" hidden>Uložit</button>
+      </div>
+      {% endif %}
+    </div>
   </div>
 
   <div id="cp-timeline"></div>
   <script id="cp-timeline-data" type="application/json">{{ timeline | tojson }}</script>
+  {% if can_edit(camp) %}
+  <script id="cp-timeline-edit" type="application/json">{{ {
+      "save": url_for("api.timeline_save", slug=camp.slug),
+      "activities": url_for("api.activity_list", slug=camp.slug),
+      "createActivity": url_for("api.activity_create", slug=camp.slug),
+      "slotOrgs": url_for("api.slot_orgs", slot_id=0),
+      "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
+    } | tojson }}</script>
+  {% endif %}
 {% endblock %}
 
 {% block scripts %}
   <script src="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}"></script>
+  {% if can_edit(camp) %}
+  {# editor-only: shared helpers + fuzzy search + the editing module, before timeline.js so it can call them #}
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/slot-orgs.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/timeline-edit.js') }}"></script>
+  {% endif %}
   <script src="{{ url_for('main.static', filename='js/timeline.js') }}"></script>
 {% endblock %}

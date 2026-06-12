@@ -10,6 +10,7 @@
 (function () {
   const dataEl = document.getElementById("cp-tax-data");
   if (!dataEl) return;
+  const { el, csrf, swatch } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const KIND_LABEL = Object.fromEntries(DATA.tag_kinds); // value -> czech label
 
@@ -39,21 +40,6 @@
     },
   };
 
-  function el(tag, attrs, ...kids) {
-    const node = document.createElement(tag);
-    if (attrs) {
-      for (const k in attrs) {
-        if (k === "class") node.className = attrs[k];
-        else if (k in node) node[k] = attrs[k];
-        else node.setAttribute(k, attrs[k]);
-      }
-    }
-    for (const kid of kids) node.append(kid);
-    return node;
-  }
-
-  const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content ?? "";
-
   document.querySelectorAll("[data-tax]").forEach((section) => {
     const type = section.dataset.tax;
     const cfg = TYPES[type];
@@ -63,19 +49,8 @@
     let editing = false;
     let dragRow = null;
 
-    // Result message, shown just under this section's heading. Fades in, dwells,
-    // then fades out (CSS transition on .cp-flash-show) before being removed.
-    function flash(message, isError) {
-      if (!flashArea) return;
-      const banner = el("div", { class: "cp-flash" + (isError ? " cp-flash-error" : "") }, message);
-      flashArea.replaceChildren(banner);
-      void banner.offsetWidth; // commit the initial opacity:0 so adding the class transitions
-      banner.classList.add("cp-flash-show");
-      setTimeout(() => {
-        banner.classList.remove("cp-flash-show");
-        banner.addEventListener("transitionend", () => banner.remove(), { once: true });
-      }, 30000);
-    }
+    // Result message, shown just under this section's heading.
+    const flash = (message, isError) => window.cpDom.flash(flashArea, message, isError);
 
     function buildTable(headings, tbody) {
       const htr = el("tr", null, ...headings.map((h) => el("th", null, h)));
@@ -85,7 +60,7 @@
     // ---- read-only view ----
     function viewCell(item, col) {
       if (col.type === "color") {
-        return el("td", null, el("span", { class: "cp-swatch", style: "background:" + item.color }), item.color || "");
+        return el("td", null, swatch(item.color), item.color || "");
       }
       if (col.type === "select") return el("td", null, KIND_LABEL[item[col.key]] || item[col.key] || "");
       if (col.type === "checkbox") return el("td", null, item[col.key] ? "✓" : "");

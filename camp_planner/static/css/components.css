@@ -1,0 +1,92 @@
+/* Shared UI primitives used by more than one inline-editing page (timeline editor,
+ * activity detail): the modal scaffold, selectable chips, and the search/list combo.
+ * Page-agnostic — loaded alongside content.css wherever cpDom.openModal / chipGroup
+ * are used. Page-specific chrome stays in that page's own stylesheet. */
+
+/* --- toast notifications (cpDom.toast) ----------------------------------- */
+/* Fixed stack at the top-right, above the modal overlay (z-index 1100). The container
+ * ignores pointer events so it never blocks clicks; individual toasts re-enable them. */
+.cp-toasts {
+  position: fixed; top: 1rem; right: 1rem; z-index: 1200;
+  display: flex; flex-direction: column; gap: 0.5rem;
+  width: min(22rem, calc(100vw - 2rem)); pointer-events: none;   /* fixed width → toasts are uniform */
+}
+.cp-toast {
+  pointer-events: auto; cursor: pointer; box-sizing: border-box;
+  padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.9rem;
+  background: #e7f4ec; border: 1px solid #0a7a3e; color: #14502f;   /* darker-than-accent green border */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+  opacity: 0; transform: translateX(12px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.cp-toast.cp-toast-show { opacity: 1; transform: none; }
+.cp-toast-error { background: #fdecea; border-color: #c5221f; color: #76211c; }
+
+/* --- modal scaffold (cpDom.openModal) ------------------------------------ */
+.cp-modal-overlay {
+  position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.cp-modal {
+  background: #fff; border-radius: 10px; width: min(440px, 100%); max-height: 80vh;
+  display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.3);
+}
+.cp-modal.cp-modal-wide { width: min(560px, 100%); }
+.cp-modal-head { padding: 0.85rem 0.9rem; font-weight: 600; border-bottom: 1px solid var(--cp-border); }
+.cp-modal-head.cp-head-danger { color: #c5221f; }
+.cp-modal-foot { padding: 0.7rem 0.9rem; border-top: 1px solid var(--cp-border); display: flex; gap: 0.5rem; justify-content: flex-end; }
+.cp-pane { padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; overflow: auto; }
+.cp-pane[hidden] { display: none; }   /* beat the .cp-pane display:flex so tabs actually switch */
+.cp-modal .cp-pane p { margin: 0.25rem 0; }
+
+/* tabbed modal (e.g. Existing / New picker) */
+.cp-modal-tabs { display: flex; border-bottom: 1px solid var(--cp-border); }
+.cp-tab {
+  flex: 1; font: inherit; padding: 0.7rem; cursor: pointer; border: 0; background: #f3f4f6; color: #555;
+}
+.cp-tab.on { background: #fff; color: #1a73e8; font-weight: 600; box-shadow: inset 0 -2px 0 #1a73e8; }
+
+/* search box + result list (fuzzy pickers) */
+.cp-modal-search, .cp-modal-name, .cp-act-textarea {
+  font: inherit; padding: 0.5rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 100%; box-sizing: border-box;
+}
+.cp-modal-list { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow: auto; }
+.cp-modal-item {
+  display: flex; align-items: center; gap: 0.5rem; text-align: left; width: 100%;
+  font: inherit; padding: 0.5rem; cursor: pointer; border: 0; background: none; border-radius: 6px;
+}
+.cp-modal-item:hover, .cp-modal-item.cp-active { background: #dbe7fb; }
+.cp-modal-recent { margin-left: auto; font-size: 11px; color: #888; }
+.cp-modal-hint { font-size: 12px; color: #b0531f; }
+
+/* --- selectable chips (cpDom.chipGroup) ---------------------------------- */
+.cp-cat-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.cp-cat-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem; font: inherit; font-size: 13px;
+  padding: 0.3rem 0.6rem; cursor: pointer; color: #333;
+  border: 1px solid var(--cp-border); border-radius: 999px; background: #fff;
+}
+.cp-cat-chip:hover { background: #f3f4f6; }
+.cp-cat-chip.on { border-color: var(--cp-accent); background: #e8f0fe; font-weight: 600; }
+.cp-cat-chip .cp-swatch { width: 14px; height: 14px; margin: 0; }
+
+/* --- modal buttons (content.css only styles .cp-primary/.cp-cancel under forms) --- */
+.cp-modal .cp-primary, .cp-modal .cp-cancel {
+  font: inherit; padding: 0.45rem 0.9rem; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--cp-border); background: #fff; color: #333;
+}
+.cp-modal .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: #fff; }
+.cp-modal .cp-primary:disabled { opacity: .5; cursor: default; }
+.cp-modal .cp-primary:hover:not(:disabled), .cp-modal .cp-cancel:hover { filter: brightness(1.06); }
+/* colour variants — defined AFTER .cp-primary so they win at equal specificity */
+.cp-modal .cp-blue-btn { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.cp-modal .cp-warn-btn { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+.cp-modal .cp-danger-btn { background: #c5221f; border-color: #c5221f; color: #fff; }
+
+/* --- modal form fields (labels + inputs in a .cp-pane) — shared by the inline-edit pages --- */
+.cp-field-label { font-size: 12px; font-weight: 600; color: #555; margin-top: 0.3rem; }
+.cp-field-hint { font-size: 11px; color: #888; }
+.cp-act-textarea { resize: vertical; }   /* shares the input rule above; only adds vertical resize */
+.cp-need-amount-row { display: flex; gap: 0.4rem; align-items: center; }
+.cp-num { width: 6rem; }
+.cp-need-unit { font: inherit; padding: 0.3rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 8rem; }

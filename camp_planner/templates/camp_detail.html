@@ -44,5 +44,6 @@
 {% endblock %}
 
 {% block scripts %}
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/settings.js') }}"></script>
 {% endblock %}
