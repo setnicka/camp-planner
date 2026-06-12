@@ -38,6 +38,11 @@ def create_app(config_name: str | None = None) -> Flask:
     wire_app(app)
     register_cli(app)
 
+    # OpenAPI spec + Swagger UI (/apidoc/swagger) — generated from the spectree-
+    # decorated API views. Registered after the blueprints so it sees their routes.
+    from camp_planner.api import spec
+    spec.register(app)
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}

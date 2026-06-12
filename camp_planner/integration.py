@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from flask import current_app, g
 
 import camp_planner.models  # noqa: F401  (register mappers on the shared Base)
+from camp_planner.api import bp as api_bp
 from camp_planner.auth import permissions
 from camp_planner.auth.callback import CallbackProvider
 from camp_planner.auth.identity import ANONYMOUS
@@ -81,14 +82,17 @@ def _attach(
         app.config["AUTH_LOGIN_ENDPOINT"] = login_endpoint
     for bp in blueprints:
         _wire_blueprint(bp)
-        app.register_blueprint(bp, url_prefix=url_prefix)
+        # A blueprint with its own url_prefix (e.g. the API's /api) nests under the
+        # mount point, so embedded mode gets /planner/api while standalone gets /api.
+        prefix = (url_prefix or "") + bp.url_prefix if bp.url_prefix else url_prefix
+        app.register_blueprint(bp, url_prefix=prefix)
 
 
 def wire_app(app: Flask) -> None:
     """Wire Camp Planner onto our own app: pick the provider by AUTH_MODE and
     register the blueprints + request/template hooks. Called by create_app."""
     mode = app.config["AUTH_MODE"]
-    blueprints = [main_bp]
+    blueprints = [main_bp, api_bp]
     login_endpoint = None
     if mode == "standalone":
         provider: AuthProvider = StandaloneProvider()
@@ -130,7 +134,7 @@ def register_camp_planner(
 
     _attach(
         host_app,
-        [main_bp],
+        [main_bp, api_bp],
         CallbackProvider(auth_callback),
         base_template=base_template,
         url_prefix=url_prefix,
