@@ -88,6 +88,29 @@ def test_timeline_batch_create_move_delete(client, seeded):
     assert _get(client, f"/api/camps/{slug}/timeline")["segments"] == []
 
 
+def test_timeline_retype_changes_role_and_audits(client, seeded):
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    s1 = _make_slot(client, slug, aid, role="main")
+    rev = _get(client, f"/api/camps/{slug}/timeline")["camp"]["rev"]
+
+    resp = client.patch(f"/api/camps/{slug}/timeline",
+                        json={"rev": rev, "retypes": [{"slot_id": s1, "role": "cleanup"}]}, headers=ADMIN)
+    assert resp.status_code == 200 and _json(resp)["rev"] == rev + 1
+    assert _get(client, f"/api/camps/{slug}/timeline")["segments"][0]["role"] == "cleanup"
+
+    # one slot-level audit row carrying the role diff
+    slot_rows = _json(client.get(f"/api/camps/{slug}/audit?entity_type=slot", headers=ADMIN))["entries"]
+    role_rows = [e for e in slot_rows if e["action"] == "update" and e["changes"] and "role" in e["changes"]]
+    assert len(role_rows) == 1 and role_rows[0]["changes"]["role"] == ["main", "cleanup"]
+
+    # a no-op retype (same role) changes nothing and writes no audit row
+    rev = _get(client, f"/api/camps/{slug}/timeline")["camp"]["rev"]
+    client.patch(f"/api/camps/{slug}/timeline",
+                 json={"rev": rev, "retypes": [{"slot_id": s1, "role": "cleanup"}]}, headers=ADMIN)
+    slot_rows = _json(client.get(f"/api/camps/{slug}/audit?entity_type=slot", headers=ADMIN))["entries"]
+    assert len([e for e in slot_rows if e["action"] == "update" and e["changes"] and "role" in e["changes"]]) == 1
+
+
 def test_timeline_create_rejects_foreign_activity(client, seeded):
     slug = seeded["slug"]
     resp = client.patch(f"/api/camps/{slug}/timeline", json={
@@ -608,6 +631,31 @@ def test_audit_entity_type_filter(client, seeded):
     assert mats and all(e["entity_type"] == "material" for e in mats)
     # the enum validates the filter value — an unknown one is a 422, not a silent empty list
     assert client.get(f"/api/camps/{slug}/audit?entity_type=bogus", headers=ADMIN).status_code == 422
+
+
+def test_timeline_save_emits_timeline_and_per_slot_audit(client, seeded):
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    s1 = _make_slot(client, slug, aid)  # one create
+    rev = _json(client.get(f"/api/camps/{slug}/timeline", headers=ADMIN))["camp"]["rev"]
+    resp = client.patch(f"/api/camps/{slug}/timeline", json={
+        "rev": rev,
+        "creates": [{"activity_id": aid, "role": "prep",
+                     "start_at": "2026-07-04T13:30", "end_at": "2026-07-04T14:00"}],
+        "moves": [{"slot_id": s1, "start_at": "2026-07-04T15:00", "end_at": "2026-07-04T17:00"}],
+    }, headers=ADMIN)
+    assert resp.status_code == 200
+
+    kinds = [(e["entity_type"], e["action"]) for e in
+             _json(client.get(f"/api/camps/{slug}/audit", headers=ADMIN))["entries"]]
+    assert ("timeline", "update") in kinds   # one batch-level summary
+    assert ("slot", "create") in kinds       # the prep slot
+    assert ("slot", "update") in kinds        # the move
+
+    # per-slot rows are grouped under the activity and carry the time diff
+    slot_rows = _json(client.get(f"/api/camps/{slug}/audit?entity_type=slot", headers=ADMIN))["entries"]
+    assert slot_rows and all(e["activity_id"] == aid for e in slot_rows)
+    mv = next(e for e in slot_rows if e["action"] == "update")
+    assert mv["changes"]["start_at"] == ["2026-07-04T14:00:00", "2026-07-04T15:00:00"]
 
 
 def test_audit_pagination_walks_older_entries(client, seeded):

@@ -73,17 +73,53 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
         db.session.add(slot)
         created.append(slot)
 
+    moved: list[tuple] = []  # (slot, old_start, old_end) — old times captured before the change
     for move in payload.moves:
         slot = _slot(move.slot_id)
+        moved.append((slot, slot.start_at, slot.end_at))
         slot.start_at, slot.end_at = move.start_at, move.end_at
 
+    retyped: list[tuple] = []  # (slot, old_role) — only slots whose role actually changed
+    for retype in payload.retypes:
+        slot = _slot(retype.slot_id)
+        if slot.role != retype.role:
+            retyped.append((slot, slot.role))
+            slot.role = retype.role
+
+    deleted: list[tuple] = []  # (id, activity_id, start, end) — captured before delete expires them
     for slot_id in payload.deletes:
-        db.session.delete(_slot(slot_id))
+        slot = _slot(slot_id)
+        deleted.append((slot.id, slot.activity_id, slot.start_at, slot.end_at))
+        db.session.delete(slot)
 
     bump_timeline_rev(camp)
-    db.session.flush()  # assign ids to the created slots before serializing
+    db.session.flush()  # assign ids to the created slots; apply deletes
+
+    # One batch-level summary, then a per-slot row grouped under each slot's activity, so
+    # an activity's history shows exactly which of its slots were added/moved/removed.
     audit.record(camp_id=camp.id, entity_type=EntityType.timeline, entity_id=None, action=AuditAction.update,
                  message=f"{len(payload.moves)} přesunuto, {len(payload.creates)} přidáno, "
-                         f"{len(payload.deletes)} smazáno")
+                         f"{len(retyped)} přetypováno, {len(payload.deletes)} smazáno")
+    for slot in created:
+        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
+                     entity_id=slot.id, action=AuditAction.create,
+                     changes={"role": [None, slot.role], "start_at": [None, slot.start_at],
+                              "end_at": [None, slot.end_at]})
+    for slot, old_start, old_end in moved:
+        changes = {}  # only the edge(s) that actually moved — a resize touches just one
+        if slot.start_at != old_start:
+            changes["start_at"] = [old_start, slot.start_at]
+        if slot.end_at != old_end:
+            changes["end_at"] = [old_end, slot.end_at]
+        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
+                     entity_id=slot.id, action=AuditAction.update, changes=changes)
+    for slot, old_role in retyped:
+        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
+                     entity_id=slot.id, action=AuditAction.update,
+                     changes={"role": [old_role.value, slot.role.value]})
+    for sid, activity_id, old_start, old_end in deleted:
+        audit.record(camp_id=camp.id, activity_id=activity_id, entity_type=EntityType.slot,
+                     entity_id=sid, action=AuditAction.delete,
+                     changes={"start_at": [old_start, None], "end_at": [old_end, None]})
     db.session.commit()
     return {"rev": camp.timeline_rev, "created": [serialize.slot(s) for s in created]}

@@ -155,6 +155,12 @@ class MoveIn(_TimeSpan):
     slot_id: int
 
 
+class RetypeIn(BaseModel):
+    """Change an existing slot's role (main/prep/cleanup); placement is unaffected."""
+    slot_id: int
+    role: SlotRole
+
+
 class TimelineCreate(_TimeSpan):
     """A new slot to add in a timeline batch (activity_id says which activity it joins)."""
     activity_id: int
@@ -169,11 +175,13 @@ class TimelineSaveIn(BaseModel):
         "moves": [{"slot_id": 12, "start_at": "2026-07-04T14:00:00", "end_at": "2026-07-04T16:00:00"}],
         "creates": [{"activity_id": 4, "role": "prep",
                      "start_at": "2026-07-04T13:30:00", "end_at": "2026-07-04T14:00:00"}],
+        "retypes": [{"slot_id": 9, "role": "cleanup"}],
         "deletes": [18],
     }]})
     rev: int | None = Field(default=None, description="Revize, kterou klient načetl (optimistický zámek).")
     moves: list[MoveIn] = []
     creates: list[TimelineCreate] = []
+    retypes: list[RetypeIn] = []
     deletes: list[int] = []
 
 
