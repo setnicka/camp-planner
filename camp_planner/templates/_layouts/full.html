@@ -35,6 +35,7 @@
     {% endif %}
   {% endwith %}
   <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
+  <footer class="cp-footer">Camp Planner v{{ app_version }}</footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>

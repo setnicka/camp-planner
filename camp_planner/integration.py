@@ -25,6 +25,7 @@ from camp_planner.auth.identity import ANONYMOUS
 from camp_planner.auth.standalone import StandaloneProvider
 from camp_planner.auth.standalone import bp as auth_bp
 from camp_planner.extensions import db
+from camp_planner.version import __version__
 from camp_planner.views import bp as main_bp
 
 if TYPE_CHECKING:
@@ -44,6 +45,7 @@ def _load_identity() -> None:
 def _inject() -> dict[str, Any]:
     return {
         "layout": _state()["base_template"],
+        "app_version": __version__,
         "identity": g.get("identity", ANONYMOUS),
         # standalone only (we own login/logout); lets templates skip url_for('auth.*').
         "auth_enabled": bool(current_app.config.get("AUTH_LOGIN_ENDPOINT")),

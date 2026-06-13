@@ -92,6 +92,7 @@ from camp_planner.services import camps as camps_service
 from camp_planner.services import google_sync
 from camp_planner.services import audit, errors, loaders, materials, serialize, slots, taxonomy, todos
 from camp_planner.services.timeline import build_timeline
+from camp_planner.version import __version__
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -104,7 +105,7 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 #   blueprint's HTML pages and /healthz into the spec under an untagged "default" group.
 # naming_strategy: spectree defaults to "<Name>.<module-hash>" to disambiguate same-
 #   named models across modules; ours are all unique in one module, so use plain names.
-spec = SpecTree("flask", title="Camp Planner API", version="0.1.0",
+spec = SpecTree("flask", title="Camp Planner API", version=__version__,
                 mode="strict",
                 validation_error_status=422,
                 naming_strategy=lambda model: model.__name__,

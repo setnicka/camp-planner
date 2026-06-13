@@ -29,6 +29,14 @@ body {
 }
 .cp-nav button:hover { text-decoration: underline; }
 
+.cp-footer {
+  padding: 0.35rem 1rem;
+  color: var(--cp-muted);
+  font-size: 0.7rem;
+  text-align: right;
+  opacity: 0.6;
+}
+
 .cp-flashes {
   margin: 0;
   padding: 0.6rem 1rem;

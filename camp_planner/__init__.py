@@ -10,8 +10,9 @@ from camp_planner.integration import register_camp_planner, wire_app
 from camp_planner.cli import register_cli
 from camp_planner.config import config_by_name
 from camp_planner.extensions import csrf, db, migrate
+from camp_planner.version import __version__
 
-__all__ = ["create_app", "register_camp_planner"]
+__all__ = ["create_app", "register_camp_planner", "__version__"]
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -45,6 +46,6 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "ok", "version": __version__}
 
     return app
