@@ -269,12 +269,25 @@ def _render_detail(camp: Camp):
         },
         **tax,
     }
+    # Google Calendar panel data — rendered server-side (no fetch on load), gated by
+    # may_edit here and re-checked by the api. The status reports whether the feature is
+    # configured at all (status.enabled), so the template can hide the whole section.
+    google_data = {
+        "may_edit": can_edit(camp),
+        "status": camps_service.google_status(camp),
+        "urls": {
+            "base": url_for("api.google_status", slug=camp.slug),  # GET / PUT / DELETE
+            "sync": url_for("api.google_sync_now", slug=camp.slug),
+            "pull": url_for("api.google_pull_preview", slug=camp.slug),  # GET preview / POST apply
+        },
+    }
     return render_template(
         "camp_detail.html",
         camp=camp,
         end_date=camp.start_date + timedelta(days=max(0, camp.length_days - 1)),
         tz_label=_TZ_LABELS.get(camp.timezone, camp.timezone),
         tax_data=tax_data,
+        google_data=google_data,
     )
 
 # All taxonomy mutations (categories/orgs/tags batch save) live in the api blueprint;

@@ -5,6 +5,9 @@
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/settings.css') }}">
+  {% if google_data.status.enabled and google_data.may_edit %}
+    <link rel="stylesheet" href="{{ url_for('main.static', filename='css/google-sync.css') }}">
+  {% endif %}
   <meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
 
@@ -43,21 +46,39 @@
       <div data-tax-body></div>
     </section>
   {% endmacro %}
+  {% set show_google = google_data.status.enabled and google_data.may_edit %}
   <div class="cp-tabs">
     <div class="cp-tabbar" data-tax-tabbar>
       <button type="button" class="cp-tabbtn on" data-tax-tab="categories">Kategorie</button>
       <button type="button" class="cp-tabbtn" data-tax-tab="orgs">Orgové</button>
       <button type="button" class="cp-tabbtn" data-tax-tab="tags">Tagy</button>
+      {% if show_google %}<button type="button" class="cp-tabbtn" data-tax-tab="google">Google Calendar</button>{% endif %}
     </div>
     {{ tax_pane("categories", "Kategorie") }}
     {{ tax_pane("orgs", "Orgové") }}
     {{ tax_pane("tags", "Tagy") }}
+    {# Google Calendar pane — sits in the same tab system (settings.js toggles panes by
+       data-tax-pane), but its body is rendered by google-sync.js, not the taxonomy editor
+       (no data-tax attribute, so the editor loop skips it). #}
+    {% if show_google %}
+      <section class="cp-tabpane cp-section" data-tax-pane="google" data-google-root hidden>
+        <div data-google-flash class="cp-flash-area" aria-live="polite"></div>
+        <div data-google-body></div>
+      </section>
+    {% endif %}
   </div>
 
   <script id="cp-tax-data" type="application/json">{{ tax_data | tojson }}</script>
+  {% if show_google %}
+    <script id="cp-google-data" type="application/json">{{ google_data | tojson }}</script>
+  {% endif %}
 {% endblock %}
 
 {% block scripts %}
   <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/settings.js') }}"></script>
+  {% if google_data.status.enabled and google_data.may_edit %}
+    <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
+    <script src="{{ url_for('main.static', filename='js/google-sync.js') }}"></script>
+  {% endif %}
 {% endblock %}

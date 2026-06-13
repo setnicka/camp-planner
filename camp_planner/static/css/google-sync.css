@@ -1,0 +1,144 @@
+/* Google Calendar connection panel — page-scoped to the camp settings page.
+ * Loaded only on camp_detail.html when the feature is configured. Shared atoms
+ * (.cp-section, .cp-mini, .cp-danger, .cp-flash-area) come from components/content.css. */
+
+/* Text/instructions stay readable-width; the review table (a sibling) spans the pane. */
+.cp-google-info { max-width: 640px; }
+
+.cp-google p { margin: 0.4rem 0; }
+
+.cp-google code {
+  background: #f3f3f3;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.cp-google-steps {
+  margin: 0.4rem 0 0.8rem;
+  padding-left: 1.2rem;
+  color: #444;
+  line-height: 1.5;
+}
+.cp-google-steps li { margin: 0.2rem 0; }
+
+.cp-google-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.cp-google-input {
+  flex: 1 1 22rem;
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+/* the connect button (content.css only styles .cp-primary inside forms/modals) */
+.cp-google .cp-primary {
+  font: inherit;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--cp-accent);
+  background: var(--cp-accent);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cp-google .cp-primary:disabled { opacity: .5; cursor: default; }
+.cp-google .cp-primary:hover:not(:disabled) { filter: brightness(1.06); }
+
+.cp-google-pending { color: #8a6d00; }
+.cp-google-error {
+  margin: 0.5rem 0; padding: 0.5rem 0.7rem; border-radius: 6px;
+  background: #fdecea; border: 1px solid #f5c6c2; color: #8a1c14;
+}
+.cp-google-error-detail { margin-top: 0.25rem; font-family: monospace; font-size: 0.85em; word-break: break-word; }
+
+/* --- inbound review (inline, below the buttons) --- */
+.cp-google-review { margin-top: 0.8rem; }
+.cp-google-review:empty { margin-top: 0; }
+.cp-google-review-title { margin: 0 0 0.5rem; font-size: 1rem; }
+
+.cp-google-loading { display: flex; align-items: center; gap: 0.5rem; color: #555; padding: 0.4rem 0; }
+.cp-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #ccc; border-top-color: var(--cp-accent);
+  animation: cp-spin 0.7s linear infinite;
+}
+@keyframes cp-spin { to { transform: rotate(360deg); } }
+
+.cp-google-table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+.cp-google-table th, .cp-google-table td {
+  text-align: left; padding: 0.2rem 0.55rem; vertical-align: top;
+}
+.cp-google-table thead th { font-weight: 600; color: #444; border-bottom: 2px solid var(--cp-border); }
+
+/* Each change is a block of rows; a top border on its first row separates the blocks, and
+   the (rowspan) checkbox cell carries a colored left bar spanning the whole change. */
+.cp-google-row1 td { border-top: 1px solid var(--cp-border); padding-top: 0.4rem; }
+.cp-google-table tbody tr:last-child td { padding-bottom: 0.4rem; }
+
+.cp-google-table td.cp-google-check { width: 1.5rem; border-left: 4px solid #9e9e9e; }
+.cp-kind-new_event td.cp-google-check { border-left-color: #0b8043; }         /* green: add */
+.cp-kind-time_change td.cp-google-check,
+.cp-kind-attendants_change td.cp-google-check,
+.cp-kind-garant_change td.cp-google-check,
+.cp-kind-category_change td.cp-google-check { border-left-color: #1a73e8; }   /* blue: change */
+.cp-kind-deleted_in_google td.cp-google-check { border-left-color: #c5221f; } /* red: delete */
+
+.cp-google-label { font-weight: 600; }
+.cp-google-dname { color: #777; white-space: nowrap; padding-left: 1.3rem; }
+.cp-google-dvalue { color: #333; }
+.cp-google-warn { color: #8a6d00; }
+
+.cp-google-action { white-space: nowrap; }
+.cp-google-import { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+
+/* an unchecked (skipped) change is greyed and its controls disabled */
+.cp-google-off { opacity: 0.45; }
+
+/* segmented toggle: Nová aktivita / Přidat k existující */
+.cp-google-toggle { display: inline-flex; border: 1px solid var(--cp-border); border-radius: 6px; overflow: hidden; }
+.cp-google-seg {
+  font: inherit; font-size: 0.85em; padding: 0.2rem 0.6rem;
+  border: 0; background: #fff; color: #444; cursor: pointer;
+}
+.cp-google-seg + .cp-google-seg { border-left: 1px solid var(--cp-border); }
+.cp-google-seg:hover:not(.on):not(:disabled) { background: #f3f3f3; }
+.cp-google-seg.on { background: var(--cp-accent); color: #fff; }
+.cp-google-seg:disabled { opacity: .45; cursor: not-allowed; }
+
+.cp-google-field { display: flex; align-items: center; gap: 0.35rem; font-size: 0.88em; color: #555; }
+.cp-google-field[hidden] { display: none; }
+.cp-google-flabel { color: #555; }
+
+/* compact picker button (shows the current category / activity; opens a chooser modal) */
+.cp-google-pick {
+  font: inherit; display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.2rem 0.5rem; max-width: 16rem; cursor: pointer;
+  border: 1px solid var(--cp-border); border-radius: 5px; background: #fff;
+}
+.cp-google-pick:hover:not(:disabled) { background: #f3f3f3; }
+.cp-google-pick:disabled { opacity: .5; cursor: not-allowed; }
+.cp-google-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* chooser modals (reuse .cp-modal / .cp-cat-chips / .cp-modal-list from components.css) */
+.cp-google-pick-modal { width: min(420px, 100%); }
+.cp-google-pick-body { padding: 0.75rem 0.9rem; }
+.cp-google-pick-search { padding: 0.6rem 0.9rem 0; }
+
+.cp-google-review-actions { margin-top: 0.7rem; display: flex; gap: 0.5rem; }
+.cp-google-review-actions .cp-primary {
+  font: inherit; padding: 0.3rem 0.8rem; border: 1px solid var(--cp-accent);
+  background: var(--cp-accent); color: #fff; font-weight: 600; border-radius: 5px; cursor: pointer;
+}
+.cp-google-review-actions .cp-primary:disabled { opacity: .5; cursor: default; }
+.cp-google-review-actions .cp-cancel {
+  font: inherit; padding: 0.3rem 0.8rem; border: 1px solid #ccc;
+  background: #fff; border-radius: 5px; cursor: pointer;
+}
