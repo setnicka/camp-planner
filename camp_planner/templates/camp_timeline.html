@@ -16,6 +16,7 @@
       <div class="cp-tl-head">
         <h1>{{ camp.name }}</h1>
         <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Detail</a>
+        <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a>
       </div>
       {# legend injected here (under the title) by timeline.js, before the help below #}
       {% if can_edit(camp) %}

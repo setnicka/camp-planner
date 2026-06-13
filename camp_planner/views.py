@@ -156,11 +156,36 @@ def activity_detail(slug: str, activity_id: int):
             "materialCreate": url_for("api.material_create", slug=camp.slug),
             "needCreate": url_for("api.material_need_add", activity_id=aid),
             "needItem": url_for("api.material_need_update", need_id=0),
+            "materialsOverview": url_for("main.camp_materials", slug=camp.slug),
             "timeline": url_for("main.camp_timeline", slug=camp.slug),
             "slotOrgs": url_for("api.slot_orgs", slot_id=0),
         },
     }
     return render_template("activity_detail.html", camp=camp, activity=activity, data=data)
+
+
+@bp.get("/camps/<slug>/materials")
+@require_view
+def camp_materials(slug: str):
+    """Camp-wide materials overview: one row per catalog material with the activity needs
+    that use it, edited in place from the embedded JSON via the api endpoints (no reloads).
+    Edit affordances are gated by can_edit; the api re-checks server-side."""
+    camp = db.first_or_404(
+        db.select(Camp).filter_by(slug=slug).options(*loaders.MATERIALS_OVERVIEW),
+        description="Akce nenalezena.")
+    data = {
+        "materials": [serialize.material_overview(m) for m in camp.materials],
+        "may_edit": can_edit(camp),
+        # api endpoints. Item-scoped URLs carry a 0 sentinel the client swaps for the real id;
+        # materialItem serves both PATCH (edit) and DELETE, needItem both PATCH and DELETE.
+        "urls": {
+            "materialItem": url_for("api.material_update", slug=camp.slug, material_id=0),
+            "materialMerge": url_for("api.material_merge", slug=camp.slug, source_id=0),
+            "needItem": url_for("api.material_need_update", need_id=0),
+            "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
+        },
+    }
+    return render_template("materials_overview.html", camp=camp, data=data)
 
 
 @bp.get("/camps/<slug>/edit")

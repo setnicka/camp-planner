@@ -47,3 +47,33 @@ def test_activity_detail_404_for_foreign_camp(client, seeded):
                                             "window_start_min": 240, "snap_minutes": 15}, headers=ADMIN)
     assert other.status_code == 200
     assert client.get(f"/camps/jina/activities/{aid}", headers=ADMIN).status_code == 404
+
+
+def test_materials_page_renders_with_data(client, seeded):
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    # seed one catalog material + a need on the seeded activity so a usage is embedded
+    mat = client.post(f"/api/camps/{slug}/materials", json={"name": "Lano", "unit": "m"}, headers=ADMIN)
+    assert mat.status_code == 200
+    mid = mat.get_json()["material"]["id"]
+    assert client.post(f"/api/activities/{aid}/materials",
+                       json={"material_id": mid, "amount": 30}, headers=ADMIN).status_code == 200
+
+    html = client.get(f"/camps/{slug}/materials", headers=ADMIN).get_data(as_text=True)
+    assert 'id="cp-materials-data"' in html              # the embedded JSON the JS renders from
+    assert 'id="cp-materials"' in html                   # the mount point
+    assert "js/materials-overview.js" in html
+    assert f"/api/camps/{slug}/materials/0" in html       # materialItem (PATCH/DELETE) url resolves
+    assert "/api/material-needs/0" in html                # needItem url resolves
+    assert '"may_edit": true' in html                     # admin can edit
+    assert "Lano" in html                                 # embedded material, with its usage
+
+
+def test_materials_viewer_read_only(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/materials", headers=viewer(slug)).get_data(as_text=True)
+    assert '"may_edit": false' in html
+
+
+def test_materials_404_for_unknown_camp(client, seeded):
+    # the page is camp-scoped (no item id in the URL); a non-existent slug → 404
+    assert client.get("/camps/neexistuje/materials", headers=ADMIN).status_code == 404

@@ -5,7 +5,8 @@
 
 {% block content %}
   <h1>{{ camp.name }} <span class="cp-subtitle">detail</span></h1>
-  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a></p>
+  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a>
+     · <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a></p>
 
   {% set may_edit = can_edit(camp) %}
 

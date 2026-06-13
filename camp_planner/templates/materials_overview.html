@@ -1,0 +1,26 @@
+{% extends layout %}
+{% block title %}Materiál – {{ camp.name }}{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/materials.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a></p>
+  <h1>Materiál <span class="cp-subtitle">{{ camp.name }}</span></h1>
+
+  {# materials-overview.js renders the camp-wide table into here from the JSON below.
+     Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}
+  <div id="cp-materials"></div>
+
+  <script id="cp-materials-data" type="application/json">{{ data | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/material-need.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/materials-overview.js') }}"></script>
+{% endblock %}

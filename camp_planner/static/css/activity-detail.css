@@ -169,6 +169,7 @@
 .cp-due-late { color: #c5221f; }  /* overdue */
 .cp-todo-add, .cp-need-add { margin-top: 0.6rem; }
 .cp-need-name { flex: 1; }
+.cp-ext-link { font-size: 0.85em; color: var(--cp-muted); text-decoration: none; }   /* external catalog url */
 .cp-need-qty { white-space: nowrap; }
 
 /* compact in-row action buttons */

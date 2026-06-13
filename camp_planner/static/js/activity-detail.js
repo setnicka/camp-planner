@@ -602,12 +602,15 @@
       try { const j = await api("PATCH", withId(U.needItem, n.id), { is_ready: cb.checked }); Object.assign(n, j.need); refreshMaterials(); }
       catch (e) { cb.checked = !cb.checked; toast(e.message, true); }
     });
-    const name = n.material.url
-      ? el("a", { href: n.material.url, target: "_blank", rel: "noopener" }, n.material.name)
-      : el("span", null, n.material.name);
+    // name → this material in the camp-wide overview (highlighted there); keep the external
+    // catalog url as a small ↗ alongside it when present.
+    const nameCell = el("span", { class: "cp-need-name" },
+      el("a", { href: U.materialsOverview + "#material-" + n.material.id }, n.material.name));
+    if (n.material.url)
+      nameCell.append(" ", el("a", { href: n.material.url, target: "_blank", rel: "noopener", class: "cp-ext-link", title: "Externí odkaz" }, "↗"));
     const qty = ((n.amount != null ? n.amount : "") + " " + (n.unit || n.material.unit || "")).trim();
     const line = el("div", { class: "cp-need-line" },
-      el("span", { class: "cp-need-name" }, name),
+      nameCell,
       el("span", { class: "cp-muted cp-need-qty" }, qty));
     if (mayEdit) {
       const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
