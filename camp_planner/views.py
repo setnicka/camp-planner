@@ -17,9 +17,10 @@ from camp_planner.auth.permissions import (
     require_view,
 )
 from camp_planner.extensions import db
+from camp_planner.models.activity import Activity
 from camp_planner.models.camp import Camp
 from camp_planner.services import camps as camps_service
-from camp_planner.services import loaders, taxonomy
+from camp_planner.services import loaders, serialize, taxonomy
 from camp_planner.services.timeline import build_timeline
 
 bp = Blueprint("main", __name__, template_folder="templates", static_folder="static")
@@ -112,6 +113,54 @@ def camp_timeline(slug: str):
 @require_view
 def camp_detail(slug: str):
     return _render_detail(_camp_or_404(slug))
+
+
+# Czech labels for the activity type (read-only badge on the detail page).
+_ACTIVITY_TYPE_LABELS = {
+    "basic": "Vlastní program",
+    "external": "Externí (odkaz)",
+    "external_lecture": "Externí přednáška",
+}
+
+
+@bp.get("/camps/<slug>/activities/<int:activity_id>")
+@require_view
+def activity_detail(slug: str, activity_id: int):
+    """One activity's page: orgs / tags / todos / material needs, all edited in place
+    from the embedded JSON via the api endpoints (no reloads). Edit affordances are
+    gated by can_edit; the api re-checks server-side."""
+    camp = _camp_or_404(slug)
+    activity = db.first_or_404(
+        db.select(Activity).filter_by(id=activity_id, camp_id=camp.id).options(*loaders.ACTIVITY),
+        description="Aktivita nenalezena.")
+    tax = taxonomy.serialize(camp)
+    aid = activity.id
+    data = {
+        "activity": serialize.activity(activity),
+        "may_edit": can_edit(camp),
+        "type_label": _ACTIVITY_TYPE_LABELS.get(activity.type.value, activity.type.value),
+        # camp taxonomies, for the pickers
+        "categories": tax["categories"],
+        "orgs": tax["orgs"],
+        "tag_defs": tax["tags"],
+        "tag_kinds": list(taxonomy.TAG_KIND_LABELS.items()),
+        # api endpoints. Item-scoped URLs (todoItem/needItem) carry a 0 sentinel the client
+        # swaps for the real id; tag-value PATCH is just `tags`/<tag_id> built client-side.
+        "urls": {
+            "update": url_for("api.activity_update", activity_id=aid),
+            "orgs": url_for("api.activity_orgs", activity_id=aid),
+            "tags": url_for("api.activity_tags", activity_id=aid),
+            "todoCreate": url_for("api.todo_create", activity_id=aid),
+            "todoItem": url_for("api.todo_update", todo_id=0),
+            "materialList": url_for("api.material_list", slug=camp.slug),
+            "materialCreate": url_for("api.material_create", slug=camp.slug),
+            "needCreate": url_for("api.material_need_add", activity_id=aid),
+            "needItem": url_for("api.material_need_update", need_id=0),
+            "timeline": url_for("main.camp_timeline", slug=camp.slug),
+            "slotOrgs": url_for("api.slot_orgs", slot_id=0),
+        },
+    }
+    return render_template("activity_detail.html", camp=camp, activity=activity, data=data)
 
 
 @bp.get("/camps/<slug>/edit")

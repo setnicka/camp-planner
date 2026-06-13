@@ -163,6 +163,23 @@ def test_set_orgs_and_tags(client, seeded):
     assert _json(resp)["tags"][0]["value"] == "ano"
 
 
+def test_set_tags_records_value_diff_in_audit(client, seeded):
+    slug, aid, tid = seeded["slug"], seeded["activity_id"], seeded["tag_id"]  # tag "Důležité", kind text
+    tag_rows = lambda: [e for e in _json(  # noqa: E731
+        client.get(f"/api/camps/{slug}/audit?entity_type=tag", headers=ADMIN))["entries"] if e["changes"]]
+
+    client.put(f"/api/activities/{aid}/tags", json={"tags": [{"tag_id": tid, "value": "ano"}]}, headers=ADMIN)
+    assert tag_rows()[0]["changes"] == {"Důležité": [None, "ano"]}          # added
+    client.put(f"/api/activities/{aid}/tags", json={"tags": [{"tag_id": tid, "value": "ne"}]}, headers=ADMIN)
+    assert tag_rows()[0]["changes"] == {"Důležité": ["ano", "ne"]}          # value changed
+    client.put(f"/api/activities/{aid}/tags", json={"tags": []}, headers=ADMIN)
+    assert tag_rows()[0]["changes"] == {"Důležité": ["ne", None]}           # removed
+
+    n = len(tag_rows())
+    client.put(f"/api/activities/{aid}/tags", json={"tags": []}, headers=ADMIN)  # no-op
+    assert len(tag_rows()) == n                                             # writes nothing
+
+
 def test_set_orgs_rejects_duplicate(client, seeded):
     # same (org_id, role) twice -> schema validator -> 422 (malformed body)
     oid = seeded["org_id"]

@@ -1,0 +1,32 @@
+/* Camp-wide materials overview. Table/section/button/modal primitives come from
+ * content.css and components.css; only the expandable-row layout and this page's
+ * modal-form fields live here. (This file loads only on the materials page, so the
+ * generic .cp-pane form rules below scope themselves to it.) */
+
+.cp-mat-table { max-width: 60rem; }
+.cp-mat-row { cursor: pointer; }
+/* flash a row arrived-at via #material-<id> (fades in, then out when the class is removed) */
+.cp-mat-row > td { transition: background 1.2s ease; }
+.cp-mat-row.cp-mat-hl > td { background: #fff3bf; }
+.cp-mat-caret { display: inline-block; width: 1em; color: var(--cp-muted); }
+
+/* usages sub-row: a flush full-width panel under its material */
+.cp-mat-sub > td { padding: 0; background: #fafafa; border-bottom: 1px solid var(--cp-border); }
+.cp-mat-note { padding: 0.4rem 0.75rem 0.4rem 2rem; white-space: pre-wrap; font-size: 13px; }
+.cp-usage-list { display: flex; flex-direction: column; }
+.cp-usage-empty { padding: 0.5rem 0.75rem 0.5rem 2rem; }
+.cp-usage-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0.75rem 0.3rem 2rem; }
+.cp-usage-row + .cp-usage-row { border-top: 1px solid #ededed; }
+.cp-usage-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.cp-usage-line { display: flex; align-items: center; gap: 0.5rem; }
+.cp-usage-act { flex: 1; }
+.cp-usage-qty { white-space: nowrap; }
+.cp-usage-note { font-size: 12px; white-space: pre-wrap; }
+
+/* compact in-row action buttons (mirrors the activity page's .cp-mini) */
+.cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--cp-border); background: #fff; color: #333; }
+.cp-mini:hover { background: #f3f3f3; }
+.cp-danger.cp-mini { background: #c5221f; border-color: #c5221f; color: #fff; }
+.cp-danger.cp-mini:hover { filter: brightness(1.08); }
+/* modal form fields use the shared .cp-field-label/.cp-act-textarea/… from components.css */

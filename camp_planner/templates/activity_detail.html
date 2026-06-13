@@ -1,0 +1,31 @@
+{% extends layout %}
+{% block title %}{{ activity.title }} – {{ camp.name }}{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/lib/codemirror.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/activity-detail.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a></p>
+
+  {# activity-detail.js renders the header + all sections into here from the JSON below.
+     Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}
+  <div id="cp-activity"></div>
+
+  <script id="cp-activity-data" type="application/json">{{ data | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='vendor/markdown-it@14.1.0/markdown-it.min.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/lib/codemirror.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/mode/markdown/markdown.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/addon/edit/continuelist.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/material-need.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/slot-orgs.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/activity-detail.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,179 @@
+/* Activity detail page. Shared primitives (modal, chips) come from components.css;
+ * generic .cp-section/.cp-muted/.cp-edit-toggle/.cp-add/.cp-danger from content.css. */
+
+.cp-act-title { margin: 0 0 0.75rem; }
+.cp-act-title .cp-edit-toggle { font-size: 0.6em; vertical-align: middle; }
+
+/* header block: label | value | edit, one row each */
+.cp-act-bar {
+  border: 1px solid var(--cp-border); border-radius: 8px; padding: 0.4rem 0.8rem;
+  margin-bottom: 1.25rem; max-width: 52rem;
+}
+.cp-act-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
+.cp-act-row + .cp-act-row { border-top: 1px solid #f0f0f0; }
+.cp-act-row-label { flex: none; width: 6rem; font-size: 12px; font-weight: 600; color: #666; }
+.cp-act-row-body { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; min-width: 0; }
+.cp-act-row-edit { flex: none; }
+
+/* static category badge: just swatch + label, no chip border */
+.cp-cat-badge { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+/* orgs line: small muted role labels, normal-size initials */
+.cp-org-line { display: inline-flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
+.cp-org-part { white-space: nowrap; }
+.cp-org-role { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin-right: 0.3rem; }
+
+/* --- condensed tag chips (name on the left, value in the right half) ------ */
+.cp-tagchips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.cp-tagchip {
+  display: inline-flex; align-items: stretch; font-size: 12px; line-height: 1.4;
+  border: 1px solid var(--cp-border); border-radius: 999px; overflow: hidden; background: #fff;
+}
+.cp-tagchip-name { display: flex; align-items: center; padding: 0.1rem 0.55rem; background: #f3f4f6; color: #333; }
+.cp-tagchip.pinned .cp-tagchip-name { font-weight: 700; }   /* pinned = important tag */
+.cp-tagchip-val { display: flex; align-items: center; padding: 0.1rem 0.5rem; font-weight: 700; color: #fff; }
+.cp-tagchip-val.yes { background: #2e9e4d; }
+.cp-tagchip-val.no { background: #d64541; }
+.cp-tagchip-text {
+  display: flex; align-items: center; padding: 0.1rem 0.55rem; min-width: 3rem; max-width: 14rem;
+  color: #1a3a6b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* progress: fill behind a centred % label */
+.cp-tagchip-bar { position: relative; display: flex; align-items: center; min-width: 4.5rem; padding: 0.1rem 0.55rem; background: #d64541; }
+.cp-tagchip-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #2e9e4d; }
+.cp-tagchip-num { position: relative; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
+
+/* slots: one pill per line. The pill holds a navigable link segment (→ timeline, this activity
+   pre-filtered) and, when editable, an inline ✎ segment to assign orgs to the slot. */
+.cp-slot-list { display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; }
+.cp-slotchip:hover { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26, 115, 232, .2); }
+.cp-slot-main { display: inline-flex; align-items: stretch; text-decoration: none; color: inherit; cursor: pointer; }
+.cp-slot-main .cp-tagchip-text { max-width: none; gap: 0.4rem; }   /* don't truncate day + time */
+.cp-slot-day { color: #6b7686; }   /* muted day, left of the time range */
+/* attendees: a chip segment after the time, set off by a divider */
+.cp-slot-orgs { display: flex; align-items: center; padding: 0.1rem 0.55rem;
+  border-left: 1px solid var(--cp-border); font-style: italic; color: #555; }
+/* inline edit (assign orgs) segment */
+.cp-slot-edit { border: 0; border-left: 1px solid var(--cp-border); background: #f7f8fa;
+  padding: 0 0.5rem; cursor: pointer; color: #444; font: inherit; }
+.cp-slot-edit:hover { background: #e6e9ef; color: #111; }
+/* "… ukaž všechny" / "skryj" expander under the slot list */
+.cp-slot-toggle { border: 0; background: none; padding: 0.1rem 0; cursor: pointer;
+  color: #1a73e8; font: inherit; font-size: 12px; }
+.cp-slot-toggle:hover { text-decoration: underline; }
+
+/* tag editor rows (in the modal): enable switch + name + value control */
+.cp-tagedit-list { display: flex; flex-direction: column; gap: 0.15rem; }
+.cp-tagedit-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.35rem 0; border-bottom: 1px solid #f0f0f0; }
+.cp-tagedit-name { flex: 1; }
+.cp-tagedit-val { flex: none; }
+.cp-tagedit-val input[type="text"] { width: 12rem; font: inherit; padding: 0.25rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px; }
+/* greyed when the tag is disabled (the switch itself stays fully visible) */
+.cp-tagedit-row.disabled .cp-tagedit-name, .cp-tagedit-row.disabled .cp-tagedit-val { opacity: 0.4; }
+
+/* iOS-style toggle switch */
+.cp-switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
+.cp-switch-input { position: absolute; width: 0; height: 0; opacity: 0; }
+.cp-switch-slider { position: absolute; inset: 0; background: #cbd2da; border-radius: 999px; cursor: pointer; transition: background .15s; }
+.cp-switch-slider::before {
+  content: ""; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px;
+  background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s;
+}
+.cp-switch-input:checked + .cp-switch-slider { background: var(--cp-accent); }
+.cp-switch-input:checked + .cp-switch-slider::before { transform: translateX(16px); }
+.cp-switch-input:focus-visible + .cp-switch-slider { outline: 2px solid #1a73e8; outline-offset: 2px; }
+
+/* progress slider */
+.cp-slider-wrap { display: inline-flex; align-items: center; gap: 0.6rem; }
+.cp-slider { width: 9rem; }
+.cp-slider-num { font-variant-numeric: tabular-nums; width: 3rem; text-align: right; color: #555; }
+
+/* --- tabs ------------------------------------------------------------------ */
+.cp-tabbar { display: flex; gap: 4px; border-bottom: 2px solid var(--cp-border); margin: 0 0 1.25rem; }
+.cp-tabbtn {
+  font: inherit; font-size: 15px; font-weight: 600; padding: 0.6rem 1.15rem; cursor: pointer; color: #5a6675;
+  border: 0; background: none; border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
+}
+.cp-tabbtn:hover { color: #1a73e8; background: #f1f5fc; }
+.cp-tabbtn.on { color: #1a73e8; background: #e8f0fe; border-bottom-color: #1a73e8; }
+.cp-tabpane { min-height: 4rem; }
+/* inactive panes stay mounted (editor state is preserved) but hidden; this rule must
+   out-specify .cp-desc-pane's display:flex, which would otherwise beat plain [hidden] */
+.cp-tabpane[hidden] { display: none; }
+
+/* rendered markdown */
+.cp-markdown { line-height: 1.55; max-width: 48rem; }
+.cp-markdown > :first-child { margin-top: 0; }
+.cp-markdown h1, .cp-markdown h2, .cp-markdown h3 { margin: 1rem 0 0.4rem; }
+.cp-markdown pre { background: #f5f6f8; padding: 0.6rem 0.8rem; border-radius: 6px; overflow: auto; }
+.cp-markdown code { background: #f0f1f4; padding: 0.05rem 0.3rem; border-radius: 4px; font-size: 0.9em; }
+.cp-markdown pre code { background: none; padding: 0; }
+.cp-markdown blockquote { margin: 0.5rem 0; padding-left: 0.8rem; border-left: 3px solid var(--cp-border); color: #555; }
+.cp-markdown ul, .cp-markdown ol { margin: 0.4rem 0; padding-left: 1.6rem; }
+.cp-markdown ul { list-style: disc; }
+.cp-markdown ol { list-style: decimal; }
+.cp-markdown li { margin: 0.15rem 0; }
+.cp-markdown li > ul, .cp-markdown li > ol { margin: 0.1rem 0; }   /* tighter nested lists */
+/* description tab: actions pinned top-right (view = edit, edit = save/cancel) */
+.cp-desc-pane { display: flex; flex-direction: column; position: relative; }
+.cp-desc-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem; }
+/* read view: float the edit button over the markdown's top-right (no space above) */
+.cp-desc-actions-float { position: absolute; top: 0; right: 0; margin: 0; z-index: 1; }
+/* make the "Upravit popis" button stand out: accent outline that fills on hover */
+.cp-desc-edit { border-color: var(--cp-accent); color: var(--cp-accent); font-weight: 600; }
+.cp-desc-edit:hover { background: var(--cp-accent); color: #fff; }
+/* Uložit / Zrušit at the right end of the editor toolbar (outside a modal, so styled here) */
+.cp-mde-actions { margin-left: auto; display: flex; gap: 0.4rem; }
+.cp-mde-actions button {
+  font: inherit; font-size: 13px; padding: 0.25rem 0.75rem; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--cp-border); background: #fff; color: #333;
+}
+.cp-mde-actions .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: #fff; font-weight: 600; }
+.cp-mde-actions .cp-primary:disabled { opacity: .5; cursor: default; }
+.cp-mde-actions .cp-primary:hover:not(:disabled), .cp-mde-actions .cp-cancel:hover { filter: brightness(1.06); }
+/* editor toolbar — flat icon buttons, attached flush to the editor (modern-editor look) */
+.cp-mde-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  padding: 4px 6px; background: #f7f8fa;
+  border: 1px solid var(--cp-border); border-bottom: 0; border-radius: 6px 6px 0 0;
+}
+.cp-mde-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; cursor: pointer;
+  border: 0; border-radius: 5px; background: none; color: #444;
+}
+.cp-mde-btn:hover:not(:disabled) { background: #e6e9ef; color: #111; }
+.cp-mde-btn:disabled { opacity: .35; cursor: default; }
+.cp-mde-btn:active { background: #d8dce4; }
+.cp-mde-btn.active { background: #dbe7fb; color: #1a73e8; }   /* formatting under the caret */
+.cp-mde-sep { width: 1px; height: 18px; margin: 0 5px; background: var(--cp-border); }
+/* CodeMirror host attached below the bar; height set in JS (cm.setSize) to reach window bottom */
+.cp-mde { border: 1px solid var(--cp-border); border-radius: 0 0 6px 6px; overflow: hidden; }
+.cp-mde .CodeMirror { height: auto; font: inherit; }
+/* preview pane: same frame as the editor, scrolls, padded like rendered markdown */
+.cp-mde-preview { padding: 0.6rem 0.8rem; overflow: auto; background: #fff; max-width: none; }
+
+/* modal form-field primitives (.cp-field-label/.cp-act-textarea/.cp-need-amount-row/…)
+   now live in components.css, shared with the materials overview. */
+
+/* todos + materials lists */
+.cp-todo-list, .cp-need-list { display: flex; flex-direction: column; gap: 0.3rem; max-width: 44rem; }
+.cp-todo-row, .cp-need-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid #f0f0f0; }
+.cp-todo-main, .cp-need-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.cp-todo-line, .cp-need-line { display: flex; align-items: center; gap: 0.5rem; }
+.cp-todo-title { flex: 1; }
+.cp-todo-title.done { text-decoration: line-through; color: #888; }
+.cp-todo-due, .cp-todo-note, .cp-need-note { font-size: 12px; }
+.cp-todo-note { white-space: pre-wrap; }   /* render the note's line breaks */
+.cp-due-ok { color: #2e7d32; }    /* days remaining */
+.cp-due-late { color: #c5221f; }  /* overdue */
+.cp-todo-add, .cp-need-add { margin-top: 0.6rem; }
+.cp-need-name { flex: 1; }
+.cp-need-qty { white-space: nowrap; }
+
+/* compact in-row action buttons */
+.cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--cp-border); background: #fff; color: #333; }
+.cp-mini:hover { background: #f3f3f3; }
+.cp-danger.cp-mini { background: #c5221f; border-color: #c5221f; color: #fff; }
+.cp-danger.cp-mini:hover { filter: brightness(1.08); }
