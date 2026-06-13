@@ -3,12 +3,10 @@
  * Linked only on the timeline page; the embed-shared component styles stay in content.css.
  * Category colours (.vis-item.cat-<key>) are injected at runtime by timeline.js. */
 
-/* left column (title + legend) vs right column (control bars), top-aligned so the
-   legend sits right under the title instead of floating beside the 2-row buttons */
+/* left column (legend) vs right column (control bars), top-aligned so the legend sits
+   beside the 2-row buttons (the camp nav spans the full width above this row) */
 .cp-tl-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .cp-tl-left { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-.cp-tl-head { display: flex; align-items: baseline; gap: 1rem; }
-.cp-tl-head h1 { margin: 0; }
 .cp-tl-bars { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
 
 #cp-timeline { margin: 12px 0; }

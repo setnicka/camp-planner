@@ -2,7 +2,10 @@
  * from content.css and components.css; only the full-width table, the in-header sort/filter
  * controls, and the status columns live here (this file loads only on the overview page). */
 
-/* full window width (override .cp-table's 46rem cap) */
+/* The table sizes to its content and centres within the page; it stretches out toward the
+   full window only when the columns need the room (then .cp-table's 46rem cap is lifted).
+   The mount holds the toolbar + table, so both share the table's width and stay aligned. */
+#cp-overview { width: fit-content; max-width: 100%; margin: 0 auto; }
 .cp-ov-table { width: 100%; max-width: none; }
 .cp-ov-table th { vertical-align: bottom; }
 .cp-ov-table td { vertical-align: top; }

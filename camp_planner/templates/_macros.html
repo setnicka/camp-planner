@@ -2,6 +2,29 @@
 
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
+{# Per-camp page navigation: the camp name plus the four section tabs, on one compact
+   line. Shown on every camp-scoped page; `active` ∈ timeline|materials|overview|settings
+   highlights the current one. Drill-downs pick their nearest section (the activity detail
+   uses "overview", since activities are listed under Seznam her); pass "" for none. #}
+{% macro camp_nav(camp, active="") %}
+  {% set sections = [
+    ("timeline",  "main.camp_timeline",  "Timeline"),
+    ("materials", "main.camp_materials", "Materiál"),
+    ("overview",  "main.camp_overview",  "Seznam her"),
+    ("settings",  "main.camp_detail",    "Nastavení akce"),
+  ] %}
+  <nav class="cp-camp-nav">
+    <div class="cp-camp-nav-inner">
+      <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
+      {% for key, endpoint, label in sections %}
+        <a href="{{ url_for(endpoint, slug=camp.slug) }}"
+           class="{{ 'is-active' if active == key }}"
+           {{ 'aria-current=page' if active == key }}>{{ label }}</a>
+      {% endfor %}
+    </div>
+  </nav>
+{% endmacro %}
+
 {% macro errors_list(errors) %}
   {% if errors %}
     <ul class="cp-flashes">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>

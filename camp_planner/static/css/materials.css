@@ -10,6 +10,16 @@
 .cp-mat-row.cp-mat-hl > td { background: #fff3bf; }
 .cp-mat-caret { display: inline-block; width: 1em; color: var(--cp-muted); }
 
+/* "Hotovo" status badge: green = all usages ready, red = some still outstanding, so the
+   completed vs unfinished materials read at a glance down the column. */
+.cp-mat-hotovo { white-space: nowrap; }
+.cp-mat-ready {
+  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff;
+}
+.cp-mat-ready.done { background: #2e7d32; }
+.cp-mat-ready.todo { background: #c5221f; }
+
 /* usages sub-row: a flush full-width panel under its material */
 .cp-mat-sub > td { padding: 0; background: #fafafa; border-bottom: 1px solid var(--cp-border); }
 .cp-mat-note { padding: 0.4rem 0.75rem 0.4rem 2rem; white-space: pre-wrap; font-size: 13px; }
@@ -17,6 +27,8 @@
 .cp-usage-empty { padding: 0.5rem 0.75rem 0.5rem 2rem; }
 .cp-usage-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0.75rem 0.3rem 2rem; }
 .cp-usage-row + .cp-usage-row { border-top: 1px solid #ededed; }
+/* a ready usage reads as done: green activity name (the checkbox already shows the state) */
+.cp-usage-row.is-ready .cp-usage-act { color: #2e7d32; }
 .cp-usage-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .cp-usage-line { display: flex; align-items: center; gap: 0.5rem; }
 .cp-usage-act { flex: 1; }

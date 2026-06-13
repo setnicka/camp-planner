@@ -88,18 +88,7 @@
 .cp-slider { width: 9rem; }
 .cp-slider-num { font-variant-numeric: tabular-nums; width: 3rem; text-align: right; color: #555; }
 
-/* --- tabs ------------------------------------------------------------------ */
-.cp-tabbar { display: flex; gap: 4px; border-bottom: 2px solid var(--cp-border); margin: 0 0 1.25rem; }
-.cp-tabbtn {
-  font: inherit; font-size: 15px; font-weight: 600; padding: 0.6rem 1.15rem; cursor: pointer; color: #5a6675;
-  border: 0; background: none; border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
-}
-.cp-tabbtn:hover { color: #1a73e8; background: #f1f5fc; }
-.cp-tabbtn.on { color: #1a73e8; background: #e8f0fe; border-bottom-color: #1a73e8; }
-.cp-tabpane { min-height: 4rem; }
-/* inactive panes stay mounted (editor state is preserved) but hidden; this rule must
-   out-specify .cp-desc-pane's display:flex, which would otherwise beat plain [hidden] */
-.cp-tabpane[hidden] { display: none; }
+/* tab bar/panes are shared primitives — see .cp-tabbar/.cp-tabbtn/.cp-tabpane in components.css */
 
 /* rendered markdown */
 .cp-markdown { line-height: 1.55; max-width: 48rem; }

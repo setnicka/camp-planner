@@ -1,0 +1,12 @@
+/* Camp settings page — taxonomy tabs. Tab bar/panes are shared primitives from
+   components.css; this file only adds the per-pane edit toolbar. */
+
+/* Cap the pane to the table's own max-width (.cp-table is 46rem) so the right-aligned
+   edit button lands on the table's right edge, not the far edge of the container. */
+[data-tax-pane] { max-width: 46rem; }
+/* right-aligned edit button at the top of the params section and each tax pane */
+.cp-edit-toolbar { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
+
+/* "Upravit parametry" navigates to the edit page but should wear the .cp-edit-toggle
+   button chrome — reset the default anchor underline/colour so it matches. */
+a.cp-edit-toggle { display: inline-block; text-decoration: none; }

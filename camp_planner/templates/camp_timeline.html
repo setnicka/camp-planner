@@ -1,5 +1,7 @@
 {% extends layout %}
+{% from "_macros.html" import camp_nav %}
 {% block title %}{{ camp.name }} – timeline{% endblock %}
+{% block main_class %}cp-wide{% endblock %}
 
 {% block head %}
   <link rel="stylesheet"
@@ -10,16 +12,11 @@
 {% endblock %}
 
 {% block content %}
-  {# left column = title + legend (stacked); right = control bars. all top-aligned #}
+  {{ camp_nav(camp, "timeline") }}
+  {# left column = legend; right = control bars. all top-aligned #}
   <div class="cp-tl-top">
     <div class="cp-tl-left">
-      <div class="cp-tl-head">
-        <h1>{{ camp.name }}</h1>
-        <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Nastavení akce</a>
-        <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a>
-        <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">Seznam her</a>
-      </div>
-      {# legend injected here (under the title) by timeline.js, before the help below #}
+      {# legend injected here by timeline.js, before the help below #}
       {% if can_edit(camp) %}
       <p class="cp-tl-help"><small><b>Filtruj</b> klikáním na kategorie/orgy/hry výše. <b>Kliknutím na slot</b> otevřeš <b>menu</b>.
         Pro změnu/přidání slotů přepni do <b>editačního módu</b>, v něm: <b>dvojklik</b> na prázdném místě

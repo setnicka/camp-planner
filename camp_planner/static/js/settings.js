@@ -188,4 +188,20 @@
     if (toggle) toggle.addEventListener("click", () => (editing ? renderView() : renderEdit()));
     renderView();
   });
+
+  // --- tabs ------------------------------------------------------------------
+  // The three panes are server-rendered and stay mounted; clicking a tab only toggles
+  // which pane is visible, so an in-progress edit in another pane is never destroyed.
+  const tabbar = document.querySelector("[data-tax-tabbar]");
+  if (tabbar) {
+    const panes = {};
+    document.querySelectorAll("[data-tax-pane]").forEach((p) => (panes[p.dataset.taxPane] = p));
+    const buttons = [...tabbar.querySelectorAll("[data-tax-tab]")];
+    const show = (key) => {
+      buttons.forEach((b) => b.classList.toggle("on", b.dataset.taxTab === key));
+      for (const k in panes) panes[k].hidden = k !== key;
+    };
+    buttons.forEach((b) => b.addEventListener("click", () => show(b.dataset.taxTab)));
+    show((buttons.find((b) => b.classList.contains("on")) || buttons[0]).dataset.taxTab);
+  }
 })();

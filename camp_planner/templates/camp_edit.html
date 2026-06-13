@@ -1,8 +1,9 @@
 {% extends layout %}
-{% from "_macros.html" import csrf, errors_list, camp_fields %}
+{% from "_macros.html" import csrf, errors_list, camp_fields, camp_nav %}
 {% block title %}{{ camp.name }} – úprava{% endblock %}
 {% block content %}
-  <h1>{{ camp.name }} <span class="cp-subtitle">úprava parametrů</span></h1>
+  {{ camp_nav(camp, "settings") }}
+  <h1>Úprava parametrů</h1>
   <p><a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">← zpět na nastavení akce</a></p>
 
   {{ errors_list(errors) }}

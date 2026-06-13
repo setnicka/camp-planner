@@ -46,6 +46,19 @@
 }
 .cp-tab.on { background: #fff; color: #1a73e8; font-weight: 600; box-shadow: inset 0 -2px 0 #1a73e8; }
 
+/* page-level tab bar (activity detail, camp settings) — panes stay mounted, hidden when inactive */
+.cp-tabbar { display: flex; gap: 4px; border-bottom: 2px solid var(--cp-border); margin: 0 0 1.25rem; }
+.cp-tabbtn {
+  font: inherit; font-size: 15px; font-weight: 600; padding: 0.6rem 1.15rem; cursor: pointer; color: #5a6675;
+  border: 0; background: none; border-bottom: 3px solid transparent; margin-bottom: -2px; border-radius: 6px 6px 0 0;
+}
+.cp-tabbtn:hover { color: #1a73e8; background: #f1f5fc; }
+.cp-tabbtn.on { color: #1a73e8; background: #e8f0fe; border-bottom-color: #1a73e8; }
+.cp-tabpane { min-height: 4rem; }
+/* inactive panes stay mounted but hidden; this rule must out-specify any pane display rule (e.g.
+   activity detail's .cp-desc-pane display:flex), which would otherwise beat plain [hidden] */
+.cp-tabpane[hidden] { display: none; }
+
 /* search box + result list (fuzzy pickers) */
 .cp-modal-search, .cp-modal-name, .cp-act-textarea {
   font: inherit; padding: 0.5rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 100%; box-sizing: border-box;

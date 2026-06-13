@@ -1,4 +1,5 @@
 {% extends layout %}
+{% from "_macros.html" import camp_nav %}
 {% block title %}{{ activity.title }} – {{ camp.name }}{% endblock %}
 
 {% block head %}
@@ -9,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a></p>
+  {{ camp_nav(camp, "overview") }}
 
   {# activity-detail.js renders the header + all sections into here from the JSON below.
      Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}

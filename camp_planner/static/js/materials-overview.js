@@ -49,6 +49,14 @@
     return order.map((unit) => fmtNum(sums.get(unit)) + (unit ? " " + unit : "")).join(", ");
   }
   const readiness = (m) => ({ ready: m.usages.filter((u) => u.is_ready).length, total: m.usages.length });
+  // "Hotovo" cell: a filled badge — green when every usage is ready, red while some remain;
+  // a muted dash when the material isn't used anywhere yet.
+  function readyBadge(ready, total) {
+    if (!total) return el("span", { class: "cp-muted" }, "—");
+    const done = ready === total;
+    return el("span", { class: "cp-mat-ready " + (done ? "done" : "todo") },
+      (done ? "✓ " : "") + ready + "/" + total);
+  }
   // map a MaterialNeedOut back onto our flatter usage shape (keep need_id/activity_*)
   const assignNeed = (u, need) => { u.amount = need.amount; u.unit = need.unit; u.note = need.note; u.is_ready = need.is_ready; };
 
@@ -95,7 +103,7 @@
       el("td", null, m.unit || "—"),
       el("td", null, unitTotals(m) || "—"),
       el("td", null, String(total)),
-      el("td", null, total ? `${ready}/${total}` : "—"));
+      el("td", { class: "cp-mat-hotovo" }, readyBadge(ready, total)));
     if (mayEdit) {
       const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
       edit.addEventListener("click", () => openMaterialEdit(m));
@@ -158,7 +166,7 @@
     }
     const main = el("div", { class: "cp-usage-main" }, line);
     if (u.note) main.append(el("div", { class: "cp-muted cp-usage-note" }, u.note));
-    return el("div", { class: "cp-usage-row" }, cb, main);
+    return el("div", { class: "cp-usage-row" + (u.is_ready ? " is-ready" : "") }, cb, main);
   }
 
   // --- edits -----------------------------------------------------------------

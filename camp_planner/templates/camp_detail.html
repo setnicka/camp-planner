@@ -1,13 +1,15 @@
 {% extends layout %}
+{% from "_macros.html" import camp_nav %}
 {% block title %}{{ camp.name }} – nastavení akce{% endblock %}
 
-{% block head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/settings.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
 
 {% block content %}
-  <h1>{{ camp.name }} <span class="cp-subtitle">nastavení akce</span></h1>
-  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a>
-     · <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a>
-     · <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">Seznam her</a></p>
+  {{ camp_nav(camp, "settings") }}
 
   {% set may_edit = can_edit(camp) %}
 
@@ -25,22 +27,32 @@
         </td></tr>
       {% endif %}
     </table>
-    {% if may_edit %}<p><a href="{{ url_for('main.camp_edit', slug=camp.slug) }}">✎ Upravit parametry</a></p>{% endif %}
+    {% if may_edit %}<p><a class="cp-edit-toggle" href="{{ url_for('main.camp_edit', slug=camp.slug) }}">✎ Upravit parametry</a></p>{% endif %}
   </section>
 
-  {# Taxonomy lists are rendered + edited entirely by settings.js from the JSON
-     below. The pencil toggles edit mode (add / rename / drag-reorder / delete);
+  {# Taxonomy lists (categories / orgs / tags) are shown as tabs. Each pane is rendered +
+     edited entirely by settings.js from the JSON below; the tab bar just toggles which
+     pane is visible. The pencil toggles edit mode (add / rename / drag-reorder / delete);
      Save batches the whole list to the REST endpoint. #}
-  {% macro tax_section(name, heading) %}
-    <section class="cp-section" data-tax="{{ name }}">
-      <h2>{{ heading }} {% if may_edit %}<button type="button" class="cp-edit-toggle" data-edit-toggle title="Upravit">✎</button>{% endif %}</h2>
+  {% macro tax_pane(name, heading) %}
+    <section class="cp-tabpane cp-section" data-tax="{{ name }}" data-tax-pane="{{ name }}" hidden>
+      {% if may_edit %}
+        <div class="cp-edit-toolbar"><button type="button" class="cp-edit-toggle" data-edit-toggle title="Upravit {{ heading }}">✎ Upravit</button></div>
+      {% endif %}
       <div data-tax-flash class="cp-flash-area" aria-live="polite"></div>
       <div data-tax-body></div>
     </section>
   {% endmacro %}
-  {{ tax_section("categories", "Kategorie") }}
-  {{ tax_section("orgs", "Orgové") }}
-  {{ tax_section("tags", "Tagy") }}
+  <div class="cp-tabs">
+    <div class="cp-tabbar" data-tax-tabbar>
+      <button type="button" class="cp-tabbtn on" data-tax-tab="categories">Kategorie</button>
+      <button type="button" class="cp-tabbtn" data-tax-tab="orgs">Orgové</button>
+      <button type="button" class="cp-tabbtn" data-tax-tab="tags">Tagy</button>
+    </div>
+    {{ tax_pane("categories", "Kategorie") }}
+    {{ tax_pane("orgs", "Orgové") }}
+    {{ tax_pane("tags", "Tagy") }}
+  </div>
 
   <script id="cp-tax-data" type="application/json">{{ tax_data | tojson }}</script>
 {% endblock %}

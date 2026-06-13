@@ -37,4 +37,18 @@ body {
   border-bottom: 1px solid var(--cp-border);
 }
 
-main { padding: 1rem; }
+/* Pages are centered within a default reading width. A page whose content needs more
+   room (the timeline, the activity overview table) sets `main_class = cp-wide` to use
+   the full viewport instead. */
+main { padding: var(--cp-page-pad); max-width: var(--cp-page-width); margin: 0 auto; box-sizing: border-box; }
+main.cp-wide { max-width: none; }
+/* The camp nav is a full-width band. Its border-bottom spills over main's horizontal
+   padding to reach the page edges (the full window on wide pages), while the inner row is
+   capped at the page width and centered — so the links sit in the same column on every
+   page and never shift when switching sections. Spilling over the padding (rather than
+   100vw) keeps the line within the document, so no phantom horizontal scrollbar appears. */
+.cp-camp-nav { margin-left: calc(-1 * var(--cp-page-pad)); margin-right: calc(-1 * var(--cp-page-pad)); }
+.cp-camp-nav-inner {
+  max-width: var(--cp-page-width); margin-left: auto; margin-right: auto;
+  padding-left: var(--cp-page-pad); padding-right: var(--cp-page-pad); box-sizing: border-box;
+}

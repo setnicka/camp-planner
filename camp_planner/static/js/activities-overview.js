@@ -332,9 +332,24 @@
     const toolbar = el("div", { class: "cp-ov-toolbar" }, countLabel, reset);
 
     tbody = el("tbody");
-    mount.replaceChildren(toolbar,
-      el("table", { class: "cp-table cp-ov-table" }, el("thead", null, headRow), tbody));
+    const table = el("table", { class: "cp-table cp-ov-table" }, el("thead", null, headRow), tbody);
+    mount.replaceChildren(toolbar, table);
+    // buildShell only runs with filters cleared (initial load or "Zrušit filtry"), so this
+    // paints the full set; pin the resulting column widths so later filtered re-renders —
+    // which show only the matching rows — can no longer reflow the columns.
     renderTableBody();
+    freezeColumns(table, headRow);
+  }
+
+  // Freeze the current column widths into a <colgroup> + table-layout:fixed. Called after a
+  // full-data render so the widths fit the widest content; subsequent filtered renders keep them.
+  function freezeColumns(table, headRow) {
+    const widths = [...headRow.children].map((th) => th.getBoundingClientRect().width);
+    const colgroup = el("colgroup");
+    widths.forEach((w) => { const c = el("col"); c.style.width = Math.round(w) + "px"; colgroup.append(c); });
+    table.insertBefore(colgroup, table.firstChild);
+    table.style.tableLayout = "fixed";
+    table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
   }
 
   // close an open org dropdown when clicking anywhere outside it
