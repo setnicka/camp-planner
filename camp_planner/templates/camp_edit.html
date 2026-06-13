@@ -3,7 +3,7 @@
 {% block title %}{{ camp.name }} – úprava{% endblock %}
 {% block content %}
   <h1>{{ camp.name }} <span class="cp-subtitle">úprava parametrů</span></h1>
-  <p><a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">← zpět na detail</a></p>
+  <p><a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">← zpět na nastavení akce</a></p>
 
   {{ errors_list(errors) }}
 

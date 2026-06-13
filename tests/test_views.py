@@ -77,3 +77,26 @@ def test_materials_viewer_read_only(client, seeded):
 def test_materials_404_for_unknown_camp(client, seeded):
     # the page is camp-scoped (no item id in the URL); a non-existent slug → 404
     assert client.get("/camps/neexistuje/materials", headers=ADMIN).status_code == 404
+
+
+def test_overview_page_renders_with_data(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/activities", headers=ADMIN).get_data(as_text=True)
+    assert 'id="cp-overview-data"' in html               # the embedded JSON the JS renders from
+    assert 'id="cp-overview"' in html                    # the mount point
+    assert "js/activities-overview.js" in html
+    assert "/api/activities/0" in html                    # activityItem (DELETE) url resolves
+    assert "/api/activities/0/merge" in html              # activityMerge url resolves
+    assert '"may_edit": true' in html                     # admin can edit
+    assert "Akce" in html                                 # the seeded activity
+
+
+def test_overview_viewer_read_only(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/activities", headers=viewer(slug)).get_data(as_text=True)
+    assert '"may_edit": false' in html
+
+
+def test_overview_404_for_unknown_camp(client, seeded):
+    # the page is camp-scoped (no item id in the URL); a non-existent slug → 404
+    assert client.get("/camps/neexistuje/activities", headers=ADMIN).status_code == 404

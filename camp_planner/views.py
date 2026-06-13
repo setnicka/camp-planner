@@ -188,6 +188,36 @@ def camp_materials(slug: str):
     return render_template("materials_overview.html", camp=camp, data=data)
 
 
+@bp.get("/camps/<slug>/activities")
+@require_view
+def camp_overview(slug: str):
+    """Camp-wide activity overview / status page: every activity in a filterable, sortable
+    table — category, orgs, todo/material progress, a column per pinned tag, slot counts —
+    with delete and merge from the embedded JSON via the api endpoints. Edit affordances are
+    gated by can_edit; the api re-checks server-side."""
+    camp = db.first_or_404(
+        db.select(Camp).filter_by(slug=slug).options(*loaders.ACTIVITIES_OVERVIEW),
+        description="Akce nenalezena.")
+    tax = taxonomy.serialize(camp)   # categories / orgs (czech-sorted) / tags — reused as filter metadata
+    data = {
+        # order is decided client-side (the table re-sorts on every filter/sort change)
+        "activities": [serialize.activity_overview(a) for a in camp.activities],
+        # filter/column metadata: categories, orgs, and the pinned tags (= columns)
+        "categories": [{"id": c["id"], "label": c["label"], "color": c["color"]} for c in tax["categories"]],
+        "orgs": tax["orgs"],
+        "pinned_tags": [{"id": t["id"], "name": t["name"], "kind": t["kind"]} for t in tax["tags"] if t["pinned"]],
+        "may_edit": can_edit(camp),
+        # activityItem serves DELETE; activityMerge is .../<id>/merge; the trailing 0 is a
+        # sentinel the client swaps for the real id.
+        "urls": {
+            "activityItem": url_for("api.activity_delete", activity_id=0),
+            "activityMerge": url_for("api.activity_merge", source_id=0),
+            "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
+        },
+    }
+    return render_template("activities_overview.html", camp=camp, data=data)
+
+
 @bp.get("/camps/<slug>/edit")
 @require_edit
 def camp_edit(slug: str):

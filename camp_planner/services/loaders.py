@@ -63,3 +63,21 @@ MATERIALS_OVERVIEW = (
 TODOS_OVERVIEW = (
     selectinload(Camp.activities).selectinload(Activity.todos),
 )
+
+# GET /camps/<slug>/activities (web overview/status page) — the camp's filter metadata
+# (categories, orgs, tags) plus, per activity, what serialize.activity_overview counts:
+# category, org assignments, tag links (value only — keyed by tag_id), slots (role only),
+# todos (is_done) and needs (is_ready). Notably no slot attendees or need catalog rows.
+ACTIVITIES_OVERVIEW = (
+    selectinload(Camp.categories),
+    selectinload(Camp.orgs),
+    selectinload(Camp.tags),
+    selectinload(Camp.activities).options(
+        selectinload(Activity.category),
+        selectinload(Activity.assignments).selectinload(ActivityAssignment.org),
+        selectinload(Activity.tags),
+        selectinload(Activity.slots),
+        selectinload(Activity.todos),
+        selectinload(Activity.material_needs),
+    ),
+)

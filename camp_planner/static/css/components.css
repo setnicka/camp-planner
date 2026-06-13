@@ -90,3 +90,11 @@
 .cp-need-amount-row { display: flex; gap: 0.4rem; align-items: center; }
 .cp-num { width: 6rem; }
 .cp-need-unit { font: inherit; padding: 0.3rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 8rem; }
+
+/* --- compact in-row action buttons (✎ / ✕ / ⤳) — shared by the inline-edit + overview pages --- */
+.cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--cp-border); background: #fff; color: #333; }
+.cp-mini:not(.cp-danger):hover:not(:disabled) { background: #f3f3f3; }   /* danger keeps its red (below) */
+.cp-mini:disabled { opacity: .4; cursor: not-allowed; }
+.cp-danger.cp-mini { background: #c5221f; border-color: #c5221f; color: #fff; }
+.cp-danger.cp-mini:not(:disabled):hover { filter: brightness(1.08); }

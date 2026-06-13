@@ -1,0 +1,25 @@
+{% extends layout %}
+{% block title %}Seznam her – {{ camp.name }}{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/activities-overview.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+  <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a></p>
+  <h1>Seznam her <span class="cp-subtitle">{{ camp.name }}</span></h1>
+
+  {# activities-overview.js renders the filter header + table into here from the JSON below.
+     Delete/merge affordances are gated by data.may_edit; mutations go to the api endpoints. #}
+  <div id="cp-overview"></div>
+
+  <script id="cp-overview-data" type="application/json">{{ data | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/activities-overview.js') }}"></script>
+{% endblock %}

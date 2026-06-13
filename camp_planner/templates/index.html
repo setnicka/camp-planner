@@ -11,8 +11,9 @@
         <li>
           <a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
           <span class="cp-muted">{{ camp.start_date.isoformat() }}</span>
-          · <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">detail</a>
+          · <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">nastavení akce</a>
           · <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">materiál</a>
+          · <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">seznam her</a>
         </li>
       {% endfor %}
     </ul>

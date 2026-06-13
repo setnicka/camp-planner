@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from camp_planner.models.activity import OrgRole
+from camp_planner.models.common import czech_sort_key
+from camp_planner.models.slot import SlotRole
 from camp_planner.schemas import (
     ActivityOut,
     AssignmentOut,
@@ -125,6 +128,28 @@ def material_overview(m: Material) -> dict:
             amount=n.amount, unit=n.unit, note=n.note, is_ready=n.is_ready)
             for n in m.needs],
     ))
+
+
+def activity_overview(a: Activity) -> dict:
+    """A compact activity row for the camp-wide overview / status page: category, garant/helper
+    initials (czech-sorted), todo/material progress counts, slot counts by role, and the applied
+    tags as {tag_id: value} (a present key = the tag applies; its value may be null). Filtering
+    and sorting are done client-side from this shape."""
+    garants = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.garant), key=czech_sort_key)
+    helpers = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.helper), key=czech_sort_key)
+    return {
+        "id": a.id,
+        "title": a.title,
+        "category": {"id": a.category_id, "label": a.category.label, "color": a.category.color} if a.category else None,
+        "garants": garants,
+        "helpers": helpers,
+        "org_ids": sorted({x.org_id for x in a.assignments}),
+        "garant_ids": sorted({x.org_id for x in a.assignments if x.role is OrgRole.garant}),
+        "todos": {"done": sum(t.is_done for t in a.todos), "total": len(a.todos)},
+        "materials": {"done": sum(n.is_ready for n in a.material_needs), "total": len(a.material_needs)},
+        "slots": {role.value: sum(s.role is role for s in a.slots) for role in SlotRole},
+        "tags": {str(at.tag_id): at.value for at in a.tags},
+    }
 
 
 def activity(a: Activity) -> dict:

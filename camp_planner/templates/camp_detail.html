@@ -1,12 +1,13 @@
 {% extends layout %}
-{% block title %}{{ camp.name }} – detail{% endblock %}
+{% block title %}{{ camp.name }} – nastavení akce{% endblock %}
 
 {% block head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}
 
 {% block content %}
-  <h1>{{ camp.name }} <span class="cp-subtitle">detail</span></h1>
+  <h1>{{ camp.name }} <span class="cp-subtitle">nastavení akce</span></h1>
   <p><a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">← zpět na timeline</a>
-     · <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a></p>
+     · <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a>
+     · <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">Seznam her</a></p>
 
   {% set may_edit = can_edit(camp) %}
 

@@ -234,6 +234,53 @@ def test_activity_orgs_reject_foreign(client, seeded):
     assert resp.status_code == 400
 
 
+def test_activity_delete_blocked_while_it_has_slots(client, seeded):
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    _make_slot(client, slug, aid)
+    resp = client.delete(f"/api/activities/{aid}", headers=ADMIN)
+    assert resp.status_code == 400 and "naplánované sloty" in _json(resp)["error"]
+    # the activity survives for the user to clear its slots first
+    assert aid in [a["id"] for a in _get(client, f"/api/camps/{slug}/activities")["activities"]]
+
+
+def test_activity_delete_when_slotless(client, seeded):
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    resp = client.delete(f"/api/activities/{aid}", headers=ADMIN)
+    assert resp.status_code == 200 and _json(resp)["id"] == aid
+    assert aid not in [a["id"] for a in _get(client, f"/api/camps/{slug}/activities")["activities"]]
+
+
+def test_activity_merge_transfers_slots_todos_and_joins_needs(client, seeded):
+    slug, src = seeded["slug"], seeded["activity_id"]
+    dst = _json(client.post(f"/api/camps/{slug}/activities", json={"title": "Cíl"}, headers=ADMIN))["activity"]["id"]
+    # source carries a slot, a todo and a material need; the target uses the same material
+    _make_slot(client, slug, src)
+    client.post(f"/api/activities/{src}/todos", json={"title": "Koupit lano"}, headers=ADMIN)
+    mid = _make_material(client, slug, name="lano", unit="m")["material"]["id"]
+    client.post(f"/api/activities/{src}/materials", json={"material_id": mid, "amount": 30}, headers=ADMIN)
+    client.post(f"/api/activities/{dst}/materials", json={"material_id": mid, "amount": 20}, headers=ADMIN)
+
+    resp = client.post(f"/api/activities/{src}/merge", json={"into": dst}, headers=ADMIN)
+    assert resp.status_code == 200 and _json(resp)["activity"]["id"] == dst
+
+    # source gone; its slot + todo moved to the target, the shared need's amount summed
+    acts = {a["id"]: a for a in _get(client, f"/api/camps/{slug}/activities")["activities"]}
+    assert src not in acts
+    target = _get(client, f"/api/activities/{dst}")["activity"]
+    assert len(target["slots"]) == 1
+    assert [t["title"] for t in target["todos"]] == ["Koupit lano"]
+    assert len(target["material_needs"]) == 1 and target["material_needs"][0]["amount"] == 50  # 30 + 20
+
+
+def test_activity_merge_rejects_cross_camp(client, seeded):
+    src = seeded["activity_id"]
+    other = _json(client.post("/api/camps", json={**_NEW_CAMP, "slug": "jina"}, headers=ADMIN))
+    dst = _json(client.post("/api/camps/jina/activities", json={"title": "Jiná"}, headers=ADMIN))["activity"]["id"]
+    assert other  # camp created
+    resp = client.post(f"/api/activities/{src}/merge", json={"into": dst}, headers=ADMIN)
+    assert resp.status_code == 400 and "různých akcí" in _json(resp)["error"]
+
+
 def test_slot_orgs_set_and_reject_foreign(client, seeded):
     slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
     slot_id = _make_slot(client, slug, aid)

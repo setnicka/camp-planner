@@ -23,10 +23,4 @@
 .cp-usage-qty { white-space: nowrap; }
 .cp-usage-note { font-size: 12px; white-space: pre-wrap; }
 
-/* compact in-row action buttons (mirrors the activity page's .cp-mini) */
-.cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
-  border: 1px solid var(--cp-border); background: #fff; color: #333; }
-.cp-mini:hover { background: #f3f3f3; }
-.cp-danger.cp-mini { background: #c5221f; border-color: #c5221f; color: #fff; }
-.cp-danger.cp-mini:hover { filter: brightness(1.08); }
-/* modal form fields use the shared .cp-field-label/.cp-act-textarea/… from components.css */
+/* .cp-mini in-row action buttons + modal form fields come from components.css */
