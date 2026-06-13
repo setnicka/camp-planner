@@ -80,6 +80,10 @@ class Config:
     DEV_USER: dict | None = None
     # Base template every page extends; an embedding host can override it.
     BASE_TEMPLATE = os.environ.get("BASE_TEMPLATE", "_layouts/full.html")
+    # Google service-account key (a path to the JSON file, or the JSON inline) that
+    # enables two-way Google Calendar sync. Unset → the feature is disabled and hidden,
+    # and the google-api libs need not be installed. See docs/GOOGLE_CALENDAR_SETUP.md.
+    GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 
     @staticmethod
     def init_app(app: Flask) -> None:

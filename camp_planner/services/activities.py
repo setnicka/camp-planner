@@ -15,7 +15,7 @@ from camp_planner.models.activity import Activity, ActivityAssignment, ActivityT
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import TagKind
 from camp_planner.models.common import czech_sort_key
-from camp_planner.services import audit, errors, serialize, timeline
+from camp_planner.services import audit, errors, google_sync, serialize, timeline
 
 if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
@@ -51,6 +51,11 @@ def update_activity(activity: Activity, payload: ActivityUpdate) -> dict:
     if changes:
         audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.activity,
                      entity_id=activity.id, action=AuditAction.update, changes=changes)
+        # The event summary derives from the title and its color from the category, so
+        # re-push every slot's event when either changes (no-op unless the camp is connected).
+        if "title" in changes or "category_id" in changes:
+            for slot in activity.slots:
+                google_sync.enqueue_upsert(activity.camp, slot)
         db.session.commit()
     return {"activity": serialize.activity(activity)}
 
@@ -97,7 +102,8 @@ def merge_activities(source: Activity, target: Activity) -> dict:
 
     for todo in list(source.todos):
         todo.activity = target
-    for slot in list(source.slots):
+    reassigned_slots = list(source.slots)
+    for slot in reassigned_slots:
         slot.activity = target
     for need in list(source.material_needs):
         existing = target_need_by_material.get(need.material_id)
@@ -114,6 +120,9 @@ def merge_activities(source: Activity, target: Activity) -> dict:
     timeline.bump_timeline_rev(target.camp)
     audit.record(camp_id=target.camp_id, activity_id=target.id, entity_type=EntityType.activity,
                  entity_id=target.id, action=AuditAction.update, changes={"merged_from": [source_title, None]})
+    # Reassigned slots now belong to the target, so their events' summary changes.
+    for slot in reassigned_slots:
+        google_sync.enqueue_upsert(target.camp, slot)
     db.session.commit()
     return {"activity": serialize.activity(target)}
 
@@ -140,6 +149,10 @@ def set_orgs(activity: Activity, payload: ActivityOrgsIn) -> dict:
         activity.assignments = [ActivityAssignment(org_id=oid, role=role) for oid, role in new_pairs]
         audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.assignment,
                      entity_id=None, action=AuditAction.update, changes=changes)
+        # Garants AND helpers both map to each event's LOCATION (format_location), so re-push
+        # the activity's slots on any assignment change (no-op unless the camp is connected).
+        for slot in activity.slots:
+            google_sync.enqueue_upsert(activity.camp, slot)
         db.session.commit()
     return {"orgs": [serialize.assignment(a) for a in activity.assignments]}
 

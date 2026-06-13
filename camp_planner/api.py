@@ -50,6 +50,13 @@ from camp_planner.schemas import (
     ConflictOut,
     DeletedEnvelope,
     ForbiddenOut,
+    GoogleConnectIn,
+    GoogleEnvelope,
+    GooglePullApplyEnvelope,
+    GooglePullApplyIn,
+    GooglePullConflictOut,
+    GooglePullPreviewEnvelope,
+    GoogleSyncEnvelope,
     MaterialCreate,
     MaterialEnvelope,
     MaterialListEnvelope,
@@ -82,6 +89,7 @@ from camp_planner.schemas import (
 )
 from camp_planner.services import activities
 from camp_planner.services import camps as camps_service
+from camp_planner.services import google_sync
 from camp_planner.services import audit, errors, loaders, materials, serialize, slots, taxonomy, todos
 from camp_planner.services.timeline import build_timeline
 
@@ -237,6 +245,66 @@ def camp_delete(slug: str):
     if not can_edit_camp_meta(camp):
         _forbid("Mazat akce může jen administrátor.")
     return _run(lambda: camps_service.delete_camp(camp))
+
+
+# --- Google Calendar sync (connect / disconnect / push) ----------------------
+
+@bp.get("/camps/<slug>/google")
+@spec.validate(resp=Response(HTTP_200=GoogleEnvelope, **_AUTH), tags=["google"])
+def google_status(slug: str):
+    """Current Google Calendar connection state for the camp."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    return _run(lambda: {"google": camps_service.google_status(camp)})
+
+
+@bp.put("/camps/<slug>/google")
+@spec.validate(json=GoogleConnectIn, resp=Response(HTTP_200=GoogleEnvelope, **_AUTH_400), tags=["google"])
+def google_connect(slug: str):
+    """Connect the camp to a Google calendar by id (verifies access, queues an export)."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    return _run(lambda: camps_service.set_google_calendar(camp, request.context.json.calendar_id))
+
+
+@bp.delete("/camps/<slug>/google")
+@spec.validate(resp=Response(HTTP_200=GoogleEnvelope, **_AUTH_400), tags=["google"])
+def google_disconnect(slug: str):
+    """Disconnect the camp from Google (leaves the events already in the calendar)."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    return _run(lambda: camps_service.disconnect_google(camp))
+
+
+@bp.post("/camps/<slug>/google/sync")
+@spec.validate(resp=Response(HTTP_200=GoogleSyncEnvelope, **_AUTH_400), tags=["google"])
+def google_sync_now(slug: str):
+    """Deliver any queued outbound changes to Google now ("Synchronizovat nyní")."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    return _run(lambda: {"result": google_sync.drain(camp), "google": camps_service.google_status(camp)})
+
+
+@bp.get("/camps/<slug>/google/pull")
+@spec.validate(resp=Response(HTTP_200=GooglePullPreviewEnvelope, **_AUTH_400), tags=["google"])
+def google_pull_preview(slug: str):
+    """Compute the reviewable list of changes made in Google ("Načíst změny z Google")."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    return _run(lambda: google_sync.preview_pull(camp))
+
+
+@bp.post("/camps/<slug>/google/pull")
+@spec.validate(json=GooglePullApplyIn,
+               resp=Response(HTTP_200=GooglePullApplyEnvelope, HTTP_409=GooglePullConflictOut, **_AUTH_400),
+               tags=["google"])
+def google_pull_apply(slug: str):
+    """Apply the user-selected subset of inbound changes from the review screen. A stale
+    `rev` (the timeline changed since the preview) yields 409."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    payload = request.context.json
+    return _run(lambda: google_sync.apply_pull(camp, payload.decisions, rev=payload.rev))
 
 
 # --- taxonomy (batch list reconcile: PUT the whole desired list) -------------

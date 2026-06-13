@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import enum
-from datetime import date
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,7 @@ from camp_planner.models.common import TimestampMixin, portable_enum
 
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity
+    from camp_planner.models.google import GoogleSyncOp
     from camp_planner.models.material import Material
     from camp_planner.models.org import Org
 
@@ -53,6 +54,13 @@ class Camp(TimestampMixin, Base):
     # window, so a concurrent timeline edit can detect it raced.
     timeline_rev: Mapped[int] = mapped_column(default=0, server_default="0")
 
+    # Google Calendar sync (optional; see services/google_sync.py + docs/GOOGLE_CALENDAR_SETUP.md).
+    # Connected when google_calendar_id is set. google_sync_token is Google's incremental
+    # events.list cursor for the inbound review; google_last_pull_at stamps the last pull.
+    google_calendar_id: Mapped[str | None] = mapped_column(String(255))
+    google_sync_token: Mapped[str | None] = mapped_column(Text)
+    google_last_pull_at: Mapped[datetime | None]
+
     # Relationships:
     categories: Mapped[list[Category]] = relationship(
         back_populates="camp", cascade="all, delete-orphan", order_by="Category.sort_order"
@@ -66,6 +74,9 @@ class Camp(TimestampMixin, Base):
     materials: Mapped[list[Material]] = relationship(back_populates="camp", cascade="all, delete-orphan")
     tags: Mapped[list[Tag]] = relationship(
         back_populates="camp", cascade="all, delete-orphan", order_by="Tag.sort_order"
+    )
+    sync_ops: Mapped[list[GoogleSyncOp]] = relationship(
+        back_populates="camp", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

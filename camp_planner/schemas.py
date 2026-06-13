@@ -684,3 +684,88 @@ class AuditQuery(BaseModel):
 class AuditEnvelope(_Ok):
     entries: list[AuditEntryOut]
     next_before: int | None = None   # cursor for the next (older) page; null → no more
+
+
+# --- Google Calendar sync ----------------------------------------------------
+
+class GoogleConnectIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, json_schema_extra={"examples": [
+        {"calendar_id": "abc123@group.calendar.google.com"},
+    ]})
+    calendar_id: str = Field(
+        min_length=1, max_length=255,
+        description="ID kalendáře (Nastavení Google kalendáře → sekce „Integrace kalendáře“).")
+
+
+class GoogleStatusOut(BaseModel):
+    """Connection state for the settings panel. `enabled` is whether the deployment has a
+    service account configured at all; `service_account_email` is the address a calendar
+    must be shared with; `pending_ops` are outbound changes not yet pushed."""
+    enabled: bool
+    service_account_email: str | None
+    calendar_id: str | None
+    connected: bool
+    pending_ops: int
+    failed_ops: int = 0          # queued ops that have failed at least once
+    last_error: str | None = None  # most recent push error (e.g. a read-only-share 403)
+
+
+class GoogleEnvelope(_Ok):
+    google: GoogleStatusOut
+
+
+class GoogleSyncResultOut(BaseModel):
+    pushed: int
+    failed: int
+    pending: int
+
+
+class GoogleSyncEnvelope(_Ok):
+    result: GoogleSyncResultOut
+    google: GoogleStatusOut
+
+
+class GooglePullPreviewEnvelope(_Ok):
+    """The reviewable inbound diff. `changes` items carry a stable `key`, a `kind`
+    (time_change | deleted_in_google | new_event), a Czech `label` and the relevant
+    times; `activities`/`categories` are the options for importing a new event. `rev` is
+    the timeline revision this was computed against — echo it back on apply."""
+    rev: int
+    changes: list[dict]
+    activities: list[dict]
+    categories: list[dict]
+
+
+class GooglePullDecisionIn(BaseModel):
+    key: str
+    # apply = accept a time_change/deletion; new = import as a new activity; attach =
+    # import onto target_activity_id. category_id is the new activity's category (optional).
+    action: Literal["apply", "new", "attach"]
+    target_activity_id: int | None = None
+    category_id: int | None = None
+
+
+class GooglePullApplyIn(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [
+        {"rev": 7, "decisions": [{"key": "new:abc123", "action": "new", "category_id": 1}]},
+    ]})
+    rev: int | None = Field(default=None, description="timeline_rev from the preview; rejected (409) if stale.")
+    decisions: list[GooglePullDecisionIn] = []
+
+
+class GooglePullAppliedOut(BaseModel):
+    created_activities: int
+    imported_slots: int
+    updated: int
+    deleted: int
+
+
+class GooglePullApplyEnvelope(_Ok):
+    applied: GooglePullAppliedOut
+
+
+class GooglePullConflictOut(ErrorOut):
+    """409 — the timeline changed since the preview; re-pull. Carries the fresh rev (unlike
+    the timeline's ConflictOut, the client just re-runs the pull rather than reconciling)."""
+    error: str = Field(examples=["Časový plán se mezitím změnil. Načtěte změny z Google prosím znovu."])
+    rev: int

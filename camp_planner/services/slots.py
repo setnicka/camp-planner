@@ -14,7 +14,7 @@ from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import czech_sort_key
 from camp_planner.models.slot import Slot, SlotAssignment
-from camp_planner.services import audit, errors, serialize
+from camp_planner.services import audit, errors, google_sync, serialize
 from camp_planner.services.timeline import build_timeline, bump_timeline_rev
 
 if TYPE_CHECKING:
@@ -41,6 +41,7 @@ def set_slot_orgs(slot: Slot, payload: SlotOrgsIn) -> dict:
     audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
                  entity_id=slot.id, action=AuditAction.update,
                  changes={"orgs": [before, by_czech(payload.org_ids)]})
+    google_sync.enqueue_upsert(camp, slot)  # the event description lists the orgs
     db.session.commit()
     return {"orgs": serialize.slot_orgs(slot)}
 
@@ -86,10 +87,10 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
             retyped.append((slot, slot.role))
             slot.role = retype.role
 
-    deleted: list[tuple] = []  # (id, activity_id, start, end) — captured before delete expires them
+    deleted: list[tuple] = []  # (id, activity_id, start, end, google_event_id) — captured pre-delete
     for slot_id in payload.deletes:
         slot = _slot(slot_id)
-        deleted.append((slot.id, slot.activity_id, slot.start_at, slot.end_at))
+        deleted.append((slot.id, slot.activity_id, slot.start_at, slot.end_at, slot.google_event_id))
         db.session.delete(slot)
 
     bump_timeline_rev(camp)
@@ -119,9 +120,22 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
         audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
                      entity_id=slot.id, action=AuditAction.update,
                      changes={"role": [old_role.value, slot.role.value]})
-    for sid, activity_id, old_start, old_end in deleted:
+    for sid, activity_id, old_start, old_end, _event_id in deleted:
         audit.record(camp_id=camp.id, activity_id=activity_id, entity_type=EntityType.slot,
                      entity_id=sid, action=AuditAction.delete,
                      changes={"start_at": [old_start, None], "end_at": [old_end, None]})
+
+    # Mirror this batch to Google (no-op unless the camp is connected). Created and
+    # retyped slots and slots whose times actually moved are upserted; deleted slots'
+    # events are removed. Staged here, delivered out of band by google_sync.drain.
+    to_upsert = set(created)
+    to_upsert.update(slot for slot, old_start, old_end in moved
+                     if slot.start_at != old_start or slot.end_at != old_end)
+    to_upsert.update(slot for slot, _old_role in retyped)
+    for slot in to_upsert:
+        google_sync.enqueue_upsert(camp, slot)
+    for _sid, _activity_id, _old_start, _old_end, event_id in deleted:
+        google_sync.enqueue_delete(camp, event_id)
+
     db.session.commit()
     return {"rev": camp.timeline_rev, "created": [serialize.slot(s) for s in created]}

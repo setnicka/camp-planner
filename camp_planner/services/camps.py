@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -12,8 +13,10 @@ from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Camp
 from camp_planner.models.common import strip_diacritics
-from camp_planner.services import audit, errors
+from camp_planner.services import audit, errors, google_client, google_sync
 from camp_planner.services.timeline import bump_timeline_rev
+
+log = logging.getLogger(__name__)
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 _SLUG_OK = re.compile(r"^[a-z0-9-]+$")
@@ -159,6 +162,93 @@ def delete_camp(camp: Camp) -> dict:
     db.session.delete(camp)
     db.session.commit()
     return {"id": camp_id}
+
+
+def _all_slots(camp: Camp):
+    return (slot for activity in camp.activities for slot in activity.slots)
+
+
+def _owned_events(calendar_id: str) -> dict[str, str]:
+    """Map of {slot id (as str) -> event id} for events on the calendar that we previously
+    created (they carry the cpSlotId marker). Lets connect adopt them instead of inserting
+    duplicates."""
+    owned: dict[str, str] = {}
+    events, _token = google_client.list_events(calendar_id, None)
+    for ev in events:
+        if ev.get("status") == "cancelled":
+            continue
+        sid = ev.get("extendedProperties", {}).get("private", {}).get(google_client.SLOT_PROP)
+        if sid:
+            owned[sid] = ev["id"]
+    return owned
+
+
+def set_google_calendar(camp: Camp, calendar_id: str) -> dict:
+    """Connect the camp to a Google calendar (by id). Verifies the service account can reach
+    it, then queues an export of the whole current schedule (drained out of band). Events we
+    previously created on this calendar (tagged with cpSlotId) are adopted rather than
+    re-inserted, so reconnecting doesn't duplicate them. Connecting to the calendar the camp
+    is already on is a no-op. Owns its transaction."""
+    if not google_client.is_configured():
+        raise errors.Invalid("Google Calendar není v této instalaci nastavený.")
+    calendar_id = (calendar_id or "").strip()
+    if not calendar_id:
+        raise errors.Invalid("Zadejte ID kalendáře.")
+    if calendar_id == camp.google_calendar_id:
+        return {"google": google_status(camp)}
+
+    google_client.verify_access(calendar_id)
+    owned = _owned_events(calendar_id)
+    was = camp.google_calendar_id
+    camp.google_calendar_id = calendar_id
+    camp.google_sync_token = None  # a different calendar → start its inbound cursor fresh
+    for slot in _all_slots(camp):
+        slot.google_event_id = owned.get(str(slot.id))  # adopt our existing event, else None → insert
+        google_sync.enqueue_upsert(camp, slot)
+    audit.record(camp_id=camp.id, entity_type=EntityType.camp, entity_id=camp.id,
+                 action=AuditAction.update, changes={"google_calendar_id": [was, calendar_id]})
+    db.session.commit()
+    log.info("Google Calendar connected: camp %s → calendar %s (%d events queued, %d adopted)",
+             camp.slug, calendar_id, google_sync.pending_count(camp), len(owned))
+    return {"google": google_status(camp)}
+
+
+def disconnect_google(camp: Camp) -> dict:
+    """Disconnect the camp from Google: forget the calendar, the event mapping and any
+    queued ops. Events already in Google are left in place. Owns its transaction."""
+    if not camp.google_calendar_id:
+        return {"google": google_status(camp)}
+    old = camp.google_calendar_id
+    camp.google_calendar_id = None
+    camp.google_sync_token = None
+    camp.google_last_pull_at = None
+    for slot in _all_slots(camp):
+        slot.google_event_id = None
+    for op in list(camp.sync_ops):
+        db.session.delete(op)
+    audit.record(camp_id=camp.id, entity_type=EntityType.camp, entity_id=camp.id,
+                 action=AuditAction.update, changes={"google_calendar_id": [old, None]})
+    db.session.commit()
+    log.info("Google Calendar disconnected: camp %s (was calendar %s)", camp.slug, old)
+    return {"google": google_status(camp)}
+
+
+def google_status(camp: Camp) -> dict:
+    """Connection status for the settings UI / API. `enabled` reflects whether the
+    deployment is configured at all; `service_account_email` is the address to share a
+    calendar with."""
+    enabled = google_client.is_configured()
+    connected = bool(camp.google_calendar_id)
+    failed, last_error = google_sync.failure_summary(camp) if connected else (0, None)
+    return {
+        "enabled": enabled,
+        "service_account_email": google_client.service_account_email() if enabled else None,
+        "calendar_id": camp.google_calendar_id,
+        "connected": connected,
+        "pending_ops": google_sync.pending_count(camp) if connected else 0,
+        "failed_ops": failed,        # ops that have failed at least once (e.g. read-only share)
+        "last_error": last_error,    # most recent push error, for the UI to show
+    }
 
 
 def save_camp_settings(camp: Camp, data: dict, *, allow_meta: bool) -> None:

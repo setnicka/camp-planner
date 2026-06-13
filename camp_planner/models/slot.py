@@ -6,7 +6,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey
+from sqlalchemy import CheckConstraint, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from camp_planner.config import fk, table_name
@@ -43,6 +43,10 @@ class Slot(Base):
 
     start_at: Mapped[datetime] = mapped_column(index=True)
     end_at: Mapped[datetime]
+
+    # Id of the mirroring Google Calendar event, once pushed (see services/google_sync.py).
+    # Null until the slot has been synced; cleared if the camp is disconnected.
+    google_event_id: Mapped[str | None] = mapped_column(String(255), index=True)
 
     # Relationships:
     activity: Mapped[Activity] = relationship(back_populates="slots")

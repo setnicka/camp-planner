@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 import click
@@ -132,3 +133,51 @@ def register_cli(app: Flask) -> None:
         db.session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
         db.session.commit()
         click.echo(f"Granted {grant} to {username!r}.")
+
+    def _sync_once(slug: str | None) -> None:
+        """One drain pass over the connected camps. Caller owns the app context."""
+        from camp_planner.models.camp import Camp
+        from camp_planner.services import google_sync
+
+        query = db.select(Camp).where(Camp.google_calendar_id.is_not(None))
+        if slug:
+            query = query.filter_by(slug=slug)
+        camps = db.session.scalars(query).all()
+        if not camps:
+            click.echo("No connected camps to sync." if not slug
+                       else f"Camp {slug!r} is not connected to Google Calendar.")
+            return
+        for camp in camps:
+            res = google_sync.drain(camp)
+            click.echo(f"{camp.slug}: pushed={res['pushed']} failed={res['failed']} "
+                       f"pending={res['pending']}")
+
+    @app.cli.command("sync-google")
+    @click.option("--camp", "slug", default=None,
+                  help="Camp slug to sync; default = every connected camp.")
+    @click.option("--loop", "interval", type=click.IntRange(min=1), default=None,
+                  metavar="SECONDS",
+                  help="Run forever, draining every SECONDS. Omit for a single pass "
+                       "(e.g. from a systemd timer); set it to run as a scheduler sidecar.")
+    def sync_google(slug: str | None, interval: int | None) -> None:
+        """Deliver queued outbound changes to Google Calendar.
+
+        Single-pass by default (drain once and exit). With --loop SECONDS it runs as a
+        long-lived scheduler process — start exactly one such process alongside the web
+        workers; running it inside gunicorn would fire once per worker.
+        """
+        if interval is None:
+            _sync_once(slug)
+            return
+
+        click.echo(f"sync-google: draining every {interval}s (Ctrl-C to stop)")
+        while True:
+            try:
+                _sync_once(slug)
+            except Exception as exc:  # noqa: BLE001 — sidecar must survive a transient failure
+                click.echo(f"sync pass failed, retrying next interval: {exc}", err=True)
+            finally:
+                # Drop the scoped session so the next pass starts on a fresh connection /
+                # identity map rather than a stale, long-lived transaction.
+                db.session.remove()
+            time.sleep(interval)

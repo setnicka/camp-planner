@@ -13,6 +13,11 @@ dependencies = [
     "python-dotenv>=1.0",
     "pydantic>=2.13.4",        # API request/response schemas (validation + OpenAPI)
     "spectree>=2.0.1",         # OpenAPI spec + Swagger UI from the pydantic schemas
+    # Two-way Google Calendar sync (see docs/google_calendar_setup.md). Service-account
+    # auth only — no end-user OAuth, so google-auth-oauthlib is not needed. Imported
+    # lazily (services/google_client.py) so it only loads when sync is configured.
+    "google-api-python-client>=2",
+    "google-auth>=2",
 ]
 
 [project.optional-dependencies]
