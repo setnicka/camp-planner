@@ -92,7 +92,14 @@
 .cp-danger { padding: 0.2rem 0.55rem; background: #c5221f; border-color: #c5221f; color: #fff; }
 .cp-edit-toggle { padding: 0.05rem 0.45rem; font-size: 0.9rem; vertical-align: middle; }
 .cp-edit-actions button { padding: 0.35rem 0.8rem; }
-.cp-form button:hover, .cp-danger:hover, .cp-edit-actions button:hover { filter: brightness(1.08); }
+.cp-form button:hover:not(:disabled), .cp-danger:hover:not(:disabled),
+.cp-edit-actions button:hover:not(:disabled) { filter: brightness(1.08); }
+.cp-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Destructive actions, set apart from the settings form by a rule above them. */
+.cp-danger-zone { margin-top: 1.6rem; padding-top: 1rem; border-top: 1px solid var(--cp-border); }
+.cp-danger-zone h2 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+.cp-danger-zone p { margin: 0 0 0.6rem; color: var(--cp-muted); }
 
 /* Tables */
 .cp-table { border-collapse: collapse; width: 100%; max-width: 46rem; }

@@ -1,6 +1,8 @@
 {% extends layout %}
 {% from "_macros.html" import csrf, errors_list, camp_fields, camp_nav %}
 {% block title %}{{ camp.name }} – úprava{% endblock %}
+{# camp-settings.js (the delete action) sends this token via cpDom.api's X-CSRFToken header. #}
+{% block head %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endblock %}
 {% block content %}
   {{ camp_nav(camp, "settings") }}
   <h1>Úprava parametrů</h1>
@@ -21,4 +23,25 @@
     {{ camp_fields(values, timezones, tz_fixed, snap_choices) }}
     <button type="submit">Uložit</button>
   </form>
+
+  {# Delete is admin-only (server-enforced too) and refused while the camp still has activities. #}
+  {% if can_edit_camp_meta(camp) %}
+    {% set can_delete = not camp.activities %}
+    <section class="cp-danger-zone" data-camp-settings
+             data-delete-url="{{ url_for('api.camp_delete', slug=camp.slug) }}"
+             data-redirect="{{ url_for('main.index') }}"
+             data-camp-name="{{ camp.name }}">
+      <h2>Smazat akci</h2>
+      <p>Smaže akci i s jejími kategoriemi, orgy, tagy, materiály a historií změn. Tuto akci nelze vrátit.</p>
+      <button type="button" class="cp-danger" data-delete-camp
+        {% if not can_delete %}disabled title="Akci nelze smazat, dokud má aktivity – nejdřív odstraňte všechny aktivity."{% endif %}>
+        Smazat akci
+      </button>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/camp-settings.js') }}"></script>
 {% endblock %}
