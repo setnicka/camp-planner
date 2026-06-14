@@ -31,6 +31,14 @@ def table_name(name: str) -> str:
 fk = table_name
 
 
+def index_name(name: str) -> str:
+    """Prefix an auto-generated index name to match the prefixed table it indexes:
+    index_name("ix_camps_slug") -> "ix_<prefix>camps_slug". (Auto names embed the
+    table name right after "ix_"; explicitly-named indexes aren't prefixed — pass
+    them as plain literals.) Used by migrations to mirror what the models produce."""
+    return f"ix_{table_name(name[3:])}"
+
+
 def _build_database_url(instance_path: str) -> str:
     """Build the SQLAlchemy URL from the env: DATABASE_URL if set, else
     DB_BACKEND (sqlite | postgresql | mysql) assembled from the DB_* parts."""
