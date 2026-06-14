@@ -12,7 +12,7 @@
   const dataEl = document.getElementById("cp-google-data");
   if (!root || !dataEl) return;
 
-  const { el, api, toast, flash, swatch, keyList, openModal } = window.cpDom;
+  const { el, api, toast, flash, swatch, keyList, openModal, plural } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const URLS = DATA.urls;
   const body = root.querySelector("[data-google-body]");
@@ -20,10 +20,65 @@
   const UNKNOWN_WARNING =
     "Neexistující orgové budou z události odstraněni při jakékoliv změně v Camp Planneru. " +
     "Zvažte, zda chcete pokračovat.";
+  const FOREIGN_WARNING =
+    "Některé události v Google kalendáři už byly sdílené s jinou akcí Camp Planneru (obsahují " +
+    "ID slotů, která nepatří této akci). Lze je importovat, ale po importu budou čísla slotů " +
+    "v Google kalendáři přepsána (nebudou již spojena s původní akcí).";
   const hm = (iso) => iso.slice(11, 16);            // "…T14:00:00" → "14:00"
   const day = (iso) => iso.slice(0, 10);             // "2026-07-04"
   const range = (s, e) => `${day(s)} ${hm(s)}–${hm(e)}`;
   let status = DATA.status;
+  const POLL_MS = 5000;            // re-check queued-op counts while the settings page is open
+  let statusInfoEl = null;         // the pending/failed block inside the connected view (re-rendered in place)
+  let syncBtn = null;              // "Synchronizovat nyní" — disabled when nothing is queued
+
+  // n is always ≥ 1 here; cpDom.plural handles the 1 / 2–4 / 5+ agreement.
+  function pendingMessage(n) {
+    const noun = plural(n, "změna", "změny", "změn");
+    const waits = plural(n, "čeká", "čekají", "čeká");
+    const sends = n === 1 ? "Odešle se" : "Odešlou se";
+    return `${n} ${noun} ${waits} na odeslání do Google. ${sends} automaticky na pozadí, `
+      + "nebo je odešlete hned tlačítkem „Synchronizovat nyní“.";
+  }
+
+  // Reflect the queued-op count on the "Google Calendar" tab button (lives outside our root).
+  function updateBadge() {
+    const badge = document.querySelector("[data-google-badge]");
+    if (!badge) return;
+    const n = status.pending_ops || 0;
+    badge.textContent = n || "";
+    badge.hidden = !n;
+    badge.classList.toggle("cp-google-badge-fail", !!status.failed_ops);
+  }
+
+  // The pending + failed notices, as standalone nodes so they can be refreshed by polling
+  // without rebuilding (and wiping) the rest of the connected view or an open review table.
+  function statusInfoNodes() {
+    const nodes = [];
+    if (status.pending_ops) {
+      nodes.push(el("p", { class: "cp-google-pending" }, pendingMessage(status.pending_ops)));
+    }
+    if (status.failed_ops) {
+      nodes.push(el("div", { class: "cp-google-error" },
+        el("strong", null, `${status.failed_ops} změn se nepodařilo odeslat do Google.`),
+        el("div", null, "Zkontrolujte, že je kalendář sdílený se service accountem "
+          + "s právem „Provádět změny v událostech“."),
+        status.last_error ? el("div", { class: "cp-google-error-detail" }, "Chyba: " + status.last_error) : null));
+    }
+    return nodes;
+  }
+
+  function refreshStatusInfo() {
+    if (statusInfoEl) statusInfoEl.replaceChildren(...statusInfoNodes());
+  }
+
+  // Nothing queued → nothing to push, so the manual-sync button is disabled.
+  function applySyncState() {
+    if (!syncBtn) return;
+    const has = !!status.pending_ops;
+    syncBtn.disabled = !has;
+    syncBtn.title = has ? "" : "Žádné změny k odeslání.";
+  }
 
   // Run an api call with the trigger button disabled; on success swap in the fresh status
   // (every connect/disconnect/sync endpoint returns {google: …}) and re-render.
@@ -80,6 +135,7 @@
         toast(`Odesláno: ${r.pushed}` + (r.failed ? `, chyb: ${r.failed}` : ""), r.failed > 0);
       }
     });
+    syncBtn = sync;
 
     const review = el("div", { class: "cp-google-review" });
     const pull = el("button", { type: "button", class: "cp-mini" }, "Načíst změny z Google");
@@ -91,24 +147,12 @@
       call(disconnect, "DELETE", URLS.base);
     });
 
-    const pending = status.pending_ops
-      ? el("p", { class: "cp-google-pending" },
-          `${status.pending_ops} změn čeká na odeslání — spustí se na pozadí, nebo „Synchronizovat nyní“.`)
-      : null;
-
-    const failed = status.failed_ops
-      ? el("div", { class: "cp-google-error" },
-          el("strong", null, `${status.failed_ops} změn se nepodařilo odeslat do Google.`),
-          el("div", null, "Zkontrolujte, že je kalendář sdílený se service accountem "
-            + "s právem „Provádět změny v událostech“."),
-          status.last_error ? el("div", { class: "cp-google-error-detail" }, "Chyba: " + status.last_error) : null)
-      : null;
+    statusInfoEl = el("div", { class: "cp-google-status" }, ...statusInfoNodes());
 
     return el("div", { class: "cp-google" },
       el("div", { class: "cp-google-info" },
         el("p", null, "Připojeno ke kalendáři: ", el("code", null, status.calendar_id)),
-        pending,
-        failed,
+        statusInfoEl,
         el("div", { class: "cp-google-row" }, sync, pull, disconnect)),
       review);
   }
@@ -152,6 +196,7 @@
       if (change.garant_initials.length) details.push(["Garanti", change.garant_initials.join(", ")]);
       if (change.helper_initials.length) details.push(["Pomocníci", change.helper_initials.join(", ")]);
       if (change.attendant_initials.length) details.push(["Účastníci", change.attendant_initials.join(", ")]);
+      if (change.foreign_slot) details.push(["⚠", "Nesedící slot ID", "cp-google-warn"]);
     }
     if (change.unknown && change.unknown.length) {
       details.push(["Pozor", `Neznámí orgové: ${change.unknown.join(", ")}. ${UNKNOWN_WARNING}`, "cp-google-warn"]);
@@ -328,15 +373,56 @@
         el("th", null, "Akce"))),
       el("tbody", null, ...rows.flatMap((r) => r.nodes)));
 
-    area.replaceChildren(
-      el("h3", { class: "cp-google-review-title" }, "Změny z Google kalendáře"),
-      table,
-      el("div", { class: "cp-google-review-actions" }, apply, cancel));
+    // Warn (inline, atop the list) when any change is an event that carried another camp's slot
+    // id — importing it rewrites that marker in Google. Shown here rather than in a confirm.
+    const children = [el("h3", { class: "cp-google-review-title" }, "Změny z Google kalendáře")];
+    if (preview.changes.some((c) => c.foreign_slot)) {
+      children.push(el("div", { class: "cp-google-error cp-google-foreign" }, FOREIGN_WARNING));
+    }
+    children.push(table, el("div", { class: "cp-google-review-actions" }, apply, cancel));
+    area.replaceChildren(...children);
   }
 
   function render() {
+    statusInfoEl = null;  // dropped if we render the disconnected view; connectedView resets them
+    syncBtn = null;
     body.replaceChildren(status.connected ? connectedView() : disconnectedView());
+    updateBadge();
+    applySyncState();
   }
 
+  // Poll the status endpoint while the settings page is open so the queued-op count (tab badge
+  // + pending notice) tracks background drains without a reload. Only the status notice is
+  // refreshed in place — never the buttons or an open review table — and a flipped connection
+  // state triggers a full re-render. Transient errors are ignored; the next tick retries.
+  async function poll() {
+    if (!status.connected) return;  // disconnected → nothing can be queued; skip the request (timer stays alive)
+    let fresh;
+    try {
+      fresh = await api("GET", URLS.base);
+    } catch {
+      return;
+    }
+    const wasConnected = status.connected;
+    status = fresh.google;
+    if (status.connected !== wasConnected) {
+      render();
+    } else {
+      updateBadge();
+      refreshStatusInfo();
+      applySyncState();
+    }
+  }
+
+  // Only poll while the tab is in the foreground; pause the timer entirely when it's hidden
+  // (no background wake-ups), and refresh once immediately on return so the count isn't stale.
+  let pollTimer = null;
+  const startPoll = () => { if (pollTimer === null) pollTimer = setInterval(poll, POLL_MS); };
+  const stopPoll = () => { if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; } };
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { stopPoll(); } else { poll(); startPoll(); }
+  });
+
   render();
+  if (!document.hidden) startPoll();
 })();

@@ -8,7 +8,7 @@ run for real.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 
@@ -191,6 +191,50 @@ def test_disconnect_forgets_mapping_and_queue(app, seeded, gcal):
     assert camp.google_calendar_id is None
     assert db.session.get(Slot, slot.id).google_event_id is None
     assert google_sync.pending_count(camp) == 0
+
+
+def _new_camp(slug, start, length=3, window=240):
+    camp = Camp(name=slug.upper(), slug=slug, start_date=start, length_days=length,
+                window_start_min=window, snap_minutes=15)
+    db.session.add(camp)
+    db.session.commit()
+    return camp
+
+
+def test_connect_rejects_time_overlap_on_shared_calendar(app, seeded, gcal):
+    from camp_planner.services import errors
+
+    camp_a = _camp(seeded)  # 2026-07-04 .. 07-07
+    camps_service.set_google_calendar(camp_a, CAL)
+
+    overlapping = _new_camp("b", date(2026, 7, 6))      # 07-06..07-09 overlaps A
+    with pytest.raises(errors.Invalid):
+        camps_service.set_google_calendar(overlapping, CAL)
+    assert overlapping.google_calendar_id is None       # not connected
+
+    free = _new_camp("c", date(2026, 7, 20))            # no overlap → allowed
+    camps_service.set_google_calendar(free, CAL)
+    assert free.google_calendar_id == CAL
+
+
+def test_change_days_rejected_when_overlap_on_shared_calendar(app, seeded, gcal):
+    from camp_planner.services import errors
+
+    camp_a = _camp(seeded)  # 07-04 .. 07-07
+    camps_service.set_google_calendar(camp_a, CAL)
+    camp_b = _new_camp("b", date(2026, 7, 20))
+    camps_service.set_google_calendar(camp_b, CAL)
+
+    # moving B onto A's dates (same shared calendar) is refused, leaving B untouched
+    with pytest.raises(errors.Invalid):
+        camps_service.save_camp_settings(camp_b, {"start_date": date(2026, 7, 5)}, allow_meta=False)
+    db.session.expire_all()
+    assert db.session.get(Camp, camp_b.id).start_date == date(2026, 7, 20)
+
+    # moving B to a free slot is fine
+    camps_service.save_camp_settings(camp_b, {"start_date": date(2026, 8, 1)}, allow_meta=False)
+    db.session.expire_all()
+    assert db.session.get(Camp, camp_b.id).start_date == date(2026, 8, 1)
 
 
 def test_reconnect_adopts_existing_events(app, seeded, gcal):
@@ -738,6 +782,53 @@ def test_inbound_category_cleared(client, seeded, gcal):
                 headers=editor(seeded["slug"]))
     db.session.expire_all()
     assert db.session.get(Activity, seeded["activity_id"]).category_id is None
+
+
+def test_foreign_slot_event_importable_and_marker_overwritten(client, seeded, gcal):
+    camp = _camp(seeded)
+    _connect(camp)
+    ev = gcal.add_external("foreign", "Cizí hra", "2026-07-05T10:00:00", "2026-07-05T12:00:00")
+    ev["extendedProperties"] = {"private": {"cpSlotId": "99999"}}  # another camp's slot id
+
+    body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
+                      headers=editor(seeded["slug"])).get_json()
+    new = next(c for c in body["changes"] if c["kind"] == "new_event")
+    assert new["foreign_slot"] is True  # surfaced so the UI can warn
+
+    client.post(f"/api/camps/{seeded['slug']}/google/pull",
+                json={"rev": body["rev"], "decisions": [{"key": new["key"], "action": "new"}]},
+                headers=editor(seeded["slug"]))
+    db.session.expire_all()
+    slot = db.session.scalar(db.select(Slot).where(Slot.google_event_id == "foreign"))
+    assert slot is not None
+
+    google_sync.drain(_camp(seeded))  # the next push rewrites the foreign marker to our slot id
+    assert gcal.events["foreign"]["extendedProperties"]["private"]["cpSlotId"] == str(slot.id)
+
+
+def test_pending_delete_event_not_reoffered_as_import(client, seeded, gcal):
+    """A slot deleted here, whose Google delete hasn't drained yet, must not resurface as a
+    foreign import candidate (its marker is our own now-gone slot id)."""
+    camp = _camp(seeded)
+    _connect(camp)
+    hdr = editor(seeded["slug"])
+
+    create = {"rev": camp.timeline_rev, "creates": [
+        {"activity_id": seeded["activity_id"], "role": "main",
+         "start_at": "2026-07-04T14:00:00", "end_at": "2026-07-04T16:00:00"}]}
+    client.patch(f"/api/camps/{seeded['slug']}/timeline", json=create, headers=hdr)
+    google_sync.drain(camp)
+    slot = db.session.scalar(db.select(Slot))
+    event_id = slot.google_event_id
+
+    # delete the slot but DON'T drain — the event lingers in Google with the gone slot's marker
+    delete = {"rev": camp.timeline_rev, "deletes": [slot.id]}
+    client.patch(f"/api/camps/{seeded['slug']}/timeline", json=delete, headers=hdr)
+    assert event_id in gcal.events                 # not yet removed from Google
+    assert google_sync.pending_count(camp) == 1    # a delete op is queued for it
+
+    preview = google_sync.preview_pull(camp)        # must NOT re-offer it as a new/foreign import
+    assert not any(c["kind"] == "new_event" for c in preview["changes"])
 
 
 def test_import_skips_out_of_timeframe_and_too_long(client, seeded, gcal):

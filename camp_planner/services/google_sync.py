@@ -162,11 +162,12 @@ def drain(camp: Camp) -> dict:
 
 # --- inbound (Google → Planner), explicit & reviewed -------------------------
 
-def _camp_window(camp: Camp) -> tuple[datetime, datetime]:
-    """The camp's wall-clock span [start, end): from start_date at window_start_min, for
-    length_days. Used to filter which Google events are import candidates."""
-    start = datetime.combine(camp.start_date, time()) + timedelta(minutes=camp.window_start_min)
-    return start, start + timedelta(days=camp.length_days)
+def camp_window(start_date, length_days: int, window_start_min: int) -> tuple[datetime, datetime]:
+    """A camp's wall-clock span [start, end): from start_date at window_start_min, for
+    length_days. Used to filter import candidates and to detect overlaps between camps that
+    share one calendar. Takes raw fields so a *prospective* window can be checked too."""
+    start = datetime.combine(start_date, time()) + timedelta(minutes=window_start_min)
+    return start, start + timedelta(days=length_days)
 
 
 # Initials tokens are separated by commas, semicolons, plus signs or whitespace; any
@@ -312,12 +313,24 @@ def _detect(camp: Camp) -> list[dict]:
                                     "activity": activity, "new_category_id": new_cat,
                                     "new_label": label, "old_label": old_label})
 
-    window_start, window_end = _camp_window(camp)
+    window_start, window_end = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
+    own_slot_ids = {s.id for a in camp.activities for s in a.slots}
+    # Events we've already queued for deletion (slot deleted here, delete op not yet drained, or
+    # the push keeps failing). Their marker is our own now-gone slot id, so they'd otherwise look
+    # "foreign" and be re-offered for import — re-creating the slot we just deleted. Skip them.
+    pending_deletes = set(db.session.scalars(
+        db.select(GoogleSyncOp.google_event_id).where(
+            GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.op == SyncOpKind.delete)
+    ).all())
     for eid, ev in live.items():
-        if eid in mapped:
+        if eid in mapped or eid in pending_deletes:
             continue
-        if google_client.SLOT_PROP in ev.get("extendedProperties", {}).get("private", {}):
-            continue  # ours, but its slot is gone — a leftover; not an import candidate
+        # An event tagged with a cpSlotId we don't own (another camp's, or a deleted slot)
+        # is still importable — but flagged `foreign_slot` so the UI warns that the marker
+        # will be rewritten. A marker that *is* one of our current slots is left alone.
+        marker = ev.get("extendedProperties", {}).get("private", {}).get(google_client.SLOT_PROP)
+        if marker and marker.isdigit() and int(marker) in own_slot_ids:
+            continue
         times = google_client.parse_event_times(ev, tz)
         if times is None:
             continue  # all-day / malformed → not slot-shaped
@@ -337,6 +350,7 @@ def _detect(camp: Camp) -> list[dict]:
                         "helper_initials": _initials(camp, help_ids, sort=False),
                         "attendant_initials": _initials(camp, att_ids, sort=False),
                         "category_id": _color_to_category(camp, ev.get("colorId")),  # by color
+                        "foreign_slot": marker is not None,  # carried another camp's slot id
                         "unknown": list(dict.fromkeys(unk_loc + unk_desc))})
 
     changes.sort(key=_change_start)  # present the review chronologically
@@ -366,6 +380,7 @@ def _serialize_change(c: dict) -> dict:
                 "helper_initials": c["helper_initials"],
                 "attendant_initials": c["attendant_initials"],
                 "category_id": c["category_id"],              # inferred from the event color (or null)
+                "foreign_slot": c["foreign_slot"],            # carried another camp's slot id
                 "unknown": c["unknown"]}
     if kind == "garant_change":
         return {"key": c["key"], "kind": kind, "activity_title": c["activity"].title,

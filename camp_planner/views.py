@@ -20,6 +20,7 @@ from camp_planner.extensions import db
 from camp_planner.models.activity import Activity
 from camp_planner.models.camp import Camp
 from camp_planner.services import camps as camps_service
+from camp_planner.services import errors as svc_errors
 from camp_planner.services import loaders, serialize, taxonomy
 from camp_planner.services.timeline import build_timeline
 
@@ -233,7 +234,10 @@ def camp_edit_save(slug: str):
     data, errors = camps_service.validate_camp_form(request.form, require_meta=allow_meta)
     if errors:
         return render_template("camp_edit.html", camp=camp, values=request.form, errors=errors)
-    camps_service.save_camp_settings(camp, data, allow_meta=allow_meta)
+    try:
+        camps_service.save_camp_settings(camp, data, allow_meta=allow_meta)
+    except svc_errors.Invalid as exc:  # e.g. a date change clashing on a shared Google calendar
+        return render_template("camp_edit.html", camp=camp, values=request.form, errors=[str(exc)])
     flash("Nastavení uloženo.")
     return redirect(url_for("main.camp_detail", slug=camp.slug))
 

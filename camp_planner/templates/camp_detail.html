@@ -52,7 +52,12 @@
       <button type="button" class="cp-tabbtn on" data-tax-tab="categories">Kategorie</button>
       <button type="button" class="cp-tabbtn" data-tax-tab="orgs">Orgové</button>
       <button type="button" class="cp-tabbtn" data-tax-tab="tags">Tagy</button>
-      {% if show_google %}<button type="button" class="cp-tabbtn" data-tax-tab="google">Google Calendar</button>{% endif %}
+      {% if show_google %}
+        {% set pend = google_data.status.pending_ops %}
+        <button type="button" class="cp-tabbtn" data-tax-tab="google">Google Calendar<span
+          class="cp-google-badge{% if google_data.status.failed_ops %} cp-google-badge-fail{% endif %}"
+          data-google-badge{% if not pend %} hidden{% endif %}>{{ pend or '' }}</span></button>
+      {% endif %}
     </div>
     {{ tax_pane("categories", "Kategorie") }}
     {{ tax_pane("orgs", "Orgové") }}

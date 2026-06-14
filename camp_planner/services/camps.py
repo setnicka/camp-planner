@@ -168,6 +168,21 @@ def _all_slots(camp: Camp):
     return (slot for activity in camp.activities for slot in activity.slots)
 
 
+def _calendar_conflict(calendar_id: str, start, end, exclude_camp_id: int) -> Camp | None:
+    """Another camp connected to the same calendar whose time window overlaps [start, end),
+    or None. One calendar may be shared by several camps, but only if their dates don't
+    overlap (events from different camps would otherwise collide on the calendar)."""
+    others = db.session.scalars(
+        db.select(Camp).where(Camp.google_calendar_id == calendar_id, Camp.id != exclude_camp_id)
+    ).all()
+    for other in others:
+        o_start, o_end = google_sync.camp_window(other.start_date, other.length_days,
+                                                 other.window_start_min)
+        if start < o_end and o_start < end:  # half-open intervals overlap
+            return other
+    return None
+
+
 def _owned_events(calendar_id: str) -> dict[str, str]:
     """Map of {slot id (as str) -> event id} for events on the calendar that we previously
     created (they carry the cpSlotId marker). Lets connect adopt them instead of inserting
@@ -196,6 +211,13 @@ def set_google_calendar(camp: Camp, calendar_id: str) -> dict:
         raise errors.Invalid("Zadejte ID kalendáře.")
     if calendar_id == camp.google_calendar_id:
         return {"google": google_status(camp)}
+
+    start, end = google_sync.camp_window(camp.start_date, camp.length_days, camp.window_start_min)
+    conflict = _calendar_conflict(calendar_id, start, end, camp.id)
+    if conflict:
+        raise errors.Invalid(
+            f"Tento kalendář už ve stejném termínu používá akce „{conflict.name}“. Jeden kalendář "
+            f"může sdílet více akcí, ale jejich termíny se nesmí překrývat.")
 
     google_client.verify_access(calendar_id)
     owned = _owned_events(calendar_id)
@@ -255,6 +277,20 @@ def save_camp_settings(camp: Camp, data: dict, *, allow_meta: bool) -> None:
     """Apply settings to a camp, recording a field-level diff and bumping the
     timeline revision if a layout field changed. name/slug are applied only when
     allow_meta (admin) — never trust which fields the form submitted."""
+    # If the camp shares a Google calendar, refuse a date change that would overlap another
+    # camp on that calendar (checked before applying anything, so a reject leaves it intact).
+    if camp.google_calendar_id and any(
+            f in data and data[f] != getattr(camp, f) for f in _LAYOUT_FIELDS):
+        start, end = google_sync.camp_window(
+            data.get("start_date", camp.start_date),
+            data.get("length_days", camp.length_days),
+            data.get("window_start_min", camp.window_start_min))
+        conflict = _calendar_conflict(camp.google_calendar_id, start, end, camp.id)
+        if conflict:
+            raise errors.Invalid(
+                f"Změna termínu by se na sdíleném Google kalendáři překryla s akcí "
+                f"„{conflict.name}“. Termíny akcí na jednom kalendáři se nesmí překrývat.")
+
     fields = ["start_date", "length_days", "timezone", "window_start_min", "snap_minutes",
               "latitude", "longitude"]
     if allow_meta:

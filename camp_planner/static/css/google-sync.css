@@ -2,8 +2,22 @@
  * Loaded only on camp_detail.html when the feature is configured. Shared atoms
  * (.cp-section, .cp-mini, .cp-danger, .cp-flash-area) come from components/content.css. */
 
-/* Text/instructions stay readable-width; the review table (a sibling) spans the pane. */
-.cp-google-info { max-width: 640px; }
+/* Queued-op count on the "Google Calendar" tab button (updated live by polling). */
+.cp-google-badge {
+  display: inline-block;
+  min-width: 1.1em;
+  margin-left: 0.4em;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: #8a6d00;
+  color: #fff;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+.cp-google-badge[hidden] { display: none; }
+.cp-google-badge-fail { background: #c5221f; }  /* a push has been failing */
 
 .cp-google p { margin: 0.4rem 0; }
 
@@ -58,6 +72,9 @@
   background: #fdecea; border: 1px solid #f5c6c2; color: #8a1c14;
 }
 .cp-google-error-detail { margin-top: 0.25rem; font-family: monospace; font-size: 0.85em; word-break: break-word; }
+
+/* Foreign-slot warning atop the review list — a caution, not an error: amber, not red. */
+.cp-google-foreign { background: #fff8e1; border-color: #f0d98a; color: #8a6d00; }
 
 /* --- inbound review (inline, below the buttons) --- */
 .cp-google-review { margin-top: 0.8rem; }
