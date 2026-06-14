@@ -146,10 +146,11 @@ def drain(camp: Camp) -> dict:
 
 
 def _deliver_queued_ops(camp: Camp) -> dict:
-    """Push each queued op to Google oldest-first, while holding the per-camp lock (see drain).
-    Each op is removed on success; a failure bumps attempts / records the error and leaves the row
-    for the next drain. Op removal is one idempotent bulk delete, so a drain that raced past the
-    lock (only possible on SQLite) can't StaleDataError. Owns its transaction."""
+    """Push the queued ops to Google in batched HTTP round-trips (google_client.batch_push), while
+    holding the per-camp lock (see drain). Each op is removed on success; a failure bumps attempts /
+    records the error and leaves the row for the next drain. Op removal is one idempotent bulk
+    delete, so a drain that raced past the lock (only possible on SQLite) can't StaleDataError.
+    Owns its transaction."""
     result = {"pushed": 0, "failed": 0, "pending": 0}
     cal = camp.google_calendar_id
     ops = db.session.scalars(
@@ -172,36 +173,67 @@ def _deliver_queued_ops(camp: Camp) -> dict:
             done_ids.append(bucket[key].id)  # older op for the same target → drop it
         bucket[key] = op
 
-    def _push(op: GoogleSyncOp) -> None:
+    # Build the concrete API ops, resolving each upsert's current slot state. An upsert whose
+    # slot is gone (deleted before we pushed it) needs no API call — drop it now. Then deliver
+    # them all in batched HTTP round-trips (one network call per ≤50 ops, not per op).
+    push_ops: list[google_client.PushOp] = []
+    op_by_key: dict[str, GoogleSyncOp] = {}
+    slot_by_key: dict[str, Slot] = {}  # inserts: where to write the new event id back
+    for op in [*upserts.values(), *deletes.values()]:
+        key = str(op.id)
+        op_by_key[key] = op
         if op.op == SyncOpKind.delete:
-            if op.google_event_id:
-                google_client.delete_event(cal, op.google_event_id)
-                log.info("Google Calendar: deleted event %s (camp %s)", op.google_event_id, camp.slug)
-            return
+            if not op.google_event_id:  # never synced (enqueue_delete guards this) — nothing to send
+                done_ids.append(op.id)
+                result["pushed"] += 1
+                continue
+            push_ops.append(google_client.PushOp(key=key, kind="delete",
+                                                 calendar_id=cal, event_id=op.google_event_id))
+            continue
         slot = db.session.get(Slot, op.slot_id) if op.slot_id else None
         if slot is None:  # slot deleted before we pushed it — nothing to create
-            return
-        body = google_client.event_body(slot)  # includes colorId
-        if slot.google_event_id:
-            google_client.patch_event(cal, slot.google_event_id, body)
-            log.info("Google Calendar: updated event %s for slot %s (camp %s)",
-                     slot.google_event_id, slot.id, camp.slug)
-        else:
-            slot.google_event_id = google_client.insert_event(cal, body)
-            log.info("Google Calendar: created event %s for slot %s (camp %s)",
-                     slot.google_event_id, slot.id, camp.slug)
-
-    for op in [*upserts.values(), *deletes.values()]:
-        try:
-            _push(op)
             done_ids.append(op.id)
             result["pushed"] += 1
-        except Exception as exc:  # noqa: BLE001 — resilience: skip, retry on next drain
+            continue
+        body = google_client.event_body(slot)  # includes colorId
+        if slot.google_event_id:
+            push_ops.append(google_client.PushOp(key=key, kind="patch", calendar_id=cal,
+                                                 event_id=slot.google_event_id, body=body))
+        else:
+            slot_by_key[key] = slot
+            push_ops.append(google_client.PushOp(key=key, kind="insert", calendar_id=cal, body=body))
+
+    outcomes = google_client.batch_push(push_ops) if push_ops else {}
+    for pop in push_ops:
+        op = op_by_key[pop.key]
+        res = outcomes.get(pop.key)
+        # An insert counts as delivered only if Google returned the new event id — otherwise the
+        # slot stays unmapped, so we must keep the op and retry rather than drop it (→ duplicate).
+        ok = res is not None and res.ok and (pop.kind != "insert" or bool(res.event_id))
+        if ok:
+            if pop.kind == "insert":
+                slot_by_key[pop.key].google_event_id = res.event_id
+                log.info("Google Calendar: created event %s for slot %s (camp %s)",
+                         res.event_id, op.slot_id, camp.slug)
+            elif pop.kind == "patch":
+                log.info("Google Calendar: updated event %s for slot %s (camp %s)",
+                         pop.event_id, op.slot_id, camp.slug)
+            elif pop.kind == "delete":
+                log.info("Google Calendar: deleted event %s (camp %s)", pop.event_id, camp.slug)
+            done_ids.append(op.id)
+            result["pushed"] += 1
+        else:
+            if res is None:
+                err = "Žádná odpověď z dávky."
+            elif res.ok:  # insert succeeded but Google returned no event id
+                err = "Google nevrátil id vytvořené události."
+            else:
+                err = res.error or ""
             op.attempts += 1
-            op.last_error = str(exc)[:500]
+            op.last_error = err[:500]
             result["failed"] += 1
             log.warning("Google Calendar push failed (camp %s, %s, slot=%s, event=%s, attempt %d): %s",
-                        camp.slug, op.op.value, op.slot_id, op.google_event_id, op.attempts, exc)
+                        camp.slug, op.op.value, op.slot_id, op.google_event_id, op.attempts, err)
 
     if done_ids:  # one bulk delete (tolerates already-gone rows) rather than per-row ORM deletes
         db.session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id.in_(done_ids)))

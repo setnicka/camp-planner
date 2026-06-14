@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import current_app
@@ -224,25 +224,72 @@ def verify_access(calendar_id: str) -> None:
         raise errors.Invalid(f"Google Calendar: chyba {exc.resp.status}.") from exc
 
 
-def insert_event(calendar_id: str, body: dict) -> str:
-    """Create an event; return its Google id."""
-    created = client().events().insert(calendarId=calendar_id, body=body).execute()
-    return created["id"]
+# Google Calendar allows up to 50 sub-requests per batch HTTP call; we keep it lower to stay
+# well under the per-calendar write rate limit (batches run back-to-back, with no pause).
+_BATCH_MAX = 25
 
 
-def patch_event(calendar_id: str, event_id: str, body: dict) -> None:
-    client().events().patch(calendarId=calendar_id, eventId=event_id, body=body).execute()
+class PushOp(NamedTuple):
+    """One event operation to deliver. `key` is the caller's id, echoed back in the result.
+    kind is 'insert' | 'patch' | 'delete'; `body` is set for insert/patch, `event_id` for
+    patch/delete."""
+    key: str
+    kind: str
+    calendar_id: str
+    body: dict | None = None
+    event_id: str | None = None
 
 
-def delete_event(calendar_id: str, event_id: str) -> None:
-    """Delete an event, treating an already-gone event (404/410) as success."""
+class PushResult(NamedTuple):
+    """Outcome of one PushOp. `event_id` is the created event id on a successful insert
+    (None otherwise); `error` is the failure text when ok is False."""
+    ok: bool
+    event_id: str | None
+    error: str | None
+
+
+def batch_push(ops: list[PushOp]) -> dict[str, PushResult]:
+    """Deliver event create/patch/delete ops to Google in batched HTTP round-trips (≤_BATCH_MAX
+    per batch) rather than one network call each — the big win when a drain has many changes.
+    Returns {key: PushResult}. A delete of an already-gone event (404/410) counts as success.
+    Never raises for a single op's failure: it's recorded in that op's PushResult so the caller
+    can retry just that op. A whole-batch failure (e.g. a network error) fails every op in the
+    chunk the same way."""
     from googleapiclient.errors import HttpError  # noqa: PLC0415
 
-    try:
-        client().events().delete(calendarId=calendar_id, eventId=event_id).execute()
-    except HttpError as exc:
-        if exc.resp.status not in (404, 410):
-            raise
+    svc = client()  # cached service (built once); resolved here once per drain, not per op
+    events = svc.events()
+    kinds = {op.key: op.kind for op in ops}
+    results: dict[str, PushResult] = {}
+
+    def _callback(key, response, exception):
+        if exception is None:
+            eid = response.get("id") if isinstance(response, dict) else None
+            results[key] = PushResult(True, eid, None)
+        elif (kinds[key] == "delete" and isinstance(exception, HttpError)
+              and exception.resp.status in (404, 410)):
+            results[key] = PushResult(True, None, None)  # already gone → success
+        else:
+            results[key] = PushResult(False, None, str(exception))
+
+    def _request(op: PushOp):
+        if op.kind == "insert":
+            return events.insert(calendarId=op.calendar_id, body=op.body)
+        if op.kind == "patch":
+            return events.patch(calendarId=op.calendar_id, eventId=op.event_id, body=op.body)
+        return events.delete(calendarId=op.calendar_id, eventId=op.event_id)
+
+    for start in range(0, len(ops), _BATCH_MAX):
+        chunk = ops[start:start + _BATCH_MAX]
+        batch = svc.new_batch_http_request(callback=_callback)
+        for op in chunk:
+            batch.add(_request(op), request_id=op.key)
+        try:
+            batch.execute()
+        except Exception as exc:  # noqa: BLE001 — whole-batch failure → mark its ops failed, retry next drain
+            for op in chunk:
+                results.setdefault(op.key, PushResult(False, None, str(exc)))
+    return results
 
 
 def list_events(calendar_id: str, sync_token: str | None) -> tuple[list[dict], str | None]:

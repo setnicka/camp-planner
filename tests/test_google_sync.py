@@ -57,6 +57,24 @@ class FakeGoogle:
         self.calls["delete"] += 1
         self.events.pop(event_id, None)
 
+    def batch_push(self, ops):
+        """Stand-in for google_client.batch_push: dispatch each op to insert/patch/delete (so
+        the calls/events/fail_next bookkeeping stays identical), returning a PushResult per key."""
+        results = {}
+        for op in ops:
+            try:
+                if op.kind == "insert":
+                    results[op.key] = google_client.PushResult(True, self.insert(op.calendar_id, op.body), None)
+                elif op.kind == "patch":
+                    self.patch(op.calendar_id, op.event_id, op.body)
+                    results[op.key] = google_client.PushResult(True, None, None)
+                else:
+                    self.delete(op.calendar_id, op.event_id)
+                    results[op.key] = google_client.PushResult(True, None, None)
+            except Exception as exc:  # noqa: BLE001 — mirror real per-op failure capture
+                results[op.key] = google_client.PushResult(False, None, str(exc))
+        return results
+
     def list_events(self, calendar_id, sync_token):
         return list(self.events.values()), None
 
@@ -92,9 +110,7 @@ def gcal(app, monkeypatch):
     monkeypatch.setattr(google_client, "is_configured", lambda: True)
     monkeypatch.setattr(google_client, "service_account_email", lambda: "sa@test.iam")
     monkeypatch.setattr(google_client, "verify_access", lambda calendar_id: None)
-    monkeypatch.setattr(google_client, "insert_event", fake.insert)
-    monkeypatch.setattr(google_client, "patch_event", fake.patch)
-    monkeypatch.setattr(google_client, "delete_event", fake.delete)
+    monkeypatch.setattr(google_client, "batch_push", fake.batch_push)
     monkeypatch.setattr(google_client, "list_events", fake.list_events)
     monkeypatch.setattr(google_client, "color_palette", lambda: FAKE_PALETTE)
     return fake
@@ -161,6 +177,79 @@ def test_parse_event_times_floating_is_camp_local(app, seeded):
 def test_parse_all_day_event_returns_none(app, seeded):
     assert google_client.parse_event_times(
         {"start": {"date": "2026-07-04"}, "end": {"date": "2026-07-05"}}, "Europe/Prague") is None
+
+
+# --- batch_push (the real batched HTTP path, with a fake Google service) --------------
+# The gcal fixture stubs batch_push wholesale, so the chunking + callback wiring + 404/410
+# handling that batch_push itself adds is exercised only here, against a fake calendar service.
+
+def _http_error(status):
+    from googleapiclient.errors import HttpError  # available; only the network is faked
+
+    resp = type("Resp", (), {"status": status, "reason": "x"})()
+    return HttpError(resp, b"{}")
+
+
+class _FakeBatchService:
+    """Mimics the slice of the Google client batch_push touches: events() request builders,
+    new_batch_http_request(callback), and a batch whose execute() fires the callback per add()."""
+
+    def __init__(self):
+        self.batch_count = 0
+
+    def events(self):
+        return self
+
+    # request builders return a (response, exception) plan the fake batch will replay
+    def insert(self, calendarId, body):
+        return ({"id": "evt-" + body["summary"]}, None)
+
+    def patch(self, calendarId, eventId, body):
+        return ({"id": eventId}, None)
+
+    def delete(self, calendarId, eventId):
+        if eventId == "gone":
+            return (None, _http_error(404))   # already deleted in Google
+        if eventId == "boom":
+            return (None, _http_error(500))   # a real failure
+        return ({}, None)
+
+    def new_batch_http_request(self, callback):
+        self.batch_count += 1
+        return _FakeBatch(callback)
+
+
+class _FakeBatch:
+    def __init__(self, callback):
+        self.callback = callback
+        self.added = []
+
+    def add(self, request, request_id):
+        self.added.append((request_id, request))
+
+    def execute(self):
+        for request_id, (response, exception) in self.added:
+            self.callback(request_id, response, exception)
+
+
+def test_batch_push_chunks_and_maps_outcomes(monkeypatch):
+    svc = _FakeBatchService()
+    monkeypatch.setattr(google_client, "client", lambda: svc)
+    Op = google_client.PushOp
+
+    ops = [Op(key=f"i{i}", kind="insert", calendar_id=CAL, body={"summary": str(i)}) for i in range(120)]
+    ops += [Op(key="p", kind="patch", calendar_id=CAL, event_id="evtP", body={"summary": "P"}),
+            Op(key="dgone", kind="delete", calendar_id=CAL, event_id="gone"),
+            Op(key="dboom", kind="delete", calendar_id=CAL, event_id="boom")]
+
+    results = google_client.batch_push(ops)
+
+    assert svc.batch_count == 5                       # 123 ops at ≤25/batch → 5 round-trips
+    assert results["i0"].ok and results["i0"].event_id == "evt-0"   # insert id captured
+    assert results["p"].ok                            # patch succeeded
+    assert results["dgone"].ok and results["dgone"].event_id is None  # 404 → already gone → success
+    assert not results["dboom"].ok and results["dboom"].error        # 500 → genuine failure
+    assert len(results) == len(ops)                   # every op got an outcome
 
 
 # --- connect / disconnect ------------------------------------------------------------
@@ -950,7 +1039,7 @@ def test_drain_op_removal_is_idempotent(client, seeded, gcal, monkeypatch):
         db.session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id == op_id))
         return real_insert(cal, body)
 
-    monkeypatch.setattr(google_client, "insert_event", insert_then_yank)
+    monkeypatch.setattr(gcal, "insert", insert_then_yank)  # batch_push dispatches to fake.insert
     google_sync.drain(camp)  # trailing bulk delete hits 0 rows — must not raise
 
     assert google_sync.pending_count(camp) == 0
