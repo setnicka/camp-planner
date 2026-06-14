@@ -2,6 +2,7 @@
 {% from "_macros.html" import camp_nav %}
 {% block title %}{{ camp.name }} – timeline{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
+{% block header_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
 
 {% block head %}
   <link rel="stylesheet"
@@ -12,7 +13,6 @@
 {% endblock %}
 
 {% block content %}
-  {{ camp_nav(camp, "timeline") }}
   {# left column = legend; right = control bars. all top-aligned #}
   <div class="cp-tl-top">
     <div class="cp-tl-left">

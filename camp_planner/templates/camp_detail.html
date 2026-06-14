@@ -1,6 +1,7 @@
 {% extends layout %}
 {% from "_macros.html" import camp_nav %}
 {% block title %}{{ camp.name }} – nastavení akce{% endblock %}
+{% block header_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
 
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
@@ -12,8 +13,6 @@
 {% endblock %}
 
 {% block content %}
-  {{ camp_nav(camp, "settings") }}
-
   {% set may_edit = can_edit(camp) %}
 
   <section class="cp-section">

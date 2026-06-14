@@ -128,3 +128,41 @@ def test_camp_edit_no_delete_button_for_editor(client, seeded):
     # delete is admin-only (can_edit_camp_meta) → an editor never sees the button
     html = client.get(f"/camps/{seeded['slug']}/edit", headers=editor(seeded["slug"])).get_data(as_text=True)
     assert "data-delete-camp" not in html
+
+
+# --- condensed header (brand + camp heading + account on one line) ------------------
+
+def test_header_merges_brand_camp_heading_and_account(client, seeded):
+    html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
+    assert 'class="cp-header"' in html
+    assert 'class="cp-nav"' not in html                  # old top bar is gone
+    assert "cp-brand" in html and "Camp Planner" in html  # grey brand
+    assert "cp-camp-name" in html and "Tábor" in html     # camp name now lives in the header
+    assert "cp-account" in html                           # name / Uživatelé / Logout on the right
+
+
+def test_landing_heading_rides_in_header(client, seeded):
+    html = client.get("/", headers=ADMIN).get_data(as_text=True)
+    assert 'class="cp-header"' in html and "cp-brand" in html
+    # "Akce" sits in the header's camp-name slot (where camp pages show the camp name)
+    head = html[html.index('class="cp-header"'):html.index("</header>")]
+    assert "cp-camp-name" in head and "Akce" in head
+
+
+def test_landing_page_renders_camp_rows(client, seeded):
+    # the camp list is one row per camp: name, date range + section links
+    html = client.get("/", headers=ADMIN).get_data(as_text=True)
+    assert "css/landing.css" in html
+    assert "cp-camp-rows" in html and "cp-camp-row-name" in html
+    assert "Tábor" in html                                # seeded camp name (3-day camp → a range)
+    assert "4. 7. 2026 – 6. 7. 2026" in html              # start_date.end_date via Camp.end_date
+    assert "3 dny" in html                                # Czech plural for length_days
+
+
+def test_landing_page_orders_newest_first(client, seeded):
+    # a later camp must appear above the earlier seeded one (ordered by start_date desc)
+    client.post("/api/camps", json={"name": "Pozdější", "slug": "pozd", "start_date": "2026-09-01",
+                                    "length_days": 3, "timezone": "Europe/Prague",
+                                    "window_start_min": 240, "snap_minutes": 15}, headers=ADMIN)
+    html = client.get("/", headers=ADMIN).get_data(as_text=True)
+    assert html.index("Pozdější") < html.index("Tábor")   # newest (2026-09) before older (2026-07)

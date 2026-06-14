@@ -1,23 +1,37 @@
 {% extends layout %}
 {% block title %}Akce – Camp Planner{% endblock %}
+{# "Akce" rides in the navigation header (where camp pages show the camp name). #}
+{% block header_nav %}<span class="cp-camp-name">Akce</span>{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/landing.css') }}">
+{% endblock %}
+
 {% block content %}
-  <h1>Akce</h1>
   {% if can_create_camp() %}
-    <p><a href="{{ url_for('main.camp_new') }}">+ Vytvořit akci</a></p>
+    <p class="cp-landing-new"><a class="cp-new-camp" href="{{ url_for('main.camp_new') }}">+ Vytvořit akci</a></p>
   {% endif %}
+
   {% if camps %}
-    <ul class="cp-camp-list">
+    <ul class="cp-camp-rows">
       {% for camp in camps %}
-        <li>
-          <a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
-          <span class="cp-muted">{{ camp.start_date.isoformat() }}</span>
-          · <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">nastavení akce</a>
-          · <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">materiál</a>
-          · <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">seznam her</a>
+        {% set days = camp.length_days %}
+        <li class="cp-camp-row">
+          <a class="cp-camp-row-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
+          <span class="cp-camp-row-dates cp-muted">
+            {{ camp.start_date.strftime('%-d. %-m. %Y') }}{% if days > 1 %} – {{ camp.end_date.strftime('%-d. %-m. %Y') }}{% endif %}
+            · {{ days }} {{ 'den' if days == 1 else ('dny' if days <= 4 else 'dní') }}
+          </span>
+          <nav class="cp-camp-row-links">
+            <a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">Timeline</a>
+            <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a>
+            <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">Seznam her</a>
+            <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Nastavení akce</a>
+          </nav>
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>Nemáte přístup k žádné akci{% if not identity.is_authenticated %} – nejste přihlášeni{% endif %}.</p>
+    <p class="cp-landing-empty">Nemáte přístup k žádné akci{% if not identity.is_authenticated %} – nejste přihlášeni{% endif %}.</p>
   {% endif %}
 {% endblock %}

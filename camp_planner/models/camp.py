@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
@@ -78,6 +78,11 @@ class Camp(TimestampMixin, Base):
     sync_ops: Mapped[list[GoogleSyncOp]] = relationship(
         back_populates="camp", cascade="all, delete-orphan"
     )
+
+    @property
+    def end_date(self) -> date:
+        """Last calendar day of the camp (inclusive); the window spans length_days days."""
+        return self.start_date + timedelta(days=self.length_days - 1)
 
     def __repr__(self) -> str:
         return f"<Camp {self.slug!r}>"

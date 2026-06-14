@@ -10,23 +10,20 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-  <nav class="cp-nav">
-    <a href="{{ url_for('main.index') }}">Camp Planner</a>
-    {% if auth_enabled and can_manage_users() %}
-      <a href="{{ url_for('auth.users') }}">Uživatelé</a>
-    {% endif %}
-    {% if identity.is_authenticated %}
-      <span class="cp-user">{{ identity.display_name }}</span>
-      {% if auth_enabled %}
-        <form method="post" action="{{ url_for('auth.logout') }}">
-          {{ csrf() }}
-          <button type="submit">Logout</button>
-        </form>
+  {# One condensed header line: grey brand · camp heading (header_nav) · account on the right. #}
+  <header class="cp-header">
+    <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>
+    {% block header_nav %}{% endblock %}
+    <div class="cp-account">
+      {% if identity.is_authenticated %}<span class="cp-user">{{ identity.display_name }}</span>{% endif %}
+      {% if auth_enabled and can_manage_users() %}<a href="{{ url_for('auth.users') }}">Uživatelé</a>{% endif %}
+      {% if identity.is_authenticated and auth_enabled %}
+        <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}<button type="submit">Logout</button></form>
+      {% elif auth_enabled %}
+        <a href="{{ url_for('auth.login') }}">Login</a>
       {% endif %}
-    {% elif auth_enabled %}
-      <a href="{{ url_for('auth.login') }}">Login</a>
-    {% endif %}
-  </nav>
+    </div>
+  </header>
   {% with messages = get_flashed_messages() %}
     {% if messages %}
       <ul class="cp-flashes">

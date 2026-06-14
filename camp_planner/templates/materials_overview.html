@@ -1,6 +1,7 @@
 {% extends layout %}
 {% from "_macros.html" import camp_nav %}
 {% block title %}Materiál – {{ camp.name }}{% endblock %}
+{% block header_nav %}{{ camp_nav(camp, "materials") }}{% endblock %}
 
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
@@ -9,8 +10,6 @@
 {% endblock %}
 
 {% block content %}
-  {{ camp_nav(camp, "materials") }}
-
   {# materials-overview.js renders the camp-wide table into here from the JSON below.
      Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}
   <div id="cp-materials"></div>

@@ -16,16 +16,20 @@
 .cp-section { margin: 1.75rem 0; }
 .cp-subtitle { font-size: 0.6em; font-weight: normal; color: var(--cp-muted); }
 
-/* Per-camp section nav (camp_nav macro): camp name + section tabs on one compact line,
-   shared by every camp page. Lives here (not components.css) so the settings pages and an
-   embedding host — which link only content.css — pick it up too. */
-.cp-camp-nav { margin: 0 0 1rem; border-bottom: 1px solid var(--cp-border); }
-.cp-camp-nav-inner { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 1rem; padding-bottom: 0.4rem; }
-.cp-camp-nav .cp-camp-name { font-size: 1.3rem; font-weight: 700; color: #222; margin-right: 0.3rem; }
-.cp-camp-nav a { text-decoration: none; }
-.cp-camp-nav a:not(.cp-camp-name) { color: var(--cp-muted); font-weight: 500; }
-.cp-camp-nav a:hover { color: var(--cp-accent); }
-.cp-camp-nav a.is-active { color: #222; box-shadow: inset 0 -2px var(--cp-accent); }
+/* The camp heading (brand + name + section links) lives here (not components.css) so the
+   settings pages and an embedding host — which link only content.css — pick it up too. It is
+   rendered inline in the standalone header bar (.cp-header, standalone.css) and, when embedded,
+   inside the .cp-camp-nav band, which carries the same grey "Camp Planner" brand. */
+.cp-brand { color: var(--cp-muted); font-size: 0.8rem; text-decoration: none; }
+.cp-brand:hover { color: var(--cp-accent); }
+.cp-camp-nav {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 1rem;
+  margin: 0 0 1rem; border-bottom: 1px solid var(--cp-border); padding-bottom: 0.4rem;
+}
+.cp-camp-name { font-size: 1.3rem; font-weight: 700; color: #222; text-decoration: none; margin-right: 0.3rem; }
+.cp-camp-link { text-decoration: none; color: var(--cp-muted); font-weight: 500; }
+.cp-camp-link:hover { color: var(--cp-accent); }
+.cp-camp-link.is-active { color: #222; box-shadow: inset 0 -2px var(--cp-accent); }
 
 /* Read-only parameter table (camp detail page): condensed, label left. */
 .cp-params { border-collapse: collapse; }

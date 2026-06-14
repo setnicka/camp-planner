@@ -2,10 +2,11 @@
 
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
-{# Per-camp page navigation: the camp name plus the four section tabs, on one compact
-   line. Shown on every camp-scoped page; `active` ∈ timeline|materials|overview|settings
-   highlights the current one. Drill-downs pick their nearest section (the activity detail
-   uses "overview", since activities are listed under Seznam her); pass "" for none. #}
+{# The camp heading: camp name plus the four section tabs, on one compact line. Goes through
+   the page's `header_nav` block — into the standalone top bar (.cp-header) on full.html, and
+   into the .cp-camp-nav band when embedded (bare.html). `active` ∈
+   timeline|materials|overview|settings highlights the current one; drill-downs pick their
+   nearest section (activity detail uses "overview"); pass "" for none. #}
 {% macro camp_nav(camp, active="") %}
   {% set sections = [
     ("timeline",  "main.camp_timeline",  "Timeline"),
@@ -13,16 +14,12 @@
     ("overview",  "main.camp_overview",  "Seznam her"),
     ("settings",  "main.camp_detail",    "Nastavení akce"),
   ] %}
-  <nav class="cp-camp-nav">
-    <div class="cp-camp-nav-inner">
-      <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
-      {% for key, endpoint, label in sections %}
-        <a href="{{ url_for(endpoint, slug=camp.slug) }}"
-           class="{{ 'is-active' if active == key }}"
-           {{ 'aria-current=page' if active == key }}>{{ label }}</a>
-      {% endfor %}
-    </div>
-  </nav>
+  <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
+  {% for key, endpoint, label in sections %}
+    <a class="cp-camp-link {{ 'is-active' if active == key }}"
+       href="{{ url_for(endpoint, slug=camp.slug) }}"
+       {{ 'aria-current=page' if active == key }}>{{ label }}</a>
+  {% endfor %}
 {% endmacro %}
 
 {% macro errors_list(errors) %}

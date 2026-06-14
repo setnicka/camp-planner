@@ -1,6 +1,7 @@
 {% extends layout %}
 {% from "_macros.html" import camp_nav %}
 {% block title %}{{ activity.title }} – {{ camp.name }}{% endblock %}
+{% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/lib/codemirror.css') }}">
@@ -10,8 +11,6 @@
 {% endblock %}
 
 {% block content %}
-  {{ camp_nav(camp, "overview") }}
-
   {# activity-detail.js renders the header + all sections into here from the JSON below.
      Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}
   <div id="cp-activity"></div>

@@ -2,10 +2,19 @@
  * from content.css and components.css; only the full-width table, the in-header sort/filter
  * controls, and the status columns live here (this file loads only on the overview page). */
 
-/* The table sizes to its content and centres within the page; it stretches out toward the
-   full window only when the columns need the room (then .cp-table's 46rem cap is lifted).
+/* The table centres within the page. Its floor is the normal page width (so a narrow table
+   doesn't shrink to a small centred block on this full-width page), and it stretches out toward
+   the full window only when the columns need the room (then .cp-table's 46rem cap is lifted).
+   On viewports narrower than the page width the floor drops to 100% so nothing overflows.
    The mount holds the toolbar + table, so both share the table's width and stay aligned. */
-#cp-overview { width: fit-content; max-width: 100%; margin: 0 auto; }
+#cp-overview {
+  width: fit-content;
+  /* match the content column of a normal page: its border-box main is --cp-page-width wide
+     including --cp-page-pad each side, so the (unpadded) table floor is that minus the padding. */
+  min-width: min(100%, calc(var(--cp-page-width) - 2 * var(--cp-page-pad)));
+  max-width: 100%;
+  margin: 0 auto;
+}
 .cp-ov-table { width: 100%; max-width: none; }
 .cp-ov-table th { vertical-align: bottom; }
 .cp-ov-table td { vertical-align: top; }

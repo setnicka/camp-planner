@@ -8,18 +8,23 @@ body {
   line-height: 1.5;
 }
 
-.cp-nav {
+/* One condensed header line: grey brand · camp heading (the header_nav block) · account
+   controls pushed to the right. The camp-heading bits are styled in content.css. */
+.cp-header {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.6rem 1rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--cp-border);
 }
+/* .cp-brand is styled in content.css (shared with the embedded camp-nav band). */
 
-.cp-nav a { text-decoration: none; color: var(--cp-accent); }
-.cp-nav .cp-user { margin-left: auto; color: var(--cp-muted); }
-.cp-nav form { margin: 0; }
-.cp-nav button {            /* keep the nav clean: logout reads as a link, not a button */
+.cp-account { margin-left: auto; display: flex; align-items: baseline; gap: 1rem; }
+.cp-account .cp-user { color: var(--cp-muted); }
+.cp-account a { text-decoration: none; color: var(--cp-accent); }
+.cp-account form { margin: 0; }
+.cp-account button {        /* keep it clean: logout reads as a link, not a button */
   border: none;
   background: none;
   padding: 0;
@@ -27,7 +32,7 @@ body {
   color: var(--cp-accent);
   cursor: pointer;
 }
-.cp-nav button:hover { text-decoration: underline; }
+.cp-account button:hover { text-decoration: underline; }
 
 .cp-footer {
   padding: 0.35rem 1rem;
@@ -50,13 +55,3 @@ body {
    the full viewport instead. */
 main { padding: var(--cp-page-pad); max-width: var(--cp-page-width); margin: 0 auto; box-sizing: border-box; }
 main.cp-wide { max-width: none; }
-/* The camp nav is a full-width band. Its border-bottom spills over main's horizontal
-   padding to reach the page edges (the full window on wide pages), while the inner row is
-   capped at the page width and centered — so the links sit in the same column on every
-   page and never shift when switching sections. Spilling over the padding (rather than
-   100vw) keeps the line within the document, so no phantom horizontal scrollbar appears. */
-.cp-camp-nav { margin-left: calc(-1 * var(--cp-page-pad)); margin-right: calc(-1 * var(--cp-page-pad)); }
-.cp-camp-nav-inner {
-  max-width: var(--cp-page-width); margin-left: auto; margin-right: auto;
-  padding-left: var(--cp-page-pad); padding-right: var(--cp-page-pad); box-sizing: border-box;
-}

@@ -2,6 +2,7 @@
 {% from "_macros.html" import camp_nav %}
 {% block title %}Seznam her – {{ camp.name }}{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
+{% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
@@ -10,8 +11,6 @@
 {% endblock %}
 
 {% block content %}
-  {{ camp_nav(camp, "overview") }}
-
   {# activities-overview.js renders the filter header + table into here from the JSON below.
      Delete/merge affordances are gated by data.may_edit; mutations go to the api endpoints. #}
   <div id="cp-overview"></div>

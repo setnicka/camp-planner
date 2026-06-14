@@ -1,3 +1,9 @@
-{# Embedded mode: emit only the content; the host supplies the chrome and links
-   css/content.css. A host can instead pass its own base_template to wrap our pages. #}
+{# Embedded mode: emit the camp-nav band (grey "Camp Planner" brand + the camp heading) and the
+   content; the host supplies the surrounding chrome and links css/content.css. A host can instead
+   pass its own base_template to wrap our pages. Only the account controls stay standalone-only
+   (full.html) — the host owns auth. #}
+<nav class="cp-camp-nav">
+  <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>
+  {% block header_nav %}{% endblock %}
+</nav>
 {% block content %}{% endblock %}
