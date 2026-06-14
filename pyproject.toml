@@ -1,6 +1,6 @@
 [project]
 name = "camp-planner"
-version = "0.1.1"
+version = "0.1.2"
 description = "Planning tool for summer camps — Flask + SQLAlchemy, supports SQLite / PostgreSQL / MySQL"
 readme = "README.md"
 requires-python = ">=3.11"
