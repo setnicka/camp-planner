@@ -159,7 +159,7 @@ def activity_detail(slug: str, activity_id: int):
             "needItem": url_for("api.material_need_update", need_id=0),
             "materialsOverview": url_for("main.camp_materials", slug=camp.slug),
             "timeline": url_for("main.camp_timeline", slug=camp.slug),
-            "slotOrgs": url_for("api.slot_orgs", slot_id=0),
+            "slot": url_for("api.update_slot", slot_id=0),
         },
     }
     return render_template("activity_detail.html", camp=camp, activity=activity, data=data)

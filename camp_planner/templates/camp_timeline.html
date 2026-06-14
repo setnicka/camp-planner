@@ -51,7 +51,7 @@
       "save": url_for("api.timeline_save", slug=camp.slug),
       "activities": url_for("api.activity_list", slug=camp.slug),
       "createActivity": url_for("api.activity_create", slug=camp.slug),
-      "slotOrgs": url_for("api.slot_orgs", slot_id=0),
+      "slot": url_for("api.update_slot", slot_id=0),
       "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
     } | tojson }}</script>
   {% endif %}

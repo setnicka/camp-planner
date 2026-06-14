@@ -8,7 +8,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, escapeHtml, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
-  const { el, csrf, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
+  const { el, api, csrf, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -385,14 +385,20 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- floating action bar (available in view mode too: assign orgs / open detail) --
   const orgsBtn = el("button", { type: "button", class: "cp-tl-orgs" }, "Přiřadit orgy");
   const detailBtn = el("button", { type: "button", class: "cp-tl-detail" }, "ℹ️ Detail");
+  const nameBtn = el("button", { type: "button", class: "cp-tl-name" }, "✎ Název");
   const retypeBtn = el("button", { type: "button", class: "cp-tl-retype" }, "↺ Typ slotu");
   const delBtn = el("button", { type: "button", class: "cp-tl-del" }, "🗑 Smazat blok");
-  const actionBar = el("div", { class: "cp-tl-actions", hidden: true }, orgsBtn, detailBtn, retypeBtn, delBtn);
+  const actionBar = el("div", { class: "cp-tl-actions", hidden: true }, orgsBtn, detailBtn, nameBtn, retypeBtn, delBtn);
   delBtn.addEventListener("click", deleteSelected);
   retypeBtn.addEventListener("click", () => {
     const [id] = timeline.getSelection();
     const it = id != null && items.get(id);
     if (it) openSlotType(it);
+  });
+  nameBtn.addEventListener("click", () => {
+    const [id] = timeline.getSelection();
+    const it = id != null && items.get(id);
+    if (it && it.slotId != null) openSlotName(it);
   });
   orgsBtn.addEventListener("click", () => {
     const [id] = timeline.getSelection();
@@ -416,6 +422,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       // edit mode = change type / delete; view mode = assign orgs / open detail
       orgsBtn.hidden = editing || !(it && it.slotId != null); // attendees need a saved slot id
       detailBtn.hidden = editing;
+      nameBtn.hidden = !editing || !(it && it.slotId != null); // a name override needs a saved slot id
       retypeBtn.hidden = !editing;
       delBtn.hidden = !editing;
       const r = sel.getBoundingClientRect();
@@ -437,8 +444,19 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   window.addEventListener("blur", dropSelection);   // tab/window loses focus
   timeline.on("rangechange", hideActionBar);        // pan/zoom slides the slot out from under it
 
+  // Re-render every on-screen segment of a slot after a standalone edit: patch each
+  // segment's local data via `mutate(seg)`, then rebuild its content + tooltip.
+  function rerenderSegments(slotId, mutate) {
+    segsOf(slotId).forEach((it) => {
+      if (it._seg) {
+        mutate(it._seg);
+        items.update({ id: it.id, content: segmentContent(it._seg), title: segmentTitle(it._seg) });
+      }
+    });
+  }
+
   // --- slot attendees (who staffs this block) --------------------------------
-  // Shared dialog (cpSlotOrgsEdit) — same window as the activity detail page. The PUT is a
+  // Shared dialog (cpSlotOrgsEdit) — same window as the activity detail page. The PATCH is a
   // standalone commit (not part of the move/create/delete batch; doesn't touch timeline_rev);
   // on save we re-render the slot's segments and refresh the display-filter dim.
   function openSlotOrgs(item) {
@@ -446,17 +464,41 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     window.cpSlotOrgsEdit({
       orgs: payload.orgs,
       selected: (item._seg && item._seg.attending) || [],
-      url: EDIT.slotOrgs.replace(/0\/orgs$/, slotId + "/orgs"),
+      url: EDIT.slot.replace(/\d+$/, slotId),
       onSaved: (_orgs, ids) => {
-        segsOf(slotId).forEach((it) => {
-          if (it._seg) {
-            it._seg.attending = ids;
-            items.update({ id: it.id, content: segmentContent(it._seg), title: segmentTitle(it._seg) });
-          }
-        });
+        rerenderSegments(slotId, (seg) => { seg.attending = ids; });
         applyHeights();   // attendees changed → refresh the display filter's dim (e.g. an "attending:" filter)
       },
     });
+  }
+
+  // --- slot name override (custom timeline label / Google event title) --------
+  // Standalone PATCH (like the attendees one — not part of the batch, doesn't touch
+  // timeline_rev). Empty input clears the override → the slot shows the activity title.
+  function openSlotName(item) {
+    const slotId = item.slotId;
+    const seg = item._seg || {};
+    const input = el("input", { type: "text", class: "cp-modal-name", maxlength: 255,
+      placeholder: seg.title || "", value: seg.override_name || "" });
+    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
+    const ok = el("button", { type: "button", class: "cp-primary" }, "Uložit");
+    const dialog = el("div", { class: "cp-modal" },
+      el("div", { class: "cp-modal-head" }, "Název slotu"),
+      el("div", { class: "cp-pane" },
+        el("label", { class: "cp-field-label" }, "Speciální název slotu (prázdný název defaultuje na název aktivity)"), input),
+      el("div", { class: "cp-modal-foot" }, cancel, ok));
+    const close = openModal(dialog);
+    cancel.addEventListener("click", close);
+    ok.addEventListener("click", async () => {
+      ok.disabled = true;
+      try {
+        const json = await api("PATCH", EDIT.slot.replace(/\d+$/, slotId), { override_name: input.value });
+        close();
+        rerenderSegments(slotId, (seg) => { seg.override_name = json.override_name; });
+        toast("Uloženo");
+      } catch (e) { ok.disabled = false; toast(e.message, true); }
+    });
+    input.focus();
   }
 
   // --- save (one PATCH; on success reload the authoritative state) -----------

@@ -69,8 +69,8 @@ from camp_planner.schemas import (
     NotFoundOut,
     OrgListIn,
     OrgsEnvelope,
-    SlotOrgsEnvelope,
-    SlotOrgsIn,
+    SlotEnvelope,
+    SlotUpdateIn,
     TagDefsEnvelope,
     TagLinkEnvelope,
     TagListIn,
@@ -470,15 +470,16 @@ def activity_tag_value(activity_id: int, tag_id: int):
 # --- slots -------------------------------------------------------------------
 # Slot placement (add / reposition / remove) is edited only through the timeline
 # batch (PATCH …/timeline); a slot's role is fixed at creation. The one slot-level
-# endpoint is its attendees, which aren't placement — grouped under "timeline" too.
+# endpoint patches its attendees and/or display-name override — neither is placement,
+# so it's grouped under "timeline" too.
 
-@bp.put("/slots/<int:slot_id>/orgs")
-@spec.validate(json=SlotOrgsIn, resp=Response(HTTP_200=SlotOrgsEnvelope, **_AUTH_400), tags=["timeline"])
-def slot_orgs(slot_id: int):
-    """Set which orgs attend this slot (plain set, no role)."""
+@bp.patch("/slots/<int:slot_id>")
+@spec.validate(json=SlotUpdateIn, resp=Response(HTTP_200=SlotEnvelope, **_AUTH_400), tags=["timeline"])
+def update_slot(slot_id: int):
+    """Set which orgs attend this slot and/or its display-name override."""
     slot = _slot(slot_id)
     _guard(slot.activity.camp, edit=True)
-    return _run(lambda: slots.set_slot_orgs(slot, request.context.json))
+    return _run(lambda: slots.update_slot(slot, request.context.json))
 
 
 # --- materials ---------------------------------------------------------------

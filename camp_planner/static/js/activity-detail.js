@@ -55,23 +55,26 @@
       el("span", { class: "cp-tagchip-name" }, SLOT_ROLE[s.role] || s.role),
       el("span", { class: "cp-tagchip-text" },
         el("span", { class: "cp-slot-day" }, day), " " + hhmm(s.start_at) + " – " + hhmm(s.end_at)));
+    if (s.override_name) main.append(el("span", { class: "cp-slot-name" }, s.override_name));
     if (s.orgs.length) main.append(el("span", { class: "cp-slot-orgs" }, s.orgs.map((o) => o.initials).join(", ")));
     const chip = el("span", { class: "cp-tagchip cp-slotchip" }, main);
     if (mayEdit) {   // inline ✎ segment (a button can't live inside the <a>, so it's a sibling)
-      const edit = el("button", { type: "button", class: "cp-slot-edit", title: "Přiřadit orgy do slotu" }, "✎");
+      const edit = el("button", { type: "button", class: "cp-slot-edit", title: "Upravit slot (název, orgy)" }, "✎");
       edit.addEventListener("click", () => openSlotOrgs(s));
       chip.append(edit);
     }
     return chip;
   }
 
-  // shared slot-attendees dialog (cpSlotOrgsEdit) — same modal as the timeline editor
+  // shared slot-edit dialog (cpSlotOrgsEdit) — same modal as the timeline editor, here with
+  // the name-override field too (the timeline editor has a separate name dialog).
   function openSlotOrgs(s) {
     window.cpSlotOrgsEdit({
       orgs: DATA.orgs,
       selected: s.orgs.map((o) => o.org_id),
-      url: U.slotOrgs.replace(/0\/orgs$/, s.id + "/orgs"),
-      onSaved: (orgs) => { s.orgs = orgs; renderHeader(); },
+      withName: true, name: s.override_name, namePlaceholder: A.title,
+      url: withId(U.slot, s.id),
+      onSaved: (orgs, _ids, overrideName) => { s.orgs = orgs; s.override_name = overrideName; renderHeader(); },
     });
   }
 

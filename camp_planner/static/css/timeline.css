@@ -167,12 +167,14 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 /* floating action bar over the selected slot */
 .cp-tl-actions { position: fixed; z-index: 1000; display: flex; gap: 4px; }
 .cp-tl-actions[hidden] { display: none; }  /* beat the display:flex so hidden actually hides */
-.cp-tl-orgs, .cp-tl-detail, .cp-tl-retype, .cp-tl-del {
+.cp-tl-orgs, .cp-tl-detail, .cp-tl-name, .cp-tl-retype, .cp-tl-del {
   font: inherit; font-size: 13px; padding: 0.35rem 0.7rem; cursor: pointer; color: #fff;
   border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.3);
 }
 .cp-tl-orgs { background: #1a73e8; border: 1px solid #1565c0; }
 .cp-tl-orgs:hover { background: #1565c0; }
+.cp-tl-name { background: #0b8043; border: 1px solid #0a6e3a; }
+.cp-tl-name:hover { background: #0a6e3a; }
 .cp-tl-detail { background: #5f6368; border: 1px solid #494c50; }
 .cp-tl-detail:hover { background: #494c50; }
 .cp-tl-retype { background: #6f42c1; border: 1px solid #59359c; }

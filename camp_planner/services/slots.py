@@ -2,8 +2,9 @@
 
 All slot placement (add / move / remove) goes through save_timeline — one atomic batch
 under the camp.timeline_rev optimistic lock (no single-slot endpoints; a slot's role is
-fixed at creation). set_slot_orgs manages attendees, which aren't placement. Slot
-datetimes are naive local values (see timeline.py); the schemas enforce start<end.
+fixed at creation). update_slot patches a slot's attendees and/or display-name override,
+neither of which is placement. Slot datetimes are naive local values (see timeline.py);
+the schemas enforce start<end.
 """
 
 from __future__ import annotations
@@ -19,31 +20,42 @@ from camp_planner.services.timeline import build_timeline, bump_timeline_rev
 
 if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
-    from camp_planner.schemas import SlotOrgsIn, TimelineSaveIn
+    from camp_planner.schemas import SlotUpdateIn, TimelineSaveIn
 
 
-def set_slot_orgs(slot: Slot, payload: SlotOrgsIn) -> dict:
-    """Replace the set of orgs attending this slot. Attendees aren't placement, so this
-    does not bump timeline_rev."""
+def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
+    """Patch a slot's attendees and/or its display-name override. Only the fields present
+    in the request are touched (an empty override_name clears it). Neither is placement, so
+    this does not bump timeline_rev; both feed the Google event (orgs → description, name →
+    title), so any change re-pushes it."""
     camp = slot.activity.camp
-    initials = {o.id: o.initials for o in camp.orgs}
-    for org_id in payload.org_ids:  # schema already rejected duplicate ids
-        if org_id not in initials:
-            raise errors.Invalid("Orgové: neznámý org této akce.")
+    fields = payload.model_fields_set
+    changes: dict = {}
 
-    current = {a.org_id for a in slot.assignments}
-    if current == set(payload.org_ids):
-        return {"orgs": serialize.slot_orgs(slot)}  # unchanged → no write, no audit row
+    if "org_ids" in fields and payload.org_ids is not None:  # explicit null → unchanged; [] → clear
+        org_ids = payload.org_ids
+        initials = {o.id: o.initials for o in camp.orgs}
+        for org_id in org_ids:  # schema already rejected duplicate ids
+            if org_id not in initials:
+                raise errors.Invalid("Orgové: neznámý org této akce.")
+        current = {a.org_id for a in slot.assignments}
+        if current != set(org_ids):
+            by_czech = lambda ids: sorted((initials[i] for i in ids), key=czech_sort_key)  # noqa: E731
+            changes["orgs"] = [by_czech(current), by_czech(org_ids)]
+            slot.assignments = [SlotAssignment(org_id=i) for i in org_ids]  # delete-orphan drops the old rows
 
-    by_czech = lambda ids: sorted((initials[i] for i in ids), key=czech_sort_key)  # noqa: E731
-    before = by_czech(current)
-    slot.assignments = [SlotAssignment(org_id=i) for i in payload.org_ids]  # delete-orphan drops the old rows
-    audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                 entity_id=slot.id, action=AuditAction.update,
-                 changes={"orgs": [before, by_czech(payload.org_ids)]})
-    google_sync.enqueue_upsert(camp, slot)  # the event description lists the orgs
-    db.session.commit()
-    return {"orgs": serialize.slot_orgs(slot)}
+    if "override_name" in fields:
+        new_name = (payload.override_name or "").strip() or None
+        if new_name != slot.override_name:
+            changes["override_name"] = [slot.override_name, new_name]
+            slot.override_name = new_name
+
+    if changes:  # nothing changed → no write, no audit row, no Google re-push
+        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
+                     entity_id=slot.id, action=AuditAction.update, changes=changes)
+        google_sync.enqueue_upsert(camp, slot)
+        db.session.commit()
+    return {"orgs": serialize.slot_orgs(slot), "override_name": slot.override_name}
 
 
 def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:

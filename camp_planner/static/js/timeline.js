@@ -133,7 +133,7 @@
   // Inner HTML of one segment box. Pulled out so the editor can rebuild it after a
   // slot-attendee change (re-running it with the segment's updated `attending`).
   function segmentContent(s) {
-    const heading = roleHeading(s.role, s.title);
+    const heading = roleHeading(s.role, s.override_name || s.title);
     const left = s.cont_back ? "«&nbsp;" : "";
     const right = s.cont_fwd ? "&nbsp;»" : "";
     // garants (bold) + helpers (normal), then any slot attendees in italics after a pipe.
@@ -158,7 +158,7 @@
   function segmentTitle(s) {
     if (!s.garants.length && !s.helpers.length && !s.attending.length) return ""; // no orgs → no tooltip
     const names = (ids) => ids.map((id) => escapeHtml(orgById[id]?.name ?? "?")).join(", ");
-    const lines = [`<b>${escapeHtml(s.title)}</b>`];
+    const lines = [`<b>${escapeHtml(s.override_name || s.title)}</b>`];
     if (s.garants.length) lines.push(`<b>Garant:</b> ${names(s.garants)}`);
     if (s.helpers.length) lines.push(`<b>Pomocník:</b> ${names(s.helpers)}`);
     if (s.attending.length) lines.push(`<b>Účastní se:</b> ${names(s.attending)}`);

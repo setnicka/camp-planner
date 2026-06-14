@@ -284,10 +284,10 @@ def test_activity_merge_rejects_cross_camp(client, seeded):
 def test_slot_orgs_set_and_reject_foreign(client, seeded):
     slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
     slot_id = _make_slot(client, slug, aid)
-    resp = client.put(f"/api/slots/{slot_id}/orgs", json={"org_ids": [oid]}, headers=ADMIN)
+    resp = client.patch(f"/api/slots/{slot_id}", json={"org_ids": [oid]}, headers=ADMIN)
     assert resp.status_code == 200
     assert [o["initials"] for o in _json(resp)["orgs"]] == ["K"]
-    assert client.put(f"/api/slots/{slot_id}/orgs", json={"org_ids": [99999]}, headers=ADMIN).status_code == 400
+    assert client.patch(f"/api/slots/{slot_id}", json={"org_ids": [99999]}, headers=ADMIN).status_code == 400
 
     # audited as a `slot` change (under the activity) with the orgs before/after
     def org_audits():
@@ -299,8 +299,45 @@ def test_slot_orgs_set_and_reject_foreign(client, seeded):
     assert changes[0]["activity_id"] == aid and changes[0]["changes"]["orgs"] == [[], ["K"]]
 
     # re-submitting the same set is a no-op: no second audit row
-    client.put(f"/api/slots/{slot_id}/orgs", json={"org_ids": [oid]}, headers=ADMIN)
+    client.patch(f"/api/slots/{slot_id}", json={"org_ids": [oid]}, headers=ADMIN)
     assert len(org_audits()) == 1
+
+
+def test_slot_override_name_set_clear_and_combined(client, seeded):
+    slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
+    slot_id = _make_slot(client, slug, aid)
+
+    # set a name override; it's echoed back and surfaces on the timeline segment
+    resp = client.patch(f"/api/slots/{slot_id}", json={"override_name": "Ranní rozcvička"}, headers=ADMIN)
+    assert resp.status_code == 200 and _json(resp)["override_name"] == "Ranní rozcvička"
+    seg = next(s for s in _get(client, f"/api/camps/{slug}/timeline")["segments"] if s["slot_id"] == slot_id)
+    assert seg["override_name"] == "Ranní rozcvička"
+
+    # omitting org_ids leaves attendees untouched; combined patch updates both at once
+    resp = client.patch(f"/api/slots/{slot_id}",
+                        json={"org_ids": [oid], "override_name": "Hra"}, headers=ADMIN)
+    assert _json(resp)["override_name"] == "Hra"
+    assert [o["initials"] for o in _json(resp)["orgs"]] == ["K"]
+
+    # explicit null org_ids means "unchanged" (only [] clears) — attendees survive
+    resp = client.patch(f"/api/slots/{slot_id}", json={"org_ids": None, "override_name": "Jiná"}, headers=ADMIN)
+    assert _json(resp)["override_name"] == "Jiná"
+    assert [o["initials"] for o in _json(resp)["orgs"]] == ["K"]
+
+    # an empty (whitespace-only) override clears it → falls back to the activity title
+    resp = client.patch(f"/api/slots/{slot_id}", json={"override_name": "  "}, headers=ADMIN)
+    assert _json(resp)["override_name"] is None
+    assert [o["initials"] for o in _json(resp)["orgs"]] == ["K"]  # untouched (org_ids omitted)
+
+    # passing [] actually clears attendees
+    resp = client.patch(f"/api/slots/{slot_id}", json={"org_ids": []}, headers=ADMIN)
+    assert [o["initials"] for o in _json(resp)["orgs"]] == []
+
+    # the name changes are audited as `slot` updates with before/after
+    rows = _get(client, f"/api/camps/{slug}/audit?entity_type=slot")["entries"]
+    name_changes = [e["changes"]["override_name"] for e in rows
+                    if e["changes"] and "override_name" in e["changes"]]
+    assert [None, "Ranní rozcvička"] in name_changes and ["Jiná", None] in name_changes
 
 
 # --- todos -------------------------------------------------------------------
@@ -573,7 +610,7 @@ def test_timeline_read_query_count_is_constant(app, client, seeded):
         client.put(f"/api/activities/{activity_id}/orgs",
                    json={"orgs": [{"org_id": org_id, "role": "garant"}]}, headers=ADMIN)
         sid = _make_slot(client, slug, activity_id)
-        client.put(f"/api/slots/{sid}/orgs", json={"org_ids": [org_id]}, headers=ADMIN)
+        client.patch(f"/api/slots/{sid}", json={"org_ids": [org_id]}, headers=ADMIN)
 
     wire(aid)
     aid2 = _json(client.post(f"/api/camps/{slug}/activities", json={"title": "B"}, headers=ADMIN))["activity"]["id"]

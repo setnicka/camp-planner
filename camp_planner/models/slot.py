@@ -44,6 +44,10 @@ class Slot(Base):
     start_at: Mapped[datetime] = mapped_column(index=True)
     end_at: Mapped[datetime]
 
+    # Optional display name shown on the timeline and used as the Google event title in
+    # place of the activity title. Null (or empty) → fall back to activity.title.
+    override_name: Mapped[str | None] = mapped_column(String(255))
+
     # Id of the mirroring Google Calendar event, once pushed (see services/google_sync.py).
     # Null until the slot has been synced; cleared if the camp is disconnected.
     google_event_id: Mapped[str | None] = mapped_column(String(255), index=True)

@@ -50,6 +50,9 @@
 .cp-slot-main { display: inline-flex; align-items: stretch; text-decoration: none; color: inherit; cursor: pointer; }
 .cp-slot-main .cp-tagchip-text { max-width: none; gap: 0.4rem; }   /* don't truncate day + time */
 .cp-slot-day { color: #6b7686; }   /* muted day, left of the time range */
+/* slot name override: a chip segment after the time, set off by a divider */
+.cp-slot-name { display: flex; align-items: center; padding: 0.1rem 0.55rem;
+  border-left: 1px solid var(--cp-border); font-weight: 600; color: #333; }
 /* attendees: a chip segment after the time, set off by a divider */
 .cp-slot-orgs { display: flex; align-items: center; padding: 0.1rem 0.55rem;
   border-left: 1px solid var(--cp-border); font-style: italic; color: #555; }

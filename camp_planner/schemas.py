@@ -108,13 +108,16 @@ class TodoOverviewEnvelope(_Ok):
 
 # --- slots -------------------------------------------------------------------
 
-class SlotOrgsIn(BaseModel):
-    """Replace the set of orgs attending a slot (PUT …/slots/<id>/orgs)."""
-    org_ids: list[int] = []
+class SlotUpdateIn(BaseModel):
+    """Patch a slot's attendees and/or its display-name override (PATCH …/slots/<id>).
+    Only the fields present in the request are changed; an empty (or whitespace-only)
+    override_name clears the override, so the slot falls back to the activity title."""
+    org_ids: list[int] | None = None              # absent/null → unchanged; [] → clear attendees
+    override_name: str | None = Field(None, max_length=255)  # absent → unchanged; ""/null → clear
 
     @model_validator(mode="after")
     def _unique(self):
-        if len(set(self.org_ids)) != len(self.org_ids):
+        if self.org_ids is not None and len(set(self.org_ids)) != len(self.org_ids):
             raise ValueError("Orgové: org se v seznamu opakuje.")
         return self
 
@@ -130,11 +133,13 @@ class SlotOut(BaseModel):
     role: SlotRole
     start_at: NaiveDatetime
     end_at: NaiveDatetime
+    override_name: str | None = None
     orgs: list[SlotOrgOut]
 
 
-class SlotOrgsEnvelope(_Ok):
+class SlotEnvelope(_Ok):
     orgs: list[SlotOrgOut]
+    override_name: str | None = None
 
 
 # --- timeline ----------------------------------------------------------------
@@ -237,7 +242,8 @@ class TimelineSegment(BaseModel):
     rel_end_min: int
     role: SlotRole
     cat_key: str
-    title: str
+    title: str            # the activity title (the fallback label)
+    override_name: str | None  # slot's display-name override; client shows it in place of title
     garants: list[int]    # org ids (resolve against payload.orgs); the activity's garants
     helpers: list[int]    # org ids; the activity's helpers
     attending: list[int]  # org ids; orgs attending this specific slot

@@ -64,7 +64,8 @@ def test_slot_past_last_day_is_clamped_out():
 # --- build_timeline -----------------------------------------------------------
 
 def _slot(start: datetime, end: datetime, role=SlotRole.main, assignments=()):
-    return SimpleNamespace(id=1, start_at=start, end_at=end, role=role, assignments=list(assignments))
+    return SimpleNamespace(id=1, start_at=start, end_at=end, role=role, override_name=None,
+                           assignments=list(assignments))
 
 
 def _camp(activities, *, length_days=3, orgs=(), tags=()):

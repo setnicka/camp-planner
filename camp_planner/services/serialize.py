@@ -54,7 +54,7 @@ def _slot_orgs(s: Slot) -> list[SlotOrgOut]:
 def _slot(s: Slot) -> SlotOut:
     return SlotOut(
         id=s.id, activity_id=s.activity_id, role=s.role,
-        start_at=s.start_at, end_at=s.end_at, orgs=_slot_orgs(s),
+        start_at=s.start_at, end_at=s.end_at, override_name=s.override_name, orgs=_slot_orgs(s),
     )
 
 

@@ -123,6 +123,7 @@ def _segments(camp: Camp) -> list[TimelineSegment]:
                     **seg,  # day, rel_start_min, rel_end_min, cont_back, cont_fwd
                     slot_id=slot.id, activity_id=activity.id,
                     role=slot.role, cat_key=cat_key, title=activity.title,
+                    override_name=slot.override_name,
                     garants=garants, helpers=helpers, attending=attending,
                     abs_start_min=s_abs, abs_end_min=e_abs, tag_ids=tag_ids,
                 ))
