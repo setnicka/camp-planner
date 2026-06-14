@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -134,8 +135,11 @@ def register_cli(app: Flask) -> None:
         db.session.commit()
         click.echo(f"Granted {grant} to {username!r}.")
 
-    def _sync_once(slug: str | None) -> None:
-        """One drain pass over the connected camps. Caller owns the app context."""
+    def _sync_once(slug: str | None, *, quiet_idle: bool = False) -> int:
+        """One drain pass over the connected camps; runs as an independent process, so each line
+        is timestamped. With quiet_idle (the --loop sidecar) a camp that delivered nothing is not
+        logged, so an idle loop stays silent; a one-shot run reports every camp. Returns the number
+        of connected camps considered. Caller owns the app context."""
         from camp_planner.models.camp import Camp
         from camp_planner.services import google_sync
 
@@ -143,14 +147,16 @@ def register_cli(app: Flask) -> None:
         if slug:
             query = query.filter_by(slug=slug)
         camps = db.session.scalars(query).all()
-        if not camps:
-            click.echo("No connected camps to sync." if not slug
-                       else f"Camp {slug!r} is not connected to Google Calendar.")
-            return
         for camp in camps:
+            t0 = time.perf_counter()
             res = google_sync.drain(camp)
-            click.echo(f"{camp.slug}: pushed={res['pushed']} failed={res['failed']} "
-                       f"pending={res['pending']}")
+            took = time.perf_counter() - t0
+            if quiet_idle and not (res["pushed"] or res["failed"]):
+                continue  # loop mode → don't log a camp with nothing to sync
+            click.echo(f"{datetime.now():%Y-%m-%d %H:%M:%S} {camp.slug}: "
+                       f"pushed={res['pushed']} failed={res['failed']} pending={res['pending']} "
+                       f"({took:.3f}s)")
+        return len(camps)
 
     @app.cli.command("sync-google")
     @click.option("--camp", "slug", default=None,
@@ -167,15 +173,19 @@ def register_cli(app: Flask) -> None:
         workers; running it inside gunicorn would fire once per worker.
         """
         if interval is None:
-            _sync_once(slug)
+            if _sync_once(slug) == 0:  # one-shot run → confirm there was nothing connected
+                click.echo("No connected camps to sync." if not slug
+                           else f"Camp {slug!r} is not connected to Google Calendar.")
             return
 
-        click.echo(f"sync-google: draining every {interval}s (Ctrl-C to stop)")
+        click.echo(f"{datetime.now():%Y-%m-%d %H:%M:%S} sync-google: draining every "
+                   f"{interval}s (Ctrl-C to stop)")
         while True:
             try:
-                _sync_once(slug)
+                _sync_once(slug, quiet_idle=True)
             except Exception as exc:  # noqa: BLE001 — sidecar must survive a transient failure
-                click.echo(f"sync pass failed, retrying next interval: {exc}", err=True)
+                click.echo(f"{datetime.now():%Y-%m-%d %H:%M:%S} sync pass failed, "
+                           f"retrying next interval: {exc}", err=True)
             finally:
                 # Drop the scoped session so the next pass starts on a fresh connection /
                 # identity map rather than a stale, long-lived transaction.
