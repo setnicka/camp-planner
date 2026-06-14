@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
+from contextlib import contextmanager
 from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 
@@ -90,15 +91,67 @@ def failure_summary(camp: Camp) -> tuple[int, str | None]:
     return len(failed), (failed[0].last_error if failed else None)
 
 
-def drain(camp: Camp) -> dict:
-    """Deliver all queued outbound ops for the camp to Google, oldest first. Each op is
-    removed on success; a failure bumps attempts / records the error and leaves the row
-    for the next drain. Owns its transaction. Returns {pushed, failed, pending}."""
-    result = {"pushed": 0, "failed": 0, "pending": 0}
-    if not camp.google_calendar_id:
-        return result
-    cal = camp.google_calendar_id
+# Per-camp drain lock: (acquire SQL, release SQL, key-from-camp-id). Both statements take a single
+# :k bind whose type differs by backend — Postgres advisory locks key on a bigint, while MySQL
+# GET_LOCK needs a string name (an int errors on MySQL 8). Each key is namespaced so it can't
+# collide with another feature's advisory lock: a "cp_drain_<id>" name on MySQL, and on Postgres
+# our namespace in the high 32 bits with the camp id in the low 32. A backend without advisory
+# locks (SQLite) maps to None — drain() then relies on write serialization + idempotent deletion.
+_DRAIN_LOCK_NS = 0x6770  # "gp" — drain-lock namespace, kept clear of other advisory-lock users
+_LOCK_SQL = {
+    "postgresql": ("SELECT pg_try_advisory_lock(:k)", "SELECT pg_advisory_unlock(:k)",
+                   lambda i: (_DRAIN_LOCK_NS << 32) | i),
+    "mysql": ("SELECT GET_LOCK(:k, 0)", "SELECT RELEASE_LOCK(:k)", lambda i: f"cp_drain_{i}"),
+}
 
+
+@contextmanager
+def _drain_lock(camp: Camp):
+    """Non-blocking, per-camp cross-process mutex: the cron/sidecar and the "Synchronizovat nyní"
+    button both call drain(), and without this they could double-insert events. Yields True to
+    proceed, False to bow out (the holder delivers our ops too). The lock lives on a dedicated
+    connection for the whole drain — so it outlives drain's mid-flow commit and a pooled-connection
+    swap can't leak it — and is advisory, so it never blocks timeline edits. No-op on SQLite (no
+    advisory locks), where the idempotent op-deletion in drain() covers the race."""
+    sql = _LOCK_SQL.get(db.session.get_bind().dialect.name)
+    if sql is None:
+        yield True
+        return
+    acquire, release, make_key = sql
+    key = make_key(camp.id)
+    conn = db.engine.connect()
+    try:
+        got = conn.execute(db.text(acquire), {"k": key}).scalar()
+        try:
+            yield bool(got)
+        finally:
+            if got:
+                conn.execute(db.text(release), {"k": key})
+    finally:
+        conn.close()
+
+
+def drain(camp: Camp) -> dict:
+    """Deliver all queued outbound ops for the camp to Google. A non-blocking per-camp lock (see
+    _drain_lock) makes a second concurrent drain bow out, so the cron and the manual button can't
+    double-push. Returns {pushed, failed, pending}."""
+    if not camp.google_calendar_id:
+        return {"pushed": 0, "failed": 0, "pending": 0}
+    with _drain_lock(camp) as acquired:
+        if not acquired:
+            log.info("Google Calendar drain (camp %s): another drain holds the lock, skipping",
+                     camp.slug)
+            return {"pushed": 0, "failed": 0, "pending": pending_count(camp)}
+        return _deliver_queued_ops(camp)
+
+
+def _deliver_queued_ops(camp: Camp) -> dict:
+    """Push each queued op to Google oldest-first, while holding the per-camp lock (see drain).
+    Each op is removed on success; a failure bumps attempts / records the error and leaves the row
+    for the next drain. Op removal is one idempotent bulk delete, so a drain that raced past the
+    lock (only possible on SQLite) can't StaleDataError. Owns its transaction."""
+    result = {"pushed": 0, "failed": 0, "pending": 0}
+    cal = camp.google_calendar_id
     ops = db.session.scalars(
         db.select(GoogleSyncOp)
         .where(GoogleSyncOp.camp_id == camp.id)
@@ -111,15 +164,13 @@ def drain(camp: Camp) -> dict:
     # whose slot was since deleted is handled in _push: the slot is gone → nothing to send.)
     upserts: dict[int, GoogleSyncOp] = {}
     deletes: dict[str, GoogleSyncOp] = {}
-    superseded: list[GoogleSyncOp] = []
+    done_ids: list[int] = []  # op rows to remove (superseded + delivered) — bulk-deleted below
     for op in ops:
         bucket, key = ((deletes, op.google_event_id) if op.op == SyncOpKind.delete
                        else (upserts, op.slot_id))
         if key in bucket:
-            superseded.append(bucket[key])  # older op for the same target → drop it
+            done_ids.append(bucket[key].id)  # older op for the same target → drop it
         bucket[key] = op
-    for op in superseded:
-        db.session.delete(op)
 
     def _push(op: GoogleSyncOp) -> None:
         if op.op == SyncOpKind.delete:
@@ -143,7 +194,7 @@ def drain(camp: Camp) -> dict:
     for op in [*upserts.values(), *deletes.values()]:
         try:
             _push(op)
-            db.session.delete(op)
+            done_ids.append(op.id)
             result["pushed"] += 1
         except Exception as exc:  # noqa: BLE001 — resilience: skip, retry on next drain
             op.attempts += 1
@@ -152,6 +203,8 @@ def drain(camp: Camp) -> dict:
             log.warning("Google Calendar push failed (camp %s, %s, slot=%s, event=%s, attempt %d): %s",
                         camp.slug, op.op.value, op.slot_id, op.google_event_id, op.attempts, exc)
 
+    if done_ids:  # one bulk delete (tolerates already-gone rows) rather than per-row ORM deletes
+        db.session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id.in_(done_ids)))
     db.session.commit()
     result["pending"] = pending_count(camp)
     if ops:

@@ -905,3 +905,53 @@ def test_import_new_event_seeds_orgs(client, seeded, gcal):
     roles = {a.role: a.org_id for a in slot.activity.assignments}
     assert roles[OrgRole.garant] == seeded["org_id"]   # first LOCATION item → garant
     assert roles[OrgRole.helper] == marek.id           # the rest → helpers
+
+
+# --- concurrent drains (cron + manual "Synchronizovat nyní") -------------------------
+
+def test_drain_skips_when_lock_held(client, seeded, gcal, monkeypatch):
+    """When another drain holds the per-camp lock, drain bows out: nothing is pushed and the
+    queued op is left for the holder to deliver."""
+    from contextlib import contextmanager
+
+    camp = _camp(seeded)
+    _connect(camp)
+    slot = _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    google_sync.enqueue_upsert(camp, slot)
+    db.session.commit()
+    assert google_sync.pending_count(camp) == 1
+
+    @contextmanager
+    def _held(_camp):
+        yield False  # pretend a concurrent drain already holds the lock
+
+    monkeypatch.setattr(google_sync, "_drain_lock", _held)
+    result = google_sync.drain(camp)
+
+    assert result == {"pushed": 0, "failed": 0, "pending": 1}
+    assert gcal.events == {}                       # nothing delivered
+    assert google_sync.pending_count(camp) == 1    # op still queued
+
+
+def test_drain_op_removal_is_idempotent(client, seeded, gcal, monkeypatch):
+    """The op rows are bulk-deleted, so a row already removed (by a drain that raced past the
+    lock — only possible on SQLite) doesn't raise: the trailing delete just matches no rows."""
+    camp = _camp(seeded)
+    _connect(camp)
+    slot = _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    google_sync.enqueue_upsert(camp, slot)
+    db.session.commit()
+    op_id = db.session.scalar(db.select(GoogleSyncOp.id))
+
+    real_insert = gcal.insert
+
+    def insert_then_yank(cal, body):
+        # mimic a concurrent drain that already deleted this op row before we get to remove it
+        db.session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id == op_id))
+        return real_insert(cal, body)
+
+    monkeypatch.setattr(google_client, "insert_event", insert_then_yank)
+    google_sync.drain(camp)  # trailing bulk delete hits 0 rows — must not raise
+
+    assert google_sync.pending_count(camp) == 0
+    assert len(gcal.events) == 1
