@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, swatch, openModal, chipGroup, keyList, toast } = window.cpDom;
+  const { el, api, swatch, openModal, chipGroup, keyList, toast, plural, tabHash } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
   const DATA = JSON.parse(dataEl.textContent);
@@ -21,8 +21,8 @@
   const catById = Object.fromEntries(DATA.categories.map((c) => [c.id, c]));
   // open on the tab named in the URL hash (#todos / #materials), e.g. when arriving from
   // the materials overview; defaults to the description tab.
-  const HASH_TAB = location.hash.slice(1);
-  let activeTab = ["description", "todos", "materials"].includes(HASH_TAB) ? HASH_TAB : "description";
+  const TAB = tabHash(["description", "todos", "materials"]);
+  let activeTab = TAB.initial || "description";
   let descEdit = null;                      // {cm, fit, dirty} while the description editor is open
   let titleHost, headerHost, tabbarHost;    // stable region nodes, assigned once in buildShell()
   const panes = {};                         // { description, todos, materials } — built once, shown/hidden by tab
@@ -38,7 +38,6 @@
     try { await fn(); }
     catch (e) { btn.disabled = false; toast(e.message, true); }
   }
-  const plural = (n, one, few, many) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
 
   // --- slots (header chips → timeline, this activity pre-filtered) ------------
   let slotsExpanded = false;   // when >3 slots, collapse to the first 3 until toggled open
@@ -296,7 +295,10 @@
     tabbarHost.replaceChildren();
     tabs.forEach((tab) => {
       const b = el("button", { type: "button", class: "cp-tabbtn" + (tab.key === activeTab ? " on" : "") }, tab.label);
-      b.addEventListener("click", () => { activeTab = tab.key; renderTabbar(); showActivePane(); });
+      b.addEventListener("click", () => {
+        activeTab = tab.key; renderTabbar(); showActivePane();
+        TAB.write(tab.key);  // reflect the active tab in the URL hash (shareable/reloadable)
+      });
       tabbarHost.append(b);
     });
   }

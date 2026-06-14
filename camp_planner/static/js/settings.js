@@ -201,7 +201,9 @@
       buttons.forEach((b) => b.classList.toggle("on", b.dataset.taxTab === key));
       for (const k in panes) panes[k].hidden = k !== key;
     };
-    buttons.forEach((b) => b.addEventListener("click", () => show(b.dataset.taxTab)));
-    show((buttons.find((b) => b.classList.contains("on")) || buttons[0]).dataset.taxTab);
+    // Reflect the active tab in the URL hash so a reload / shared link reopens the same tab.
+    const { initial, write } = window.cpDom.tabHash(buttons.map((b) => b.dataset.taxTab));
+    buttons.forEach((b) => b.addEventListener("click", () => { show(b.dataset.taxTab); write(b.dataset.taxTab); }));
+    show(initial || (buttons.find((b) => b.classList.contains("on")) || buttons[0]).dataset.taxTab);
   }
 })();

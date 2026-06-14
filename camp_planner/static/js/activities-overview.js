@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, swatch, openModal, keyList, toast, toastNext } = window.cpDom;
+  const { el, api, swatch, openModal, keyList, toast, toastNext, plural } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -24,7 +24,6 @@
 
   const withId = (tpl, id) => tpl.replace(/\d+$/, id);                       // swap the trailing 0 sentinel
   const mergeUrl = (id) => U.activityMerge.replace(/\/0\/merge$/, "/" + id + "/merge");  // .../<id>/merge
-  const plural = (n, one, few, many) => (n === 1 ? one : n >= 2 && n <= 4 ? few : many);
   const clampPct = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
   const slotCount = (r) => r.slots.main + r.slots.prep + r.slots.cleanup;
   const hasTag = (r, id) => Object.prototype.hasOwnProperty.call(r.tags, id);   // key present = tag applies

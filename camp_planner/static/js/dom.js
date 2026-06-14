@@ -156,5 +156,21 @@ window.cpDom = (function () {
     }, 8000);
   }
 
-  return { el, csrf, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash };
+  // Czech plural agreement: 1 → one, 2–4 → few, 5+/0 → many. e.g. plural(n, "změna","změny","změn").
+  const plural = (n, one, few, many) => (n === 1 ? one : (n >= 2 && n <= 4 ? few : many));
+
+  // Small tab↔URL-hash controller shared by the tabbed pages (camp settings, activity detail).
+  // Reads the active tab from location.hash on load (validated against validKeys) and writes it
+  // back on change with replaceState — shareable/reloadable links, no scroll-jump, no history
+  // spam. Returns { initial, write }: initial is the hashed key if valid else null (the caller
+  // picks its own default); write(key) updates the hash.
+  function tabHash(validKeys) {
+    const fromHash = location.hash.slice(1);
+    return {
+      initial: validKeys.includes(fromHash) ? fromHash : null,
+      write: (key) => history.replaceState(null, "", "#" + key),
+    };
+  }
+
+  return { el, csrf, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash, plural, tabHash };
 })();

@@ -8,7 +8,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, escapeHtml, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
-  const { el, csrf, swatch, openModal, chipGroup, keyList, toast, toastNext } = window.cpDom;
+  const { el, csrf, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -81,8 +81,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function afterChange() { hideActionBar(); applyHeights(); refresh(); }
 
   function pluralChanges(n) {
-    const word = n === 1 ? "změna" : (n >= 2 && n <= 4 ? "změny" : "změn");
-    return `${n} ${word}`;
+    return `${n} ${plural(n, "změna", "změny", "změn")}`;
   }
   function refresh() {
     if (saveBtn) saveBtn.disabled = !history.length;
