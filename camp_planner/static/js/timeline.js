@@ -304,6 +304,9 @@
         .map((s) => `${s.c} ${s.p.toFixed(1)}%`);
       return {
         id: "bg" + i, group: g.id, type: "background", start: winStart, end: winEnd,
+        // limitSize:false stops vis clamping the box to ~3 panel-widths; the CSS gradient maps
+        // `to right` across the box, so a clamped box would shift/squash it when zoomed in.
+        limitSize: false,
         className: "cp-daynight", style: `background: linear-gradient(to right, ${stops.join(",")})`,
       };
     });
