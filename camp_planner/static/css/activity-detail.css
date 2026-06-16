@@ -165,3 +165,4 @@
 .cp-need-qty { white-space: nowrap; }
 
 /* .cp-mini / .cp-danger.cp-mini in-row action buttons live in components.css (shared) */
+/* change-history feed (.cp-hist-*) is shared — see components.css */

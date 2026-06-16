@@ -663,7 +663,11 @@ class CampListEnvelope(_Ok):
 
 class AuditEntryOut(BaseModel):
     """One recorded change. `changes` is a {field: [before, after]} diff (or null);
-    `activity_id` groups slot/assignment/material edits under their activity."""
+    `activity_id` groups slot/assignment/material edits under their activity. `entity_title`
+    /`entity_url` name+link the entry's own activity/material when it still exists (so the feed
+    shows its name instead of a generic noun); null once deleted. `activity_title`/`activity_url`
+    name+link the parent activity of a per-activity detail entry (slot/todo/…) for context; null
+    when the activity is the entry's own subject or no longer exists."""
     model_config = ConfigDict(from_attributes=True)
     id: int
     created_at: datetime
@@ -673,16 +677,22 @@ class AuditEntryOut(BaseModel):
     entity_id: int | None
     activity_id: int | None
     changes: dict | None
+    entity_title: str | None = None
+    entity_url: str | None = None
+    activity_title: str | None = None
+    activity_url: str | None = None
 
 
 class AuditQuery(BaseModel):
     """Filters for GET /camps/<slug>/audit. With no filter it's the whole-camp feed;
     activity_id narrows to one activity's thread, entity_type+entity_id to one row's
-    history. `before` is a keyset cursor: pass the previous page's `next_before` to
-    fetch older entries."""
+    history, camp_level to the high-level structural changes (activities/materials
+    added or removed, taxonomy and camp-settings edits). `before` is a keyset cursor:
+    pass the previous page's `next_before` to fetch older entries."""
     activity_id: int | None = None
     entity_type: EntityType | None = None
     entity_id: int | None = None
+    camp_level: bool = False
     before: int | None = Field(default=None, ge=1, description="Return entries older than this id.")
     limit: int = Field(default=100, ge=1, le=500)
 

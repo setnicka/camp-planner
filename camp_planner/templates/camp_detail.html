@@ -57,6 +57,7 @@
           class="cp-google-badge{% if google_data.status.failed_ops %} cp-google-badge-fail{% endif %}"
           data-google-badge{% if not pend %} hidden{% endif %}>{{ pend or '' }}</span></button>
       {% endif %}
+      <button type="button" class="cp-tabbtn" data-tax-tab="history">Historie změn</button>
     </div>
     {{ tax_pane("categories", "Kategorie") }}
     {{ tax_pane("orgs", "Orgové") }}
@@ -70,6 +71,17 @@
         <div data-google-body></div>
       </section>
     {% endif %}
+    {# Change-history pane — rendered by history-feed.js into data-history-root. No data-tax
+       attribute, so the taxonomy editor loop skips it. The segmented toggle switches between
+       the curated camp-level feed and the full unfiltered camp history. #}
+    <section class="cp-tabpane cp-section" data-tax-pane="history" hidden>
+      <div class="cp-hist-modes" data-history-modes>
+        <button type="button" class="cp-hist-mode on" data-history-mode="camp">Zobrazit centrální změny
+          <span class="cp-hist-mode-hint">(bez detailů aktivit)</span></button>
+        <button type="button" class="cp-hist-mode" data-history-mode="all">Zobrazit veškerou historii</button>
+      </div>
+      <div data-history-root></div>
+    </section>
   </div>
 
   <script id="cp-tax-data" type="application/json">{{ tax_data | tojson }}</script>
@@ -80,6 +92,7 @@
 
 {% block scripts %}
   <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/history-feed.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/settings.js') }}"></script>
   {% if google_data.status.enabled and google_data.may_edit %}
     <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>

@@ -140,6 +140,7 @@ def activity_detail(slug: str, activity_id: int):
         "activity": serialize.activity(activity),
         "may_edit": can_edit(camp),
         "type_label": _ACTIVITY_TYPE_LABELS.get(activity.type.value, activity.type.value),
+        "type_labels": _ACTIVITY_TYPE_LABELS,   # full map, for the change-history diff
         # camp taxonomies, for the pickers
         "categories": tax["categories"],
         "orgs": tax["orgs"],
@@ -160,6 +161,7 @@ def activity_detail(slug: str, activity_id: int):
             "materialsOverview": url_for("main.camp_materials", slug=camp.slug),
             "timeline": url_for("main.camp_timeline", slug=camp.slug),
             "slot": url_for("api.update_slot", slot_id=0),
+            "audit": url_for("api.audit_list", slug=camp.slug),
         },
     }
     return render_template("activity_detail.html", camp=camp, activity=activity, data=data)
@@ -270,6 +272,7 @@ def _render_detail(camp: Camp):
             "categories": url_for("api.categories_save", slug=camp.slug),
             "orgs": url_for("api.orgs_save", slug=camp.slug),
             "tags": url_for("api.tags_save", slug=camp.slug),
+            "audit": url_for("api.audit_list", slug=camp.slug),   # high-level change history
         },
         **tax,
     }

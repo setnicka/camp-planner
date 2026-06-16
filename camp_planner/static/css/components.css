@@ -59,6 +59,40 @@
    activity detail's .cp-desc-pane display:flex), which would otherwise beat plain [hidden] */
 .cp-tabpane[hidden] { display: none; }
 
+/* change-history feed ("Historie změn") — shared by the activity-detail and camp-settings
+   pages (rendered by js/history-feed.js). GitLab-style vertical timeline. */
+.cp-hist-feed { list-style: none; margin: 0; padding: 0 0 0 1.4rem; max-width: 48rem; position: relative; }
+.cp-hist-feed::before { content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 2px; background: #e6e6e6; }
+.cp-hist-entry { position: relative; padding: 0 0 0.9rem 0.4rem; }
+.cp-hist-dot { position: absolute; left: -1.4rem; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: #9e9e9e; box-shadow: 0 0 0 2px #fff; }
+.cp-hist-create .cp-hist-dot { background: #2e9e4d; }
+.cp-hist-update .cp-hist-dot { background: #1f6feb; }
+.cp-hist-delete .cp-hist-dot { background: #d64541; }
+.cp-hist-merge .cp-hist-dot { background: #8250df; }
+.cp-hist-head { font-size: 0.92rem; }
+.cp-hist-author { font-weight: 600; }
+.cp-hist-link { color: #1a73e8; text-decoration: none; font-weight: 500; }
+.cp-hist-link:hover { text-decoration: underline; }
+/* parent-activity context line on per-activity detail rows in the whole-camp feed */
+.cp-hist-actref { font-size: 0.88rem; margin-top: 0.15rem; }
+.cp-hist-time { color: #888; font-size: 0.82rem; }
+.cp-hist-changes { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.12rem; }
+.cp-hist-change { font-size: 0.88rem; color: #333; }
+.cp-hist-field { font-weight: 500; color: #666; }
+.cp-hist-field::after { content: ":"; }
+.cp-hist-old { color: #b0322a; text-decoration: line-through; }
+.cp-hist-new { color: #1f7a37; text-decoration: none; }
+/* long content (description/config/taxonomy items) — truncated inline, expands to a word diff */
+.cp-hist-toggle { background: none; border: 0; padding: 0; margin-left: 0.3rem; color: #1f6feb; cursor: pointer; font-size: 0.82rem; }
+.cp-hist-toggle:hover { text-decoration: underline; }
+.cp-hist-diff { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.25rem; }
+.cp-hist-diff[hidden] { display: none; }   /* class display:flex would otherwise beat [hidden] */
+.cp-hist-diffbox { white-space: pre-wrap; word-break: break-word; padding: 0.35rem 0.5rem; border-radius: 4px; background: #f6f8fa; font-size: 0.88rem; line-height: 1.5; }
+.cp-hist-diffbox del { color: #8a1f17; background: #fbddd8; text-decoration: line-through; border-radius: 2px; }
+.cp-hist-diffbox ins { color: #15602b; background: #c8ebd3; text-decoration: none; border-radius: 2px; }
+.cp-hist-oldblock { background: #fce8e6; }
+.cp-hist-newblock { background: #e6f4ea; }
+
 /* search box + result list (fuzzy pickers) */
 .cp-modal-search, .cp-modal-name, .cp-act-textarea {
   font: inherit; padding: 0.5rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 100%; box-sizing: border-box;

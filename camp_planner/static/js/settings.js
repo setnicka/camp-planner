@@ -197,9 +197,27 @@
     const panes = {};
     document.querySelectorAll("[data-tax-pane]").forEach((p) => (panes[p.dataset.taxPane] = p));
     const buttons = [...tabbar.querySelectorAll("[data-tax-tab]")];
+    // Camp change history mounted in the history pane (shared cpHistoryFeed), reloaded
+    // whenever its tab is opened so it reflects edits made since (like activity detail). The
+    // segmented toggle switches between the curated camp-level feed and the full unfiltered history.
+    const histRoot = panes.history && panes.history.querySelector("[data-history-root]");
+    const modeBtns = panes.history ? [...panes.history.querySelectorAll("[data-history-mode]")] : [];
+    const catById = Object.fromEntries((DATA.categories || []).map((c) => [c.id, c]));
+    const loadHistory = () => {
+      if (!histRoot) return;
+      const all = modeBtns.some((b) => b.classList.contains("on") && b.dataset.historyMode === "all");
+      window.cpHistoryFeed({
+        host: histRoot, url: DATA.urls.audit, query: all ? {} : { camp_level: true }, catById,
+      }).reload();
+    };
+    modeBtns.forEach((b) => b.addEventListener("click", () => {
+      modeBtns.forEach((x) => x.classList.toggle("on", x === b));
+      loadHistory();
+    }));
     const show = (key) => {
       buttons.forEach((b) => b.classList.toggle("on", b.dataset.taxTab === key));
       for (const k in panes) panes[k].hidden = k !== key;
+      if (key === "history") loadHistory();
     };
     // Reflect the active tab in the URL hash so a reload / shared link reopens the same tab.
     const { initial, write } = window.cpDom.tabHash(buttons.map((b) => b.dataset.taxTab));

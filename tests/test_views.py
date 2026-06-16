@@ -30,6 +30,7 @@ def test_activity_detail_page_renders_with_data(client, seeded):
     assert 'id="cp-activity"' in html                   # the mount point
     assert "js/activity-detail.js" in html
     assert f"/api/activities/{aid}/orgs" in html         # an edit url resolves
+    assert f"/api/camps/{slug}/audit" in html             # change-history feed url resolves
     assert '"may_edit": true' in html                    # admin can edit
 
 
@@ -100,6 +101,16 @@ def test_overview_viewer_read_only(client, seeded):
 def test_overview_404_for_unknown_camp(client, seeded):
     # the page is camp-scoped (no item id in the URL); a non-existent slug → 404
     assert client.get("/camps/neexistuje/activities", headers=ADMIN).status_code == 404
+
+
+def test_camp_detail_has_history_tab(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/detail", headers=ADMIN).get_data(as_text=True)
+    assert 'data-tax-tab="history"' in html              # the tab button
+    assert 'data-history-root' in html                    # the feed mount
+    assert 'data-history-mode' in html                    # the camp-level / full-history toggle
+    assert f"/api/camps/{slug}/audit" in html             # audit url resolves into the embed
+    assert "js/history-feed.js" in html
 
 
 # --- camp settings: delete button ---------------------------------------------------

@@ -10,3 +10,11 @@
 /* "Upravit parametry" navigates to the edit page but should wear the .cp-edit-toggle
    button chrome — reset the default anchor underline/colour so it matches. */
 a.cp-edit-toggle { display: inline-block; text-decoration: none; }
+
+/* change-history pane: segmented toggle (camp-level vs full history) above the feed */
+.cp-hist-modes { display: inline-flex; margin-bottom: 1rem; border: 1px solid var(--cp-border); border-radius: 7px; overflow: hidden; }
+.cp-hist-mode { font: inherit; font-size: 0.86rem; padding: 0.4rem 0.95rem; border: 0; background: #fff; color: #5a6675; cursor: pointer; }
+.cp-hist-mode + .cp-hist-mode { border-left: 1px solid var(--cp-border); }
+.cp-hist-mode:hover { background: #f1f5fc; color: #1a73e8; }
+.cp-hist-mode.on { background: #e8f0fe; color: #1a73e8; font-weight: 600; }
+.cp-hist-mode-hint { opacity: 0.65; font-weight: 400; }

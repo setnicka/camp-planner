@@ -19,13 +19,13 @@
   const mayEdit = DATA.may_edit;
   const A = DATA.activity;                  // current state; refreshed in place after saves
   const catById = Object.fromEntries(DATA.categories.map((c) => [c.id, c]));
-  // open on the tab named in the URL hash (#todos / #materials), e.g. when arriving from
-  // the materials overview; defaults to the description tab.
-  const TAB = tabHash(["description", "todos", "materials"]);
+  // open on the tab named in the URL hash (#todos / #materials / #history), e.g. when
+  // arriving from the materials overview; defaults to the description tab.
+  const TAB = tabHash(["description", "todos", "materials", "history"]);
   let activeTab = TAB.initial || "description";
   let descEdit = null;                      // {cm, fit, dirty} while the description editor is open
   let titleHost, headerHost, tabbarHost;    // stable region nodes, assigned once in buildShell()
-  const panes = {};                         // { description, todos, materials } — built once, shown/hidden by tab
+  const panes = {};                         // { description, todos, materials, history } — built once, shown/hidden by tab
 
   // --- small helpers ---------------------------------------------------------
   const withId = (tpl, id) => tpl.replace(/\d+$/, id);  // swap the trailing 0 sentinel for a real id
@@ -294,6 +294,7 @@
       { key: "description", label: "Popis" + (descEdit ? " ✎" : "") },   // ✎ = editor open
       { key: "todos", label: "Úkoly" + (totT ? ` (${doneT}/${totT})` : "") },
       { key: "materials", label: "Materiál" + (totM ? ` (${doneM}/${totM})` : "") },
+      { key: "history", label: "Historie změn" },
     ];
     tabbarHost.replaceChildren();
     tabs.forEach((tab) => {
@@ -311,6 +312,9 @@
   function showActivePane() {
     for (const key in panes) panes[key].hidden = key !== activeTab;
     if (activeTab === "description" && descEdit) { descEdit.cm.refresh(); descEdit.fit(); }
+    // History is append-only on the server; reload its first page on every open so edits
+    // made elsewhere on the page (and by Google sync) show up without a full reload.
+    if (activeTab === "history") historyFeed.reload();
   }
 
   // Read view: rendered markdown + an edit button that swaps in the editor in place.
@@ -751,6 +755,22 @@
     search.focus();
   }
 
+  // --- change history ("Historie změn") --------------------------------------
+  // The feed itself is the shared cpHistoryFeed module; here we just mount it into
+  // panes.history filtered to this activity. showActivePane() reloads it on every open so
+  // edits made elsewhere on the page — and by Google sync — show up without a full reload.
+  let historyFeed = null;
+
+  function renderHistoryPane() {
+    historyFeed = window.cpHistoryFeed({
+      host: panes.history,
+      url: U.audit,
+      query: { activity_id: A.id },
+      catById,
+      typeLabels: DATA.type_labels || {},
+    });
+  }
+
   // --- render ----------------------------------------------------------------
   // Build the page once into stable region nodes, then let each region refresh on its own.
   // An open description editor lives in panes.description and is only ever rebuilt by its
@@ -762,14 +782,17 @@
     panes.description = el("div", { class: "cp-tabpane cp-desc-pane" });
     panes.todos = el("div", { class: "cp-tabpane" });
     panes.materials = el("div", { class: "cp-tabpane" });
+    panes.history = el("div", { class: "cp-tabpane" });
     mount.replaceChildren(titleHost, headerHost,
-      el("div", { class: "cp-tabs" }, tabbarHost, panes.description, panes.todos, panes.materials));
+      el("div", { class: "cp-tabs" }, tabbarHost,
+        panes.description, panes.todos, panes.materials, panes.history));
     renderTitle();
     renderHeader();
     renderTabbar();
     renderDescriptionPane();
     renderTodosPane();
     renderMaterialsPane();
+    renderHistoryPane();   // feed shell only; entries are fetched lazily on first open
     showActivePane();
   }
   buildShell();

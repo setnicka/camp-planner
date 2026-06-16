@@ -20,13 +20,14 @@ from __future__ import annotations
 
 from typing import Callable
 
-from flask import Blueprint, abort, g, jsonify, request
+from flask import Blueprint, abort, g, jsonify, request, url_for
 from spectree import Response, SpecTree
 from werkzeug.exceptions import HTTPException
 
 from camp_planner.auth.permissions import can_create_camp, can_edit, can_edit_camp_meta, can_view
 from camp_planner.extensions import db
 from camp_planner.models.activity import Activity, Todo
+from camp_planner.models.audit import EntityType
 from camp_planner.models.camp import Camp
 from camp_planner.models.material import Material, MaterialNeed
 from camp_planner.models.slot import Slot
@@ -608,10 +609,47 @@ def todo_delete(todo_id: int):
 @spec.validate(query=AuditQuery, resp=Response(HTTP_200=AuditEnvelope, **_AUTH), tags=["audit"])
 def audit_list(slug: str):
     """Camp change history, newest first. No filter → whole-camp feed; activity_id →
-    one activity's thread; entity_type+entity_id → one row's history."""
+    one activity's thread; entity_type+entity_id → one row's history; camp_level →
+    high-level structural changes only."""
     camp = _camp(slug)
     _guard(camp, edit=False)
     q = request.context.query
-    return _run(lambda: audit.list_audit(
-        camp, activity_id=q.activity_id, entity_type=q.entity_type,
-        entity_id=q.entity_id, before=q.before, limit=q.limit))
+
+    def run():
+        res = audit.list_audit(
+            camp, activity_id=q.activity_id, entity_type=q.entity_type,
+            entity_id=q.entity_id, camp_level=q.camp_level, before=q.before, limit=q.limit)
+        # Link activity/material entries to their pages — only on cross-entity (whole-camp)
+        # feeds; within one activity's or one row's thread the target never varies.
+        if q.activity_id is None and q.entity_id is None:
+            _link_audit_entities(camp, res["entries"])
+        return res
+
+    return _run(run)
+
+
+def _link_audit_entities(camp: Camp, entries: list[dict]) -> None:
+    """Name + link entities on a whole-camp feed (deleted targets stay a plain generic noun):
+      • entity_title/entity_url — the entry's own activity/material when it still exists, so
+        the headline shows its name (and the merge target's) instead of a generic noun;
+      • activity_title/activity_url — the parent activity of a per-activity detail entry
+        (slot/todo/…), shown as a context line.
+    Two batched lookups total (activity titles cover both uses; material names)."""
+    act, mat = EntityType.activity.value, EntityType.material.value
+    activity_ids = {e["activity_id"] for e in entries if e["activity_id"]}
+    activity_ids |= {e["entity_id"] for e in entries if e["entity_type"] == act and e["entity_id"]}
+    titles = audit.activity_titles(camp, activity_ids)
+    mat_names = audit.material_names(camp, {e["entity_id"] for e in entries
+                                            if e["entity_type"] == mat and e["entity_id"]})
+
+    for e in entries:
+        if e["entity_type"] == act and e["entity_id"] in titles:
+            e["entity_title"] = titles[e["entity_id"]]
+            e["entity_url"] = url_for("main.activity_detail", slug=camp.slug, activity_id=e["entity_id"])
+        elif e["entity_type"] == mat and e["entity_id"] in mat_names:
+            e["entity_title"] = mat_names[e["entity_id"]]
+            e["entity_url"] = url_for("main.camp_materials", slug=camp.slug)
+        # Detail entries (slot/todo/material_need/…) get their parent activity as a context line.
+        if e["entity_type"] != act and e["activity_id"] in titles:
+            e["activity_title"] = titles[e["activity_id"]]
+            e["activity_url"] = url_for("main.activity_detail", slug=camp.slug, activity_id=e["activity_id"])

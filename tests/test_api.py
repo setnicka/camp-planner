@@ -734,6 +734,78 @@ def test_audit_entity_type_filter(client, seeded):
     assert client.get(f"/api/camps/{slug}/audit?entity_type=bogus", headers=ADMIN).status_code == 422
 
 
+def test_audit_camp_level_filter(client, seeded):
+    slug, aid, cat = seeded["slug"], seeded["activity_id"], seeded["cat_id"]
+    client.patch(f"/api/activities/{aid}", json={"title": "Nová"}, headers=ADMIN)         # activity update
+    client.post(f"/api/camps/{slug}/activities", json={"title": "Druhá"}, headers=ADMIN)  # activity create
+    src = _make_material(client, slug, name="lano A")["material"]["id"]                    # material create
+    dst = _make_material(client, slug, name="lano B")["material"]["id"]                    # material create
+    client.post(f"/api/camps/{slug}/materials/{src}/merge", json={"into": dst}, headers=ADMIN)  # material merge
+    client.put(f"/api/camps/{slug}/categories", json={"items": [                          # taxonomy update
+        {"id": cat, "key": "hra", "label": "Hra", "color": "#0b8043"},
+        {"key": "jidlo", "label": "Jídlo", "color": "#4285f4"}]}, headers=ADMIN)
+
+    entries = _get(client, f"/api/camps/{slug}/audit?camp_level=true")["entries"]
+    kinds = {(e["entity_type"], e["action"]) for e in entries}
+    assert ("activity", "create") in kinds       # adding/removing activities is high-level
+    assert ("material", "create") in kinds        # so is the material catalog
+    assert ("material", "merge") in kinds          # ...including merges
+    assert ("category", "update") in kinds         # and taxonomy edits
+    # per-activity field edits belong on the activity's own history, not the camp feed
+    assert ("activity", "update") not in kinds
+    assert not any(e["entity_type"] in {"slot", "todo", "material_need", "assignment"} for e in entries)
+
+
+def test_audit_links_live_entities_only(client, seeded):
+    slug = seeded["slug"]
+    new_id = _json(client.post(f"/api/camps/{slug}/activities",
+                               json={"title": "Druhá"}, headers=ADMIN))["activity"]["id"]
+
+    def act_entry():
+        rows = _get(client, f"/api/camps/{slug}/audit?camp_level=true")["entries"]
+        return next(e for e in rows if e["entity_type"] == "activity" and e["entity_id"] == new_id)
+
+    # while it exists, the entry links to the activity page and carries its name
+    assert act_entry()["entity_url"].endswith(f"/activities/{new_id}")
+    assert act_entry()["entity_title"] == "Druhá"
+
+    # after deletion there's nothing to link to → entity_url is null on every row about it
+    client.delete(f"/api/activities/{new_id}", headers=ADMIN)
+    rows = _get(client, f"/api/camps/{slug}/audit?camp_level=true")["entries"]
+    assert all(e["entity_url"] is None for e in rows
+               if e["entity_type"] == "activity" and e["entity_id"] == new_id)
+
+
+def test_audit_full_feed_prefixes_detail_entries_with_activity(client, seeded):
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    client.post(f"/api/activities/{aid}/todos", json={"title": "Koupit lano"}, headers=ADMIN)  # detail
+    client.post(f"/api/camps/{slug}/activities", json={"title": "Druhá"}, headers=ADMIN)        # activity create
+
+    # full (unfiltered) feed: the todo is a per-activity detail entry → carries its parent
+    # activity as title + link, so the camp feed can prefix "[Akce] …"
+    entries = _get(client, f"/api/camps/{slug}/audit")["entries"]
+    todo = next(e for e in entries if e["entity_type"] == "todo")
+    assert todo["activity_title"] == "Akce"
+    assert todo["activity_url"].endswith(f"/activities/{aid}")
+    # an activity-level entry is its own subject — no parent-activity prefix
+    act = next(e for e in entries if e["entity_type"] == "activity")
+    assert act["activity_title"] is None
+
+
+def test_audit_camp_level_shows_merge_linked_to_target(client, seeded):
+    slug, src = seeded["slug"], seeded["activity_id"]
+    dst = _json(client.post(f"/api/camps/{slug}/activities",
+                            json={"title": "Cíl"}, headers=ADMIN))["activity"]["id"]
+    client.post(f"/api/activities/{src}/merge", json={"into": dst}, headers=ADMIN)
+
+    # a merge is its own action in the high-level feed, on the surviving target (clickable)
+    entries = _get(client, f"/api/camps/{slug}/audit?camp_level=true")["entries"]
+    merge = next(e for e in entries if e["entity_type"] == "activity" and e["action"] == "merge")
+    assert merge["entity_id"] == dst
+    assert merge["changes"]["merged_from"][0] == "Akce"          # absorbed source's title
+    assert merge["entity_url"].endswith(f"/activities/{dst}")     # target still exists → links
+
+
 def test_timeline_save_emits_timeline_and_per_slot_audit(client, seeded):
     slug, aid = seeded["slug"], seeded["activity_id"]
     s1 = _make_slot(client, slug, aid)  # one create

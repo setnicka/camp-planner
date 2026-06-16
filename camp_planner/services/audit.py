@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from flask import g
 from pydantic_core import to_jsonable_python
+from sqlalchemy import and_, or_
 
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, AuditLog, EntityType
@@ -20,6 +21,20 @@ from camp_planner.services import serialize
 if TYPE_CHECKING:
     from camp_planner.auth.identity import Identity
     from camp_planner.models.camp import Camp
+
+# "Camp-level" history = high-level structural changes, excluding the per-activity edits that
+# belong on an activity's own history. Activities and catalog materials only when added or
+# removed (not their field edits); taxonomy (categories/orgs/tags) and camp-settings changes.
+# Per-activity tag *links* share the `tag` entity_type with taxonomy tag edits, so they're
+# told apart by activity_id — taxonomy edits carry none, links always do.
+_CAMP_LEVEL = or_(
+    AuditLog.entity_type.in_([EntityType.camp, EntityType.category, EntityType.org]),
+    and_(AuditLog.entity_type == EntityType.tag, AuditLog.activity_id.is_(None)),
+    and_(AuditLog.entity_type == EntityType.activity,
+         AuditLog.action.in_([AuditAction.create, AuditAction.delete, AuditAction.merge])),
+    and_(AuditLog.entity_type == EntityType.material,
+         AuditLog.action.in_([AuditAction.create, AuditAction.delete, AuditAction.merge])),
+)
 
 
 def record(
@@ -70,16 +85,20 @@ def apply_patch(target, payload, fields) -> dict[str, list]:
 
 def list_audit(
     camp: Camp, *, activity_id: int | None = None, entity_type: EntityType | None = None,
-    entity_id: int | None = None, before: int | None = None, limit: int = 100,
+    entity_id: int | None = None, camp_level: bool = False,
+    before: int | None = None, limit: int = 100,
 ) -> dict:
     """A page of audit entries for the camp, newest first. With no filter it's the
     whole-camp change feed; activity_id narrows to one activity's thread,
-    entity_type+entity_id to a single row's history.
+    entity_type+entity_id to a single row's history, camp_level to the high-level
+    structural changes (see _CAMP_LEVEL).
 
     Keyset-paginated: ids are monotonic with insertion, so `id DESC` is newest-first
     and `before` (an id) fetches the next older page. Returns `next_before` — the
     cursor for the following page, or None when this was the last one."""
     query = db.select(AuditLog).filter_by(camp_id=camp.id)
+    if camp_level:
+        query = query.where(_CAMP_LEVEL)
     if activity_id is not None:
         query = query.filter_by(activity_id=activity_id)
     if entity_type is not None:
@@ -91,3 +110,28 @@ def list_audit(
     rows = db.session.scalars(query.order_by(AuditLog.id.desc()).limit(limit)).all()
     next_before = rows[-1].id if len(rows) == limit else None  # full page → more may follow
     return {"entries": [serialize.audit_entry(r) for r in rows], "next_before": next_before}
+
+
+def _names(camp: Camp, model, name_col, ids: set[int]) -> dict[int, str]:
+    """{id: name} for the camp's `model` rows in `ids` that still exist — one batched query,
+    so the view can show an entity's name (and link) instead of a generic noun."""
+    if not ids:
+        return {}
+    rows = db.session.execute(
+        db.select(model.id, name_col).where(model.camp_id == camp.id, model.id.in_(ids)))
+    return {row[0]: row[1] for row in rows}
+
+
+def activity_titles(camp: Camp, ids: set[int]) -> dict[int, str]:
+    """{id: title} of still-existing activities — links an entry's own activity (create/delete/
+    merge) and labels the parent activity of per-activity detail entries (slot/todo/…)."""
+    from camp_planner.models.activity import Activity
+
+    return _names(camp, Activity, Activity.title, ids)
+
+
+def material_names(camp: Camp, ids: set[int]) -> dict[int, str]:
+    """{id: name} of still-existing catalog materials — links/labels an entry's own material."""
+    from camp_planner.models.material import Material
+
+    return _names(camp, Material, Material.name, ids)
