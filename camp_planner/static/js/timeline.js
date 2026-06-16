@@ -310,6 +310,46 @@
   }
   if (hasLocation) items.add(dayNightBackgrounds());
 
+  // --- current-time line (today's row only, drawn over the items) ------------
+  // Days are rows on one shared 24h window axis, so vis's full-height current-time bar would
+  // cross every day, and a vis background item sits *behind* the event boxes. So we overlay our
+  // own thin line on the center panel at "now", clipped to just today's row. Repositioned on
+  // every redraw (zoom/pan/resize) and once a minute; hidden when the camp isn't running today.
+  const nowLine = document.createElement("div");
+  nowLine.className = "cp-nowline";
+  nowLine.hidden = true;
+  let nowDay = null;   // day-row the line last sat on; a change means snap (rollover), not slide
+  const DAY_MS = DAY_MIN * 60000;
+  // animate=true (the minute tick) glides the line to its new spot; redraws / zoom / pan /
+  // resize / the day rollover snap instantly (animating those would lag or slide backwards).
+  function placeNowLine(animate) {
+    const center = container.querySelector(".vis-panel.vis-center");
+    if (!center) return;
+    if (nowLine.parentNode !== center) center.appendChild(nowLine);
+    const day = Math.floor((Date.now() - winStart) / DAY_MS);  // day-row whose window holds now
+    const groupEl = container.querySelectorAll(".vis-foreground .vis-group")[day];
+    const win = timeline.getWindow();
+    const nowOnAxis = Date.now() - day * DAY_MS;               // fold now back onto the day-0 window axis
+    const x = ((nowOnAxis - win.start.getTime()) / (win.end.getTime() - win.start.getTime())) * center.clientWidth;
+    if (day < 0 || day >= camp.length_days || !groupEl || x < 0 || x > center.clientWidth) {
+      nowLine.hidden = true;
+      nowDay = null;
+      return;
+    }
+    const cr = center.getBoundingClientRect(), gr = groupEl.getBoundingClientRect();
+    nowLine.classList.toggle("cp-snap", !(animate && day === nowDay));  // glide only the minute drift
+    nowLine.hidden = false;
+    nowLine.style.left = x + "px";
+    nowLine.style.top = (gr.top - cr.top - 1) + "px";
+    nowLine.style.height = gr.height + "px";
+    nowDay = day;
+  }
+  placeNowLine();
+  timeline.on("changed", () => placeNowLine());   // redraws: zoom, pan, data/height changes
+  timeline.on("rangechange", () => placeNowLine());
+  window.addEventListener("resize", () => placeNowLine());
+  setInterval(() => placeNowLine(true), 15000);
+
   // --- controls (day/night toggle + zoom) ------------------------------------
   const dnBtn = document.getElementById("cp-dn-toggle");
   if (dnBtn && !hasLocation) {

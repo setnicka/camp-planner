@@ -66,6 +66,14 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
   border: 0; border-radius: 0; min-height: 0; z-index: -1; transition: opacity 0.35s ease;
 }
 #cp-timeline.dn-hidden .vis-item.cp-daynight { opacity: 0; }
+/* current-time line: a thin marker over today's row, on top of the event boxes. The minute
+   tick glides via the transition; .cp-snap disables it for zoom/pan/resize/rollover repositions. */
+#cp-timeline .cp-nowline {
+  position: absolute; width: 2px; background: #ea4335; z-index: 5; pointer-events: none;
+  box-shadow: 0 0 2px 0.5px rgba(255, 255, 255, 0.57);   /* faint white halo: legible on dark/night boxes */
+  transition: left 0.8s linear;
+}
+#cp-timeline .cp-nowline.cp-snap { transition: none; }
 /* let the hour grid sit between the gradient (-1) and the event boxes */
 #cp-timeline .vis-panel.vis-center > .vis-content { transform: none !important; }
 #cp-timeline .vis-panel.vis-background.vis-vertical { z-index: 0; }
