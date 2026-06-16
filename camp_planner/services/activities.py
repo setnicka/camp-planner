@@ -119,7 +119,7 @@ def merge_activities(source: Activity, target: Activity) -> dict:
     db.session.delete(source)
     timeline.bump_timeline_rev(target.camp)
     audit.record(camp_id=target.camp_id, activity_id=target.id, entity_type=EntityType.activity,
-                 entity_id=target.id, action=AuditAction.update, changes={"merged_from": [source_title, None]})
+                 entity_id=target.id, action=AuditAction.merge, changes={"merged_from": [source_title, None]})
     # Reassigned slots now belong to the target, so their events' summary changes.
     for slot in reassigned_slots:
         google_sync.enqueue_upsert(target.camp, slot)

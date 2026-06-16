@@ -117,7 +117,7 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
 
     db.session.delete(source)
     audit.record(camp_id=camp.id, entity_type=EntityType.material, entity_id=target.id,
-                 action=AuditAction.update, changes={"merged_from": [source.name, None]})
+                 action=AuditAction.merge, changes={"merged_from": [source.name, None]})
     db.session.commit()
     return {"material": serialize.material(target)}
 

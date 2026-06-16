@@ -17,6 +17,7 @@ class AuditAction(str, enum.Enum):
     create = "create"
     update = "update"
     delete = "delete"
+    merge = "merge"     # one entity absorbed into another (source removed, target kept)
 
 
 class EntityType(str, enum.Enum):
