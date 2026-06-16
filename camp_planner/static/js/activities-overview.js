@@ -110,6 +110,51 @@
     return tr;
   }
 
+  // --- filter/sort state <-> URL hash ----------------------------------------
+  // Persist the whole filter + sort state in the URL hash (as a query string) so the view is
+  // shareable and survives reload. Written with replaceState (no scroll-jump, no history spam);
+  // read back on load and on hashchange (external links / back button). Default state → no hash.
+  function sortKeyValid(key) {
+    if (key === "title") return "title";
+    const m = /^tag:(\d+):(check|progress)$/.exec(key || "");
+    const tag = m && PINNED.find((t) => t.id === Number(m[1]));
+    return tag && tag.kind === m[2] ? key : null;
+  }
+  function stateToHash() {
+    const p = new URLSearchParams();
+    if (filter.categoryId != null) p.set("cat", filter.categoryId);
+    if (filter.unfinishedTodos) p.set("todos", "1");
+    if (filter.unfinishedMaterials) p.set("mat", "1");
+    filter.orgIds.forEach((id) => p.append("org", id));
+    if (filter.garantsOnly) p.set("garants", "1");
+    for (const [id, state] of filter.tags) p.set("tag" + id, state);
+    if (sortKey !== "title" || sortDir !== 1) { p.set("sort", sortKey); if (sortDir !== 1) p.set("dir", "-1"); }
+    return p.toString();
+  }
+  function writeHash() {
+    const s = stateToHash();
+    history.replaceState(null, "", s ? "#" + s : location.pathname + location.search);
+  }
+  // Mutate filter + sort state from the current hash, validating every value against the real
+  // categories/orgs/tags so a stale or hand-edited link can't wedge the view into an impossible state.
+  function applyHashToState() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const catId = Number(p.get("cat"));
+    filter.categoryId = CATEGORIES.some((c) => c.id === catId) ? catId : null;
+    filter.unfinishedTodos = p.get("todos") === "1";
+    filter.unfinishedMaterials = p.get("mat") === "1";
+    filter.orgIds = new Set(p.getAll("org").map(Number).filter((id) => ORGS.some((o) => o.id === id)));
+    filter.garantsOnly = p.get("garants") === "1";
+    filter.tags = new Map();
+    PINNED.forEach((t) => {
+      const v = p.get("tag" + t.id);
+      if (v === "has" || ((v === "checked" || v === "unchecked") && t.kind === "check")) filter.tags.set(t.id, v);
+    });
+    const validSort = sortKeyValid(p.get("sort"));
+    sortKey = validSort || "title";
+    sortDir = validSort && p.get("dir") === "-1" ? -1 : 1;
+  }
+
   // --- filtering + sorting (client-side over ROWS) ---------------------------
   function passes(r) {
     if (filter.categoryId != null && (!r.category || r.category.id !== filter.categoryId)) return false;
@@ -155,6 +200,7 @@
   function setSort(key) {
     if (key === sortKey) sortDir = -sortDir; else { sortKey = key; sortDir = 1; }   // re-click reverses
     sortArrows.forEach((span, k) => { span.textContent = arrowFor(k); });
+    writeHash();
     renderTableBody();
   }
 
@@ -167,7 +213,7 @@
     return el("th", { class: extraClass || null }, btn);
   }
 
-  const onFilterChange = () => renderTableBody();
+  const onFilterChange = () => { writeHash(); renderTableBody(); };
 
   function categoryHead() {
     const sel = el("select", { class: "cp-th-filter" });
@@ -246,6 +292,7 @@
     filter.categoryId = null; filter.unfinishedTodos = false; filter.unfinishedMaterials = false;
     filter.orgIds.clear(); filter.tags.clear(); filter.garantsOnly = false;
     sortKey = "title"; sortDir = 1;
+    writeHash();
     buildShell();
   }
 
@@ -333,11 +380,12 @@
     tbody = el("tbody");
     const table = el("table", { class: "cp-table cp-ov-table" }, el("thead", null, headRow), tbody);
     mount.replaceChildren(toolbar, table);
-    // buildShell only runs with filters cleared (initial load or "Zrušit filtry"), so this
-    // paints the full set; pin the resulting column widths so later filtered re-renders —
-    // which show only the matching rows — can no longer reflow the columns.
-    renderTableBody();
+    // Paint the full set first so the frozen column widths fit the widest content, then apply
+    // any active filter. Pinning the widths up front stops later filtered re-renders — which
+    // show only the matching rows — from reflowing the columns.
+    tbody.replaceChildren(...ROWS.map(activityRow));
     freezeColumns(table, headRow);
+    renderTableBody();
   }
 
   // Freeze the current column widths into a <colgroup> + table-layout:fixed. Called after a
@@ -354,5 +402,10 @@
   // close an open org dropdown when clicking anywhere outside it
   document.addEventListener("click", () => { if (openPopover) { openPopover.hidden = true; openPopover = null; } });
 
+  // External links / back button: re-read the hash and rebuild (our own writeHash uses
+  // replaceState, which doesn't fire hashchange, so this can't loop).
+  window.addEventListener("hashchange", () => { applyHashToState(); buildShell(); });
+
+  applyHashToState();   // restore filters/sort from the URL before the first paint
   buildShell();
 })();
