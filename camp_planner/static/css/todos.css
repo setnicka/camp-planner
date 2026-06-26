@@ -1,0 +1,14 @@
+/* Camp-wide TODO overview page. Table/button/modal primitives come from content.css and
+ * components.css (incl. the cp-th-* filter-header controls and all the cp-todo-* cell, toolbar
+ * and table-shape styles — shared with the activity TODO tab); only the full-width layout that
+ * makes this table fill the wide page lives here (this file loads only on the overview page). */
+
+/* The table centres within the page, floored at the normal page width and stretching toward
+   the window only when columns need the room (mirrors #cp-overview on the activities page). */
+#cp-todos {
+  width: fit-content;
+  min-width: min(100%, calc(var(--cp-page-width) - 2 * var(--cp-page-pad)));
+  max-width: 100%;
+  margin: 0 auto;
+}
+.cp-todo-table { width: 100%; max-width: none; }

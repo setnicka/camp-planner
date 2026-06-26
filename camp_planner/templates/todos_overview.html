@@ -1,0 +1,26 @@
+{% extends layout %}
+{% from "_macros.html" import camp_nav %}
+{% block title %}Úkoly – {{ camp.name }}{% endblock %}
+{% block main_class %}cp-wide{% endblock %}
+{% block header_nav %}{{ camp_nav(camp, "todos") }}{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/todos.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block content %}
+  {# todos-overview.js hands the JSON below to the shared cpTodoList component, which renders
+     the filter header + table here. Check/edit/delete go to the api endpoints; edit affordances
+     are gated by data.may_edit and re-checked server-side. #}
+  <div id="cp-todos"></div>
+
+  <script id="cp-todos-data" type="application/json">{{ data | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/todo-list.js') }}"></script>
+  <script src="{{ url_for('main.static', filename='js/todos-overview.js') }}"></script>
+{% endblock %}

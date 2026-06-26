@@ -19,6 +19,7 @@ from camp_planner.auth.permissions import (
 from camp_planner.extensions import db
 from camp_planner.models.activity import Activity
 from camp_planner.models.camp import Camp
+from camp_planner.models.common import czech_sort_key
 from camp_planner.services import camps as camps_service
 from camp_planner.services import errors as svc_errors
 from camp_planner.services import loaders, serialize, taxonomy
@@ -219,6 +220,34 @@ def camp_overview(slug: str):
         },
     }
     return render_template("activities_overview.html", camp=camp, data=data)
+
+
+@bp.get("/camps/<slug>/todos")
+@require_view
+def camp_todos(slug: str):
+    """Camp-wide TODO overview: every activity's todos in a filterable, sortable table —
+    status, activity, assigned orgs, due date and note — checked/edited/deleted in place
+    from the embedded JSON via the api endpoints. Edit affordances are gated by can_edit;
+    the api re-checks server-side."""
+    camp = db.first_or_404(
+        db.select(Camp).filter_by(slug=slug).options(*loaders.TODOS_OVERVIEW),
+        description="Akce nenalezena.")
+    activities = sorted(camp.activities, key=lambda a: czech_sort_key(a.title))
+    data = {
+        # order is decided client-side (the table re-sorts on every filter/sort change)
+        "todos": [serialize.todo_overview(t) for a in camp.activities for t in a.todos],
+        # filter metadata: the camp roster and the activities (for the activity filter/sort)
+        "orgs": taxonomy.orgs(camp),
+        "activities": [{"id": a.id, "title": a.title} for a in activities],
+        "may_edit": can_edit(camp),
+        # todoItem serves both PATCH (edit/toggle) and DELETE; the trailing 0 is a sentinel
+        # the client swaps for the real id. activityDetail links each row to its activity.
+        "urls": {
+            "todoItem": url_for("api.todo_update", todo_id=0),
+            "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
+        },
+    }
+    return render_template("todos_overview.html", camp=camp, data=data)
 
 
 @bp.get("/camps/<slug>/edit")

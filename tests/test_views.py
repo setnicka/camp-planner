@@ -103,6 +103,27 @@ def test_overview_404_for_unknown_camp(client, seeded):
     assert client.get("/camps/neexistuje/activities", headers=ADMIN).status_code == 404
 
 
+def test_todos_page_renders_with_data(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/todos", headers=ADMIN).get_data(as_text=True)
+    assert 'id="cp-todos-data"' in html                  # the embedded JSON the JS renders from
+    assert 'id="cp-todos"' in html                       # the mount point
+    assert "js/todo-list.js" in html                     # the shared component
+    assert "js/todos-overview.js" in html
+    assert "/api/todos/0" in html                         # todoItem (PATCH/DELETE) url resolves
+    assert '"may_edit": true' in html                     # admin can edit
+
+
+def test_todos_viewer_read_only(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/todos", headers=viewer(slug)).get_data(as_text=True)
+    assert '"may_edit": false' in html
+
+
+def test_todos_404_for_unknown_camp(client, seeded):
+    assert client.get("/camps/neexistuje/todos", headers=ADMIN).status_code == 404
+
+
 def test_camp_detail_has_history_tab(client, seeded):
     slug = seeded["slug"]
     html = client.get(f"/camps/{slug}/detail", headers=ADMIN).get_data(as_text=True)

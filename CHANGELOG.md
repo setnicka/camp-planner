@@ -16,6 +16,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Todos can now have assigned organizers (any number). _(DB migration)_
 - Filtering and sorting of TODOs in the activity detail.
+- Camp-wide TODOs overview page: a filterable, sortable table of every
+  activity's todos showing status, activity, assigned orgs, due date and note.
 
 ## [0.1.4] - 2026-06-16
 

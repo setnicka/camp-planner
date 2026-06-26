@@ -5,13 +5,14 @@
 {# The camp heading: camp name plus the four section tabs, on one compact line. Goes through
    the page's `header_nav` block — into the standalone top bar (.cp-header) on full.html, and
    into the .cp-camp-nav band when embedded (bare.html). `active` ∈
-   timeline|materials|overview|settings highlights the current one; drill-downs pick their
-   nearest section (activity detail uses "overview"); pass "" for none. #}
+   timeline|materials|overview|todos|settings highlights the current one; drill-downs pick
+   their nearest section (activity detail uses "overview"); pass "" for none. #}
 {% macro camp_nav(camp, active="") %}
   {% set sections = [
     ("timeline",  "main.camp_timeline",  "Timeline"),
     ("materials", "main.camp_materials", "Materiál"),
     ("overview",  "main.camp_overview",  "Seznam her"),
+    ("todos",     "main.camp_todos",     "Úkoly"),
     ("settings",  "main.camp_detail",    "Nastavení akce"),
   ] %}
   <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
