@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import selectinload
 
-from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag
+from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, Todo, TodoAssignment
 from camp_planner.models.camp import Camp
 from camp_planner.models.material import Material, MaterialNeed
 from camp_planner.models.slot import Slot, SlotAssignment
@@ -22,13 +22,13 @@ from camp_planner.models.slot import Slot, SlotAssignment
 
 def _activity_graph() -> tuple:
     """The graph serialize.activity() walks (slots+attendees, org roles, tag links,
-    todos, needs+catalog), as loader options rooted at Activity. A fresh tuple per call
-    so the option objects can be reused standalone and nested under Camp.activities."""
+    todos+their orgs, needs+catalog), as loader options rooted at Activity. A fresh tuple
+    per call so the option objects can be reused standalone and nested under Camp.activities."""
     return (
         selectinload(Activity.slots).selectinload(Slot.assignments).selectinload(SlotAssignment.org),
         selectinload(Activity.assignments).selectinload(ActivityAssignment.org),
         selectinload(Activity.tags).selectinload(ActivityTag.tag),
-        selectinload(Activity.todos),
+        selectinload(Activity.todos).selectinload(Todo.assignments).selectinload(TodoAssignment.org),
         selectinload(Activity.material_needs).selectinload(MaterialNeed.material),
     )
 
@@ -58,10 +58,13 @@ MATERIALS_OVERVIEW = (
     selectinload(Camp.materials).selectinload(Material.needs).selectinload(MaterialNeed.activity),
 )
 
-# GET /camps/<slug>/todos — every activity's todos (each todo's .activity is its already
-# loaded parent, so no further option is needed for activity_title).
+# GET /camps/<slug>/todos (+ web todos overview) — every activity's todos with their
+# responsible orgs (each todo's .activity is its already loaded parent, so activity_title
+# needs no further option), plus the camp roster used as filter metadata.
 TODOS_OVERVIEW = (
-    selectinload(Camp.activities).selectinload(Activity.todos),
+    selectinload(Camp.orgs),
+    selectinload(Camp.activities).selectinload(Activity.todos)
+    .selectinload(Todo.assignments).selectinload(TodoAssignment.org),
 )
 
 # GET /camps/<slug>/activities (web overview/status page) — the camp's filter metadata

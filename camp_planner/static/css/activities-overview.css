@@ -22,35 +22,9 @@
 .cp-ov-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; margin-bottom: 0.5rem; }
 .cp-ov-count { font-size: 12px; }
 
-/* --- in-header sort + filter controls -------------------------------------- */
+/* --- in-header sort + filter controls (cp-th-* primitives live in components.css) --- */
 .cp-ov-table thead th { padding-bottom: 0.4rem; }
-.cp-th-label { display: block; font-weight: 600; }
-/* a sortable column title: looks like the header label but is a clickable button */
-.cp-th-sort {
-  display: block; width: 100%; text-align: left; font: inherit; font-weight: 600; color: inherit;
-  padding: 0; border: 0; background: none; cursor: pointer;
-}
-.cp-th-sort:hover { color: var(--cp-accent); }
-.cp-th-arrow { color: var(--cp-accent); }
 .cp-ov-tag .cp-th-sort { text-align: center; }
-
-/* filter control under the title (select / checkbox / dropdown button) */
-.cp-th-filter { margin-top: 0.25rem; font: inherit; font-size: 12px; font-weight: normal;
-  padding: 0.1rem 0.25rem; border: 1px solid var(--cp-border); border-radius: 5px; background: #fff; max-width: 9rem; }
-.cp-th-check { display: block; margin-top: 0.25rem; font-size: 11px; font-weight: normal; color: #555; cursor: pointer; white-space: nowrap; }
-
-/* org filter: a dropdown button revealing a checkbox popover */
-.cp-th-dd { position: relative; }
-.cp-th-dd-btn { cursor: pointer; text-align: left; white-space: nowrap; }
-.cp-th-pop {
-  position: absolute; z-index: 5; top: calc(100% + 2px); left: 0; min-width: 11rem; max-height: 16rem; overflow: auto;
-  padding: 0.3rem; background: #fff; border: 1px solid var(--cp-border); border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
-}
-.cp-th-pop-row { display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.25rem; font-size: 12px; font-weight: normal; white-space: nowrap; cursor: pointer; }
-.cp-th-pop-row:hover { background: #f1f5fc; }
-/* "jen garanti" modifier, set off from the org list below it */
-.cp-th-pop-opt { font-weight: 600; border-bottom: 1px solid var(--cp-border); margin-bottom: 0.2rem; padding-bottom: 0.25rem; }
 
 /* --- status columns -------------------------------------------------------- */
 .cp-ov-num { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }

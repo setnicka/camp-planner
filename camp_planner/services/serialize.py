@@ -29,6 +29,7 @@ from camp_planner.schemas import (
     SlotOrgOut,
     SlotOut,
     TagLinkOut,
+    TodoOrgOut,
     TodoOut,
     TodoWithActivityOut,
 )
@@ -91,15 +92,30 @@ def tag_link(t: ActivityTag) -> dict:
     return _dump(_tag_link(t))
 
 
+def _todo_orgs(t: Todo) -> list[TodoOrgOut]:
+    """The todo's responsible orgs, czech-sorted by initials."""
+    return [TodoOrgOut(org_id=a.org_id, initials=a.org.initials)
+            for a in sorted(t.assignments, key=lambda a: czech_sort_key(a.org.initials))]
+
+
+def _todo_fields(t: Todo) -> dict:
+    """The base TodoOut fields from a Todo row — the single source of the todo shape, fed to
+    both TodoOut and (with activity_title) TodoWithActivityOut so they can't drift."""
+    return dict(id=t.id, activity_id=t.activity_id, title=t.title, note=t.note,
+                due_date=t.due_date, is_done=t.is_done, orgs=_todo_orgs(t))
+
+
+def _todo(t: Todo) -> TodoOut:
+    return TodoOut(**_todo_fields(t))
+
+
 def todo(t: Todo) -> dict:
-    return _dump(TodoOut.model_validate(t))
+    return _dump(_todo(t))
 
 
 def todo_overview(t: Todo) -> dict:
     """A todo with its activity, for the camp-wide TODO page."""
-    return _dump(TodoWithActivityOut(
-        id=t.id, activity_id=t.activity_id, activity_title=t.activity.title,
-        title=t.title, note=t.note, due_date=t.due_date, is_done=t.is_done))
+    return _dump(TodoWithActivityOut(**_todo_fields(t), activity_title=t.activity.title))
 
 
 def material(m: Material) -> dict:
@@ -159,6 +175,6 @@ def activity(a: Activity) -> dict:
         slots=[_slot(s) for s in a.slots],
         orgs=[_assignment(x) for x in a.assignments],
         tags=[_tag_link(t) for t in a.tags],
-        todos=[TodoOut.model_validate(t) for t in a.todos],
+        todos=[_todo(t) for t in a.todos],
         material_needs=[_material_need(m) for m in a.material_needs],
     ))

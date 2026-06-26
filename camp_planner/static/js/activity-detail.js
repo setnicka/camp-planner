@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, swatch, openModal, chipGroup, keyList, toast, plural, tabHash } = window.cpDom;
+  const { el, api, swatch, openModal, chipGroup, keyList, toast, tabHash } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
   const DATA = JSON.parse(dataEl.textContent);
@@ -76,22 +76,6 @@
       url: withId(U.slot, s.id),
       onSaved: (orgs, _ids, overrideName) => { s.orgs = orgs; s.override_name = overrideName; renderHeader(); },
     });
-  }
-
-  // Due indicator for a todo. Completed → the plain date; otherwise the whole-day delta
-  // from today: remaining days in green, overdue days in red, due-today neutral.
-  function dueBadge(t) {
-    if (!t.due_date) return null;
-    if (t.is_done) return el("span", { class: "cp-muted cp-todo-due" }, t.due_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const [y, m, d] = t.due_date.split("-").map(Number);
-    const days = Math.round((new Date(y, m - 1, d) - today) / 86400000);
-    let text, cls;
-    if (days > 0) { text = "zbývá " + days + " " + plural(days, "den", "dny", "dní"); cls = "cp-due-ok"; }
-    else if (days === 0) { text = "dnes"; cls = "cp-due-ok"; }
-    else { const n = -days; text = "po termínu " + n + " " + plural(n, "den", "dny", "dní"); cls = "cp-due-late"; }
-    return el("span", { class: "cp-todo-due " + cls, title: t.due_date }, text);
   }
 
   // --- title -----------------------------------------------------------------
@@ -301,7 +285,7 @@
       const b = el("button", { type: "button", class: "cp-tabbtn" + (tab.key === activeTab ? " on" : "") }, tab.label);
       b.addEventListener("click", () => {
         activeTab = tab.key; renderTabbar(); showActivePane();
-        TAB.write(tab.key);  // reflect the active tab in the URL hash (shareable/reloadable)
+        TAB.write(tab.key);  // reflect the active tab in the URL hash (preserves any tab's filters)
       });
       tabbarHost.append(b);
     });
@@ -514,79 +498,24 @@
   }
 
   // --- todos -----------------------------------------------------------------
+  // The TODO tab reuses the shared cpTodoList component (same as the camp-wide TODO overview),
+  // here scoped to this one activity: no activity column / filter / sort, and no "Zrušit filtry"
+  // button (only two filters). Filter state persists in the URL hash after the tab token
+  // (#todos&done=1 — hashPrefix keeps the tab segment intact). Built once; it mutates A.todos in
+  // place and onChange() keeps the tab label's done/total counts current (renderTabbar reads A.todos).
   function renderTodosPane() {
-    const list = el("div", { class: "cp-todo-list" });
-    if (!A.todos.length) list.append(el("p", { class: "cp-muted" }, "Žádné úkoly."));
-    A.todos.forEach((t) => list.append(todoRow(t)));
-    if (mayEdit) {
-      const add = el("button", { type: "button", class: "cp-add cp-todo-add" }, "+ Přidat úkol");
-      add.addEventListener("click", () => openTodoForm(null));
-      list.append(add);
-    }
-    panes.todos.replaceChildren(list);
-  }
-  const refreshTodos = () => { renderTodosPane(); renderTabbar(); };   // counts live in the tab label
-
-  function todoRow(t) {
-    const cb = el("input", { type: "checkbox" });
-    cb.checked = t.is_done;
-    cb.disabled = !mayEdit;
-    if (mayEdit) cb.addEventListener("change", async () => {
-      try { const j = await api("PATCH", withId(U.todoItem, t.id), { is_done: cb.checked }); Object.assign(t, j.todo); refreshTodos(); }
-      catch (e) { cb.checked = !cb.checked; toast(e.message, true); }
+    window.cpTodoList({
+      mount: panes.todos,
+      todos: A.todos,
+      orgs: DATA.orgs,
+      urls: { item: U.todoItem, create: U.todoCreate },
+      mayEdit,
+      showActivity: false,
+      useHash: true,
+      resetButton: false,
+      hashPrefix: "todos",
+      onChange: renderTabbar,
     });
-    const title = el("span", { class: "cp-todo-title" + (t.is_done ? " done" : "") }, t.title);
-    const line = el("div", { class: "cp-todo-line" }, title);
-    const due = dueBadge(t);
-    if (due) line.append(due);
-    if (mayEdit) {
-      const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
-      edit.addEventListener("click", () => openTodoForm(t));
-      const del = el("button", { type: "button", class: "cp-danger cp-mini", title: "Smazat" }, "✕");
-      del.addEventListener("click", async () => {
-        if (!confirm("Smazat úkol?")) return;
-        try { await api("DELETE", withId(U.todoItem, t.id)); A.todos = A.todos.filter((x) => x.id !== t.id); refreshTodos(); toast("Smazáno"); }
-        catch (e) { toast(e.message, true); }
-      });
-      line.append(edit, del);
-    }
-    const main = el("div", { class: "cp-todo-main" }, line);
-    if (t.note) main.append(el("div", { class: "cp-muted cp-todo-note" }, t.note));   // note on its own line
-    return el("div", { class: "cp-todo-row" }, cb, main);
-  }
-
-  // shared add/edit form — `todo` null = create, otherwise edit
-  function openTodoForm(todo) {
-    const seed = todo || {};
-    const title = el("input", { type: "text", class: "cp-modal-name", value: seed.title || "" });
-    const note = el("textarea", { class: "cp-act-textarea", rows: 3 });
-    note.value = seed.note || "";
-    const due = el("input", { type: "date" });
-    if (seed.due_date) due.value = seed.due_date;
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, todo ? "Uložit" : "Přidat");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, todo ? "Upravit úkol" : "Nový úkol"),
-      el("div", { class: "cp-pane" },
-        el("label", { class: "cp-field-label" }, "Název"), title,
-        el("label", { class: "cp-field-label" }, "Poznámka"), note,
-        el("label", { class: "cp-field-label" }, "Termín"), due),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      const v = title.value.trim();
-      if (!v) { title.focus(); return; }
-      const body = { title: v, note: note.value || null, due_date: due.value || null };
-      submit(ok, async () => {
-        if (todo) { const j = await api("PATCH", withId(U.todoItem, todo.id), body); Object.assign(todo, j.todo); }
-        else { const j = await api("POST", U.todoCreate, body); A.todos.push(j.todo); }
-        close();
-        refreshTodos();
-        toast("Uloženo");
-      });
-    });
-    title.focus();
   }
 
   // --- materials -------------------------------------------------------------

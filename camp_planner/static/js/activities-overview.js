@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, swatch, openModal, keyList, toast, toastNext, plural } = window.cpDom;
+  const { el, api, swatch, openModal, keyList, toast, toastNext, plural, freezeColumns } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -386,17 +386,6 @@
     tbody.replaceChildren(...ROWS.map(activityRow));
     freezeColumns(table, headRow);
     renderTableBody();
-  }
-
-  // Freeze the current column widths into a <colgroup> + table-layout:fixed. Called after a
-  // full-data render so the widths fit the widest content; subsequent filtered renders keep them.
-  function freezeColumns(table, headRow) {
-    const widths = [...headRow.children].map((th) => th.getBoundingClientRect().width);
-    const colgroup = el("colgroup");
-    widths.forEach((w) => { const c = el("col"); c.style.width = Math.round(w) + "px"; colgroup.append(c); });
-    table.insertBefore(colgroup, table.firstChild);
-    table.style.tableLayout = "fixed";
-    table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
   }
 
   // close an open org dropdown when clicking anywhere outside it

@@ -12,6 +12,11 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Todos can now have assigned organizers (any number). _(DB migration)_
+- Filtering and sorting of TODOs in the activity detail.
+
 ## [0.1.4] - 2026-06-16
 
 ### Added

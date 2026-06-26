@@ -253,9 +253,10 @@ def test_activity_delete_when_slotless(client, seeded):
 def test_activity_merge_transfers_slots_todos_and_joins_needs(client, seeded):
     slug, src = seeded["slug"], seeded["activity_id"]
     dst = _json(client.post(f"/api/camps/{slug}/activities", json={"title": "Cíl"}, headers=ADMIN))["activity"]["id"]
-    # source carries a slot, a todo and a material need; the target uses the same material
+    # source carries a slot, a todo (with an assigned org) and a material need; the target uses the same material
     _make_slot(client, slug, src)
-    client.post(f"/api/activities/{src}/todos", json={"title": "Koupit lano"}, headers=ADMIN)
+    client.post(f"/api/activities/{src}/todos",
+                json={"title": "Koupit lano", "org_ids": [seeded["org_id"]]}, headers=ADMIN)
     mid = _make_material(client, slug, name="lano", unit="m")["material"]["id"]
     client.post(f"/api/activities/{src}/materials", json={"material_id": mid, "amount": 30}, headers=ADMIN)
     client.post(f"/api/activities/{dst}/materials", json={"material_id": mid, "amount": 20}, headers=ADMIN)
@@ -269,6 +270,8 @@ def test_activity_merge_transfers_slots_todos_and_joins_needs(client, seeded):
     target = _get(client, f"/api/activities/{dst}")["activity"]
     assert len(target["slots"]) == 1
     assert [t["title"] for t in target["todos"]] == ["Koupit lano"]
+    # the moved todo keeps its org assignment
+    assert [o["org_id"] for o in target["todos"][0]["orgs"]] == [seeded["org_id"]]
     assert len(target["material_needs"]) == 1 and target["material_needs"][0]["amount"] == 50  # 30 + 20
 
 
@@ -361,6 +364,39 @@ def test_todo_validation_returns_pydantic_error_list(client, seeded):
     assert resp.status_code == 422
     body = resp.get_json()
     assert isinstance(body, list) and "title" in body[0]["loc"]
+
+
+def test_todo_org_assignment(client, seeded):
+    aid, org_id = seeded["activity_id"], seeded["org_id"]
+    # create with an assigned org
+    resp = client.post(f"/api/activities/{aid}/todos",
+                       json={"title": "Koupit lano", "org_ids": [org_id]}, headers=ADMIN)
+    todo = _json(resp)["todo"]
+    assert [o["org_id"] for o in todo["orgs"]] == [org_id]
+    assert todo["orgs"][0]["initials"] == "K"
+
+    # PATCH org_ids: [] clears the assignment; other fields untouched
+    resp = client.patch(f"/api/todos/{todo['id']}", json={"org_ids": []}, headers=ADMIN)
+    assert _json(resp)["todo"]["orgs"] == []
+
+    # PATCH without org_ids leaves orgs unchanged (re-assign first, then patch a scalar)
+    client.patch(f"/api/todos/{todo['id']}", json={"org_ids": [org_id]}, headers=ADMIN)
+    resp = client.patch(f"/api/todos/{todo['id']}", json={"is_done": True}, headers=ADMIN)
+    assert [o["org_id"] for o in _json(resp)["todo"]["orgs"]] == [org_id]
+
+
+def test_todo_unknown_org_rejected(client, seeded):
+    aid = seeded["activity_id"]
+    resp = client.post(f"/api/activities/{aid}/todos",
+                       json={"title": "X", "org_ids": [999999]}, headers=ADMIN)
+    assert resp.status_code == 400
+
+
+def test_todo_duplicate_org_rejected(client, seeded):
+    aid, org_id = seeded["activity_id"], seeded["org_id"]
+    resp = client.post(f"/api/activities/{aid}/todos",
+                       json={"title": "X", "org_ids": [org_id, org_id]}, headers=ADMIN)
+    assert resp.status_code == 422
 
 
 # --- materials ---------------------------------------------------------------

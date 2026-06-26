@@ -14,10 +14,18 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, NaiveDatetime, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    NaiveDatetime,
+    field_validator,
+    model_validator,
+)
 
 from camp_planner.models.activity import ActivityType, OrgRole
 from camp_planner.models.audit import AuditAction, EntityType
@@ -68,11 +76,22 @@ class DeletedEnvelope(_Ok):
 
 # --- todos -------------------------------------------------------------------
 
+def _unique_org_ids(org_ids: list[int]) -> list[int]:
+    if len(set(org_ids)) != len(org_ids):
+        raise ValueError("Orgové: org se v seznamu opakuje.")
+    return org_ids
+
+
+# org-id list with a no-duplicates check (the None branch of the update field skips it)
+OrgIds = Annotated[list[int], AfterValidator(_unique_org_ids)]
+
+
 class TodoCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255, examples=["Koupit lano"])
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     due_date: date | None = None
     is_done: bool = False
+    org_ids: OrgIds = []   # orgs responsible for the task (any number)
 
 
 class TodoUpdate(BaseModel):
@@ -81,6 +100,12 @@ class TodoUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     due_date: date | None = None
     is_done: bool | None = None
+    org_ids: OrgIds | None = None   # absent/null → unchanged; [] → clear
+
+
+class TodoOrgOut(BaseModel):
+    org_id: int
+    initials: str
 
 
 class TodoOut(BaseModel):
@@ -91,6 +116,7 @@ class TodoOut(BaseModel):
     note: str | None
     due_date: date | None
     is_done: bool
+    orgs: list[TodoOrgOut] = []
 
 
 class TodoEnvelope(_Ok):

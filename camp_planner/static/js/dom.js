@@ -164,13 +164,34 @@ window.cpDom = (function () {
   // back on change with replaceState — shareable/reloadable links, no scroll-jump, no history
   // spam. Returns { initial, write }: initial is the hashed key if valid else null (the caller
   // picks its own default); write(key) updates the hash.
+  // Tab selection persisted in the URL hash as the first `&`-segment (e.g. #todos&done=1), so it
+  // can coexist with a page's filter params that follow it. write() swaps only the tab token and
+  // preserves the trailing segments, so a page's filters survive switching tabs and back.
   function tabHash(validKeys) {
-    const fromHash = location.hash.slice(1);
+    const segs = location.hash.slice(1).split("&");
     return {
-      initial: validKeys.includes(fromHash) ? fromHash : null,
-      write: (key) => history.replaceState(null, "", "#" + key),
+      initial: validKeys.includes(segs[0]) ? segs[0] : null,
+      write: (key) => {
+        const rest = location.hash.slice(1).split("&").slice(1);
+        history.replaceState(null, "", "#" + [key, ...rest].join("&"));
+      },
     };
   }
 
-  return { el, csrf, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash, plural, tabHash };
+  // Freeze a table's current column widths into a <colgroup> + table-layout:fixed, so later
+  // re-renders (e.g. filtering to fewer rows) keep the columns put instead of reflowing/jumping.
+  // Call after a full-data paint so the frozen widths fit the widest content. No-op when the
+  // table is hidden (zero-width) — there's nothing to measure yet. Shared by the overview tables.
+  function freezeColumns(table, headRow) {
+    const widths = [...headRow.children].map((th) => th.getBoundingClientRect().width);
+    if (!widths.some((w) => w > 0)) return;
+    const colgroup = el("colgroup");
+    widths.forEach((w) => { const c = el("col"); c.style.width = Math.round(w) + "px"; colgroup.append(c); });
+    table.insertBefore(colgroup, table.firstChild);
+    table.style.tableLayout = "fixed";
+    table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
+  }
+
+  return { el, csrf, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash, plural,
+           tabHash, freezeColumns };
 })();

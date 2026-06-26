@@ -148,18 +148,14 @@
 /* modal form-field primitives (.cp-field-label/.cp-act-textarea/.cp-need-amount-row/…)
    now live in components.css, shared with the materials overview. */
 
-/* todos + materials lists */
-.cp-todo-list, .cp-need-list { display: flex; flex-direction: column; gap: 0.3rem; max-width: 44rem; }
-.cp-todo-row, .cp-need-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid #f0f0f0; }
-.cp-todo-main, .cp-need-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.cp-todo-line, .cp-need-line { display: flex; align-items: center; gap: 0.5rem; }
-.cp-todo-title { flex: 1; }
-.cp-todo-title.done { text-decoration: line-through; color: #888; }
-.cp-todo-due, .cp-todo-note, .cp-need-note { font-size: 12px; }
-.cp-todo-note { white-space: pre-wrap; }   /* render the note's line breaks */
-.cp-due-ok { color: #2e7d32; }    /* days remaining */
-.cp-due-late { color: #c5221f; }  /* overdue */
-.cp-todo-add, .cp-need-add { margin-top: 0.6rem; }
+/* materials list (the TODO tab now uses the shared cp-todo-table component, styled in
+   components.css). */
+.cp-need-list { display: flex; flex-direction: column; gap: 0.3rem; max-width: 44rem; }
+.cp-need-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid #f0f0f0; }
+.cp-need-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.cp-need-line { display: flex; align-items: center; gap: 0.5rem; }
+.cp-need-note { font-size: 12px; }
+.cp-need-add { margin-top: 0.6rem; }
 .cp-need-name { flex: 1; }
 .cp-ext-link { font-size: 0.85em; color: var(--cp-muted); text-decoration: none; }   /* external catalog url */
 .cp-need-qty { white-space: nowrap; }

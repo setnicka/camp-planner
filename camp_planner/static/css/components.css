@@ -145,3 +145,57 @@
 .cp-mini:disabled { opacity: .4; cursor: not-allowed; }
 .cp-danger.cp-mini { background: #c5221f; border-color: #c5221f; color: #fff; }
 .cp-danger.cp-mini:not(:disabled):hover { filter: brightness(1.08); }
+
+/* --- in-header sort + filter controls — shared by the overview tables (activities, todos) --- */
+.cp-th-label { display: block; font-weight: 600; }
+/* a sortable column title: looks like the header label but is a clickable button. A <button>
+   doesn't inherit text-transform/letter-spacing (and `font:` doesn't carry them), so restore
+   them explicitly to match the <th>'s uppercase styling — otherwise sort headers (e.g. "Termín")
+   render mixed-case next to the uppercase label headers (e.g. "ÚKOL"). */
+.cp-th-sort {
+  display: block; width: 100%; text-align: left; font: inherit; font-weight: 600; color: inherit;
+  text-transform: inherit; letter-spacing: inherit;
+  padding: 0; border: 0; background: none; cursor: pointer;
+}
+.cp-th-sort:hover { color: var(--cp-accent); }
+.cp-th-arrow { color: var(--cp-accent); }
+
+/* filter control under the title (select / checkbox / dropdown button) */
+.cp-th-filter { margin-top: 0.25rem; font: inherit; font-size: 12px; font-weight: normal;
+  padding: 0.1rem 0.25rem; border: 1px solid var(--cp-border); border-radius: 5px; background: #fff; max-width: 9rem; }
+.cp-th-check { display: block; margin-top: 0.25rem; font-size: 11px; font-weight: normal; color: #555; cursor: pointer; white-space: nowrap; }
+
+/* org filter: a dropdown button revealing a checkbox popover */
+.cp-th-dd { position: relative; }
+.cp-th-dd-btn { cursor: pointer; text-align: left; white-space: nowrap; }
+.cp-th-pop {
+  position: absolute; z-index: 5; top: calc(100% + 2px); left: 0; min-width: 11rem; max-height: 16rem; overflow: auto;
+  padding: 0.3rem; background: #fff; border: 1px solid var(--cp-border); border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+}
+.cp-th-pop-row { display: flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.25rem; font-size: 12px; font-weight: normal; white-space: nowrap; cursor: pointer; }
+.cp-th-pop-row:hover { background: #f1f5fc; }
+/* a modifier option, set off from the list below it (e.g. "jen garant") */
+.cp-th-pop-opt { font-weight: 600; border-bottom: 1px solid var(--cp-border); margin-bottom: 0.2rem; padding-bottom: 0.25rem; }
+
+/* --- todo list — shared by the activity TODO tab and the camp-wide TODO overview --- */
+.cp-todo-title.done { text-decoration: line-through; color: #888; }
+.cp-todo-task-lbl { display: flex; align-items: flex-start; gap: 0.45rem; cursor: pointer; }
+.cp-todo-due, .cp-todo-note { font-size: 12px; }
+.cp-todo-orgs { white-space: nowrap; }
+/* the note rides on its own full-width second row, attached under the task (no border between) */
+.cp-todo-has-note > td { border-bottom: 0; }
+.cp-todo-note-row > td { padding-top: 0; }
+.cp-todo-note { white-space: pre-wrap; color: var(--cp-muted); padding-left: 1.7rem; }   /* render line breaks; align under the title */
+/* table shape — shared by both pages (the overview adds full-width stretch in todos.css) */
+.cp-todo-table th { vertical-align: bottom; }
+.cp-todo-table td { vertical-align: top; }
+.cp-todo-table thead th { padding-bottom: 0.4rem; }
+/* toolbar above the table (count + optional reset / notes toggle); count pushes the rest right */
+.cp-todo-toolbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+.cp-todo-count { font-size: 12px; margin-left: auto; }
+.cp-todo-notes-toggle { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 13px; cursor: pointer; }
+.cp-todo-empty { text-align: center; padding: 1rem; }
+.cp-todo-add { margin-top: 0.6rem; }
+.cp-due-ok { color: #2e7d32; }    /* days remaining */
+.cp-due-late { color: #c5221f; }  /* overdue */
