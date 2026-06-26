@@ -19,6 +19,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Camp-wide TODOs overview page: a filterable, sortable table of every
   activity's todos showing status, activity, assigned orgs, due date and note.
 
+### Changed
+
+- Progress (percent) tag values can now be typed directly as a number.
+
 ## [0.1.4] - 2026-06-16
 
 ### Added

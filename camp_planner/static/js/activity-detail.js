@@ -227,10 +227,13 @@
     } else if (d.kind === "progress") {
       valEl = el("input", { type: "range", min: 0, max: 100, class: "cp-slider" });
       valEl.value = clampPct(value);
-      const num = el("span", { class: "cp-slider-num" }, valEl.value + " %");
-      valEl.addEventListener("input", () => { num.textContent = valEl.value + " %"; });
+      const num = el("input", { type: "number", min: 0, max: 100, class: "cp-slider-num" });
+      num.value = valEl.value;
+      valEl.addEventListener("input", () => { num.value = valEl.value; });           // drag → number
+      num.addEventListener("input", () => { valEl.value = num.value; });              // type → slider (live, unclamped)
+      num.addEventListener("change", () => { num.value = valEl.value = clampPct(num.value); });  // blur → normalize both
       readVal = () => String(clampPct(valEl.value));
-      valWrap = el("span", { class: "cp-slider-wrap" }, valEl, num);
+      valWrap = el("span", { class: "cp-slider-wrap" }, valEl, num, el("span", { class: "cp-slider-pct" }, "%"));
     } else if (d.kind === "text") {
       valEl = el("input", { type: "text" });
       valEl.value = value || "";
@@ -240,7 +243,11 @@
     const row = el("div", { class: "cp-tagedit-row" }, sw.node,
       el("span", { class: "cp-tagedit-name" }, d.name + (d.pinned ? " 📌" : "")));
     if (valWrap) row.append(el("span", { class: "cp-tagedit-val" }, valWrap));
-    const sync = () => { row.classList.toggle("disabled", !sw.input.checked); if (valEl) valEl.disabled = !sw.input.checked; };
+    const ctrls = !valWrap ? [] : valWrap.matches("input") ? [valWrap] : valWrap.querySelectorAll("input");
+    const sync = () => {
+      row.classList.toggle("disabled", !sw.input.checked);
+      ctrls.forEach((inp) => { inp.disabled = !sw.input.checked; });
+    };
     sw.input.addEventListener("change", sync);
     sync();
     return { node: row, read: () => ({ tag_id: d.id, enabled: sw.input.checked, value: valWrap ? readVal() : null }) };

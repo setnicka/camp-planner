@@ -87,9 +87,10 @@
 .cp-switch-input:focus-visible + .cp-switch-slider { outline: 2px solid #1a73e8; outline-offset: 2px; }
 
 /* progress slider */
-.cp-slider-wrap { display: inline-flex; align-items: center; gap: 0.6rem; }
+.cp-slider-wrap { display: inline-flex; align-items: center; gap: 0.4rem; }
 .cp-slider { width: 9rem; }
-.cp-slider-num { font-variant-numeric: tabular-nums; width: 3rem; text-align: right; color: #555; }
+.cp-slider-num { font-variant-numeric: tabular-nums; width: 3.4rem; text-align: right; }
+.cp-slider-pct { color: #555; }
 
 /* tab bar/panes are shared primitives — see .cp-tabbar/.cp-tabbtn/.cp-tabpane in components.css */
 
