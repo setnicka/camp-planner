@@ -8,6 +8,7 @@ from camp_planner.models.activity import (
     ActivityAssignment,
     ActivityTag,
     Todo,
+    TodoAssignment,
 )
 from camp_planner.models.audit import AuditLog
 from camp_planner.models.auth import User, UserCampRole
@@ -33,6 +34,7 @@ __all__ = [
     "SyncOpKind",
     "Tag",
     "Todo",
+    "TodoAssignment",
     "User",
     "UserCampRole",
 ]

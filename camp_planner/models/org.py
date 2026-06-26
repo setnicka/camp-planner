@@ -12,7 +12,7 @@ from camp_planner.extensions import Base
 from camp_planner.models.common import ExternalIdMixin
 
 if TYPE_CHECKING:
-    from camp_planner.models.activity import ActivityAssignment
+    from camp_planner.models.activity import ActivityAssignment, TodoAssignment
     from camp_planner.models.camp import Camp
     from camp_planner.models.slot import SlotAssignment
 
@@ -40,6 +40,9 @@ class Org(ExternalIdMixin, Base):
         back_populates="org", cascade="all, delete-orphan"
     )
     slot_assignments: Mapped[list[SlotAssignment]] = relationship(
+        back_populates="org", cascade="all, delete-orphan"
+    )
+    todo_assignments: Mapped[list[TodoAssignment]] = relationship(
         back_populates="org", cascade="all, delete-orphan"
     )
 

@@ -139,3 +139,22 @@ class Todo(Base):
 
     # Relationships:
     activity: Mapped[Activity] = relationship(back_populates="todos")
+    assignments: Mapped[list[TodoAssignment]] = relationship(
+        back_populates="todo", cascade="all, delete-orphan"
+    )
+
+
+class TodoAssignment(Base):
+    """Which orgs are responsible for a todo (any number, no role distinction)."""
+
+    __tablename__ = table_name("todo_assignments")
+
+    # Columns: the natural key (todo, org) is the primary key
+    todo_id: Mapped[int] = mapped_column(
+        ForeignKey(fk("todos.id"), ondelete="CASCADE"), primary_key=True
+    )
+    org_id: Mapped[int] = mapped_column(ForeignKey(fk("orgs.id")), primary_key=True, index=True)
+
+    # Relationships:
+    todo: Mapped[Todo] = relationship(back_populates="assignments")
+    org: Mapped[Org] = relationship(back_populates="todo_assignments")
