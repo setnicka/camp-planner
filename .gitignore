@@ -18,6 +18,9 @@ instance/
 # Env
 .env
 
+# Secrets — Google service-account key (never commit)
+smf-camp-planner-*.json
+
 # Editors
 .vscode/
 .idea/
