@@ -67,6 +67,7 @@ def test_materials_page_renders_with_data(client, seeded):
     assert "/api/material-needs/0" in html                # needItem url resolves
     assert '"may_edit": true' in html                     # admin can edit
     assert "Lano" in html                                 # embedded material, with its usage
+    assert '"orgs"' in html and "Karel" in html           # roster embedded for the edit modal's org picker
 
 
 def test_materials_viewer_read_only(client, seeded):

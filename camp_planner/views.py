@@ -179,6 +179,7 @@ def camp_materials(slug: str):
         description="Akce nenalezena.")
     data = {
         "materials": [serialize.material_overview(m) for m in camp.materials],
+        "orgs": taxonomy.orgs(camp),   # roster for the edit modal's responsible-orgs picker
         "may_edit": can_edit(camp),
         # api endpoints. Item-scoped URLs carry a 0 sentinel the client swaps for the real id;
         # materialItem serves both PATCH (edit) and DELETE, needItem both PATCH and DELETE.

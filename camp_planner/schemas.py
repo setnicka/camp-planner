@@ -28,6 +28,7 @@ from pydantic import (
 )
 
 from camp_planner.models.activity import ActivityType, OrgRole
+from camp_planner.models.material import SumStrategy
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import TagKind
 from camp_planner.models.slot import SlotRole
@@ -84,6 +85,26 @@ def _unique_org_ids(org_ids: list[int]) -> list[int]:
 
 # org-id list with a no-duplicates check (the None branch of the update field skips it)
 OrgIds = Annotated[list[int], AfterValidator(_unique_org_ids)]
+
+
+def _clean_labels(labels: list[str]) -> list[str]:
+    """Normalise acquisition labels: trim each, drop blanks, dedupe (order-preserving),
+    and bound length/count so a single Text/JSON column can't be abused."""
+    out: list[str] = []
+    for s in labels:
+        s = s.strip()
+        if not s or s in out:
+            continue
+        if len(s) > 200:
+            raise ValueError("Štítek je příliš dlouhý.")
+        out.append(s)
+    if len(out) > 50:
+        raise ValueError("Příliš mnoho štítků.")
+    return out
+
+
+# acquisition-label list, cleaned/deduped (the None branch of the update field skips it)
+Labels = Annotated[list[str], AfterValidator(_clean_labels)]
 
 
 class TodoCreate(BaseModel):
@@ -371,6 +392,12 @@ class TagLinkOut(BaseModel):
     value: str | None
 
 
+class MaterialOrgOut(BaseModel):
+    """An org responsible for a catalog material (initials for compact display)."""
+    org_id: int
+    initials: str
+
+
 class MaterialOut(BaseModel):
     """A catalog material (registry) — also returned by the catalog endpoints."""
     model_config = ConfigDict(from_attributes=True)
@@ -379,6 +406,14 @@ class MaterialOut(BaseModel):
     unit: str | None
     note: str | None
     url: str | None
+    acquisition_labels: list[str] = []       # free "how/where to obtain" tokens ("prefix: value" → scoped tag)
+    sum_strategy: SumStrategy                 # how per-activity needs aggregate (sum vs max)
+    orgs: list[MaterialOrgOut] = []          # responsible orgs (czech-sorted by initials)
+
+    @field_validator("acquisition_labels", mode="before")
+    @classmethod
+    def _labels_default(cls, v):
+        return v or []   # the column is nullable: a NULL row reads as no labels
 
 
 class MaterialNeedOut(BaseModel):
@@ -465,11 +500,15 @@ class MaterialCreate(BaseModel):
 
 class MaterialUpdateIn(BaseModel):
     """Patch a catalog material; only the sent fields change. A rename is re-checked
-    against the per-camp normalized-name uniqueness."""
+    against the per-camp normalized-name uniqueness. acquisition_labels / org_ids absent or
+    null → unchanged, [] → clear."""
     name: str | None = Field(default=None, min_length=1, max_length=255)
     unit: str | None = Field(default=None, max_length=40)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     url: str | None = Field(default=None, max_length=1024)
+    acquisition_labels: Labels | None = None
+    sum_strategy: SumStrategy | None = None
+    org_ids: OrgIds | None = None
 
     _check_url = field_validator("url")(_http_url)
 

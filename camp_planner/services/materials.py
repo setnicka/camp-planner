@@ -13,7 +13,8 @@ from sqlalchemy.exc import IntegrityError
 
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
-from camp_planner.models.material import Material, MaterialNeed
+from camp_planner.models.common import czech_sort_key
+from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed, SumStrategy
 from camp_planner.services import audit, errors, serialize
 
 if TYPE_CHECKING:
@@ -57,10 +58,63 @@ def create_material(camp: Camp, payload: MaterialCreate) -> dict:
     return {"material": serialize.material(material)}
 
 
+_EDITABLE = ("name", "unit", "note", "url")  # name's @validates resyncs normalized_name
+
+
+def _set_orgs(material: Material, org_ids: list[int]) -> list | None:
+    """Replace the material's responsible orgs with `org_ids` (validated against the camp
+    roster). Returns the audit diff [before, after] (czech-sorted initials) when it changed,
+    else None — unchanged means no reassignment (avoids delete-orphan churn) and no audit."""
+    initials = {o.id: o.initials for o in material.camp.orgs}
+    for oid in org_ids:
+        if oid not in initials:
+            raise errors.Invalid("Orgové: neznámý org této akce.")
+    before = sorted((a.org.initials for a in material.assignments), key=czech_sort_key)
+    after = sorted((initials[oid] for oid in org_ids), key=czech_sort_key)
+    if before == after:
+        return None
+    material.assignments = [MaterialAssignment(org_id=oid) for oid in org_ids]
+    return [before, after]
+
+
+def _set_labels(material: Material, labels: list[str]) -> list | None:
+    """Replace the material's acquisition labels (already cleaned/deduped by the schema).
+    Returns the audit diff [before, after] when it changed, else None."""
+    before = material.acquisition_labels or []
+    if before == labels:
+        return None
+    material.acquisition_labels = labels
+    return [before, labels]
+
+
+def _set_strategy(material: Material, strategy: SumStrategy) -> list | None:
+    """Set the amount-aggregation strategy. Handled apart from apply_patch because the column
+    is NOT NULL — a sent null must stay 'unchanged', not clear it. Returns the diff or None."""
+    if material.sum_strategy == strategy:
+        return None
+    before = material.sum_strategy
+    material.sum_strategy = strategy
+    return [before, strategy]
+
+
 def update_material(material: Material, payload: MaterialUpdateIn) -> dict:
     """Update a catalog material's fields (only those sent). A rename colliding with
     another material's normalized name is rejected (uq_material_camp_norm)."""
-    changes = audit.apply_patch(material, payload, ("name", "unit", "note", "url"))  # name's @validates resyncs normalized_name
+    changes = audit.apply_patch(material, payload, _EDITABLE)
+    # The list/enum fields below are applied apart from apply_patch so a sent null reads as
+    # "unchanged" (not "clear"); each helper returns its audit diff [before, after] or None.
+    if payload.acquisition_labels is not None:
+        labels_diff = _set_labels(material, payload.acquisition_labels)
+        if labels_diff:
+            changes["acquisition_labels"] = labels_diff
+    if payload.sum_strategy is not None:
+        strat_diff = _set_strategy(material, payload.sum_strategy)
+        if strat_diff:
+            changes["sum_strategy"] = strat_diff
+    if payload.org_ids is not None:
+        orgs_diff = _set_orgs(material, payload.org_ids)
+        if orgs_diff:
+            changes["orgs"] = orgs_diff
     if not changes:
         return {"material": serialize.material(material)}
     try:
@@ -114,6 +168,18 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
         if need.unit is None and source.unit != target.unit:
             need.unit = source.unit   # keep the old effective unit
         need.material = target        # reassign across the relationship
+
+    # carry the source's acquisition labels (union, dedupe) and responsible orgs onto the target,
+    # so a dedup merge doesn't silently drop them; source's duplicates fall away with the source.
+    tgt_labels = target.acquisition_labels or []
+    extra = [lab for lab in (source.acquisition_labels or []) if lab not in tgt_labels]
+    if extra:
+        target.acquisition_labels = tgt_labels + extra
+    tgt_org_ids = {a.org_id for a in target.assignments}
+    for a in list(source.assignments):
+        if a.org_id not in tgt_org_ids:
+            a.material = target
+            tgt_org_ids.add(a.org_id)
 
     db.session.delete(source)
     audit.record(camp_id=camp.id, entity_type=EntityType.material, entity_id=target.id,

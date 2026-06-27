@@ -23,6 +23,7 @@ from camp_planner.schemas import (
     AuditEntryOut,
     CampOut,
     MaterialNeedOut,
+    MaterialOrgOut,
     MaterialOut,
     MaterialUsageOut,
     MaterialWithUsagesOut,
@@ -118,9 +119,21 @@ def todo_overview(t: Todo) -> dict:
     return _dump(TodoWithActivityOut(**_todo_fields(t), activity_title=t.activity.title))
 
 
+def _material_orgs(m: Material) -> list[MaterialOrgOut]:
+    """The material's responsible orgs, czech-sorted by initials."""
+    return [MaterialOrgOut(org_id=a.org_id, initials=a.org.initials)
+            for a in sorted(m.assignments, key=lambda a: czech_sort_key(a.org.initials))]
+
+
+def _material(m: Material) -> MaterialOut:
+    return MaterialOut(id=m.id, name=m.name, unit=m.unit, note=m.note, url=m.url,
+                       acquisition_labels=m.acquisition_labels or [], sum_strategy=m.sum_strategy,
+                       orgs=_material_orgs(m))
+
+
 def material(m: Material) -> dict:
     """A catalog material (registry item)."""
-    return _dump(MaterialOut.model_validate(m))
+    return _dump(_material(m))
 
 
 def material_need(m: MaterialNeed) -> dict:
@@ -138,7 +151,7 @@ def audit_entry(row: AuditLog) -> dict:
 def material_overview(m: Material) -> dict:
     """A catalog material with every activity need that uses it (camp materials page)."""
     return _dump(MaterialWithUsagesOut(
-        id=m.id, name=m.name, unit=m.unit, note=m.note, url=m.url,
+        **_material(m).model_dump(),   # shared catalog fields (name/unit/acquisition/orgs/…)
         usages=[MaterialUsageOut(
             need_id=n.id, activity_id=n.activity_id, activity_title=n.activity.title,
             amount=n.amount, unit=n.unit, note=n.note, is_ready=n.is_ready)

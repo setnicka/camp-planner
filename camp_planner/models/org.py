@@ -14,6 +14,7 @@ from camp_planner.models.common import ExternalIdMixin
 if TYPE_CHECKING:
     from camp_planner.models.activity import ActivityAssignment, TodoAssignment
     from camp_planner.models.camp import Camp
+    from camp_planner.models.material import MaterialAssignment
     from camp_planner.models.slot import SlotAssignment
 
 
@@ -43,6 +44,9 @@ class Org(ExternalIdMixin, Base):
         back_populates="org", cascade="all, delete-orphan"
     )
     todo_assignments: Mapped[list[TodoAssignment]] = relationship(
+        back_populates="org", cascade="all, delete-orphan"
+    )
+    material_assignments: Mapped[list[MaterialAssignment]] = relationship(
         back_populates="org", cascade="all, delete-orphan"
     )
 

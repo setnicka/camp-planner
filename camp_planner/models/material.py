@@ -2,21 +2,31 @@
 
 from __future__ import annotations
 
+import enum
 import re
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from camp_planner.config import fk, table_name
 from camp_planner.extensions import Base
-from camp_planner.models.common import strip_diacritics
+from camp_planner.models.common import portable_enum, strip_diacritics
 
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity
     from camp_planner.models.camp import Camp
+    from camp_planner.models.org import Org
 
 _TOKEN_SPLIT = re.compile(r"[^0-9a-z]+")
+
+
+class SumStrategy(str, enum.Enum):
+    """How a material's per-activity amounts roll up into the camp-wide total: `sum` (default,
+    consumables) or `max` for reusables shared across activities (2 projectors → 2, not summed)."""
+
+    sum = "sum"
+    max = "max"
 
 
 class Material(Base):
@@ -43,9 +53,21 @@ class Material(Base):
     note: Mapped[str | None] = mapped_column(Text)                  # optional catalog note
     url: Mapped[str | None] = mapped_column(String(1024))          # optional "where to buy" link
 
+    # Free "how/where to obtain" tokens, e.g. ["kup: mefisto", "půjčit: jirka"]; "prefix: value"
+    # renders as a scoped tag. Nullable (unset rows); serialize coerces NULL → [].
+    acquisition_labels: Mapped[list[str] | None] = mapped_column(JSON, default=list)
+
+    # How per-activity needs roll up into the camp-wide total — see SumStrategy.
+    sum_strategy: Mapped[SumStrategy] = mapped_column(
+        portable_enum(SumStrategy, "sum_strategy"), default=SumStrategy.sum
+    )
+
     # Relationships:
     camp: Mapped[Camp] = relationship(back_populates="materials")
     needs: Mapped[list[MaterialNeed]] = relationship(
+        back_populates="material", cascade="all, delete-orphan"
+    )
+    assignments: Mapped[list[MaterialAssignment]] = relationship(
         back_populates="material", cascade="all, delete-orphan"
     )
 
@@ -90,3 +112,20 @@ class MaterialNeed(Base):
     # Relationships:
     activity: Mapped[Activity] = relationship(back_populates="material_needs")
     material: Mapped[Material] = relationship(back_populates="needs")
+
+
+class MaterialAssignment(Base):
+    """Which orgs are responsible for a catalog material (any number, no role
+    distinction). Mirrors TodoAssignment."""
+
+    __tablename__ = table_name("material_assignments")
+
+    # Columns: the natural key (material, org) is the primary key
+    material_id: Mapped[int] = mapped_column(
+        ForeignKey(fk("materials.id"), ondelete="CASCADE"), primary_key=True
+    )
+    org_id: Mapped[int] = mapped_column(ForeignKey(fk("orgs.id")), primary_key=True, index=True)
+
+    # Relationships:
+    material: Mapped[Material] = relationship(back_populates="assignments")
+    org: Mapped[Org] = relationship(back_populates="material_assignments")

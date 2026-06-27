@@ -500,7 +500,7 @@ def update_slot(slot_id: int):
 @bp.get("/camps/<slug>/materials")
 @spec.validate(resp=Response(HTTP_200=MaterialListEnvelope, **_AUTH), tags=["materials"])
 def material_list(slug: str):
-    camp = _camp(slug)
+    camp = _camp(slug, *loaders.MATERIALS)
     _guard(camp, edit=False)
     return _run(lambda: materials.list_materials(camp))
 

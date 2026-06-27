@@ -18,6 +18,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Filtering and sorting of TODOs in the activity detail.
 - Camp-wide TODOs overview page: a filterable, sortable table of every
   activity's todos showing status, activity, assigned orgs, due date and note.
+- Material catalog items now carry free acquisition labels (e.g. `kup: mefisto`,
+  `sklad: bedna K14`, `půjčit: jirka`) — any number per item, edited via a chips input
+  with prefix autocomplete. _(DB migration)_
+- Material catalog: per-item amount-aggregation strategy (sum, max). _(DB migration)_
 - Resync all button on the Google Calendar settings tab.
 
 ### Changed

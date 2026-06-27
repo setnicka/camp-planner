@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, Todo, TodoAssignment
 from camp_planner.models.camp import Camp
-from camp_planner.models.material import Material, MaterialNeed
+from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
 from camp_planner.models.slot import Slot, SlotAssignment
 
 
@@ -52,10 +52,21 @@ TIMELINE = (
     ),
 )
 
-# GET /camps/<slug>/materials/overview — each catalog material with its needs and the
-# activity each need belongs to (for the activity_title column).
+# GET /camps/<slug>/materials — the catalog list; serialize.material walks each material's
+# responsible orgs (the activity-detail picker reads it).
+MATERIALS = (
+    selectinload(Camp.materials).selectinload(Material.assignments).selectinload(MaterialAssignment.org),
+)
+
+# GET /camps/<slug>/materials/overview — each catalog material with its responsible orgs and
+# its needs (+ the activity each need belongs to, for the activity_title column), plus the
+# camp roster used to populate the edit modal's org picker.
 MATERIALS_OVERVIEW = (
-    selectinload(Camp.materials).selectinload(Material.needs).selectinload(MaterialNeed.activity),
+    selectinload(Camp.orgs),
+    selectinload(Camp.materials).options(
+        selectinload(Material.assignments).selectinload(MaterialAssignment.org),
+        selectinload(Material.needs).selectinload(MaterialNeed.activity),
+    ),
 )
 
 # GET /camps/<slug>/todos (+ web todos overview) — every activity's todos with their

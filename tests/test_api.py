@@ -699,6 +699,78 @@ def test_material_update_fields(client, seeded):
     assert (m["name"], m["unit"], m["note"]) == ("kancelářský papír", "balení", "A4")
 
 
+def test_material_acquisition_labels_and_orgs(client, seeded):
+    slug, oid = seeded["slug"], seeded["org_id"]
+    mid = _make_material(client, slug, name="lano")["material"]["id"]
+    # new field defaults to an empty list
+    assert _make_material(client, slug, name="provázek")["material"]["acquisition_labels"] == []
+
+    # blanks dropped, duplicates removed, order preserved (the _clean_labels validator)
+    resp = client.patch(f"/api/camps/{slug}/materials/{mid}",
+                        json={"acquisition_labels": ["půjčit: jirka", "  ", "půjčit: kačka", "půjčit: jirka"],
+                              "org_ids": [oid]}, headers=ADMIN)
+    assert resp.status_code == 200
+    m = _json(resp)["material"]
+    assert m["acquisition_labels"] == ["půjčit: jirka", "půjčit: kačka"]
+    assert m["orgs"] == [{"org_id": oid, "initials": "K"}]
+
+    # the overview serializer carries the same catalog fields (shared via _material())
+    ov = next(x for x in _get(client, f"/api/camps/{slug}/materials/overview")["materials"] if x["id"] == mid)
+    assert ov["acquisition_labels"] == ["půjčit: jirka", "půjčit: kačka"]
+    assert ov["orgs"] == [{"org_id": oid, "initials": "K"}]
+
+    # a field not sent is untouched; an explicit null is also unchanged (like org_ids); [] clears
+    m = _json(client.patch(f"/api/camps/{slug}/materials/{mid}",
+                           json={"org_ids": []}, headers=ADMIN))["material"]
+    assert m["orgs"] == [] and m["acquisition_labels"] == ["půjčit: jirka", "půjčit: kačka"]
+    m = _json(client.patch(f"/api/camps/{slug}/materials/{mid}",
+                           json={"acquisition_labels": None}, headers=ADMIN))["material"]
+    assert m["acquisition_labels"] == ["půjčit: jirka", "půjčit: kačka"]   # null → unchanged
+    m = _json(client.patch(f"/api/camps/{slug}/materials/{mid}",
+                           json={"acquisition_labels": []}, headers=ADMIN))["material"]
+    assert m["acquisition_labels"] == []   # [] clears
+
+
+def test_material_merge_carries_labels_and_orgs(client, seeded):
+    slug, oid = seeded["slug"], seeded["org_id"]
+    src = _make_material(client, slug, name="lano")["material"]["id"]
+    dst = _make_material(client, slug, name="provaz")["material"]["id"]
+    # target already has one label + the org; source adds an overlapping + a new label (same org)
+    client.patch(f"/api/camps/{slug}/materials/{dst}",
+                 json={"acquisition_labels": ["kup: mefisto"], "org_ids": [oid]}, headers=ADMIN)
+    client.patch(f"/api/camps/{slug}/materials/{src}",
+                 json={"acquisition_labels": ["kup: mefisto", "sklad: K14"], "org_ids": [oid]}, headers=ADMIN)
+    m = _json(client.post(f"/api/camps/{slug}/materials/{src}/merge",
+                          json={"into": dst}, headers=ADMIN))["material"]
+    assert m["id"] == dst
+    assert m["acquisition_labels"] == ["kup: mefisto", "sklad: K14"]   # union, dedup, target-first
+    assert m["orgs"] == [{"org_id": oid, "initials": "K"}]              # org carried, not doubled
+
+
+def test_material_sum_strategy(client, seeded):
+    slug = seeded["slug"]
+    m = _make_material(client, slug, name="projektor")["material"]
+    assert m["sum_strategy"] == "sum"   # default
+    mid = m["id"]
+
+    assert _json(client.patch(f"/api/camps/{slug}/materials/{mid}",
+                              json={"sum_strategy": "max"}, headers=ADMIN))["material"]["sum_strategy"] == "max"
+    # not sent → unchanged
+    assert _json(client.patch(f"/api/camps/{slug}/materials/{mid}",
+                              json={"unit": "ks"}, headers=ADMIN))["material"]["sum_strategy"] == "max"
+    # unknown value rejected by the enum
+    assert client.patch(f"/api/camps/{slug}/materials/{mid}",
+                        json={"sum_strategy": "avg"}, headers=ADMIN).status_code == 422
+
+
+def test_material_update_unknown_org_rejected(client, seeded):
+    slug = seeded["slug"]
+    mid = _make_material(client, slug, name="lano")["material"]["id"]
+    resp = client.patch(f"/api/camps/{slug}/materials/{mid}",
+                        json={"org_ids": [999999]}, headers=ADMIN)
+    assert resp.status_code == 400 and "org" in _json(resp)["error"].lower()
+
+
 def test_material_update_rename_collision(client, seeded):
     slug = seeded["slug"]
     _make_material(client, slug, name="papír")
