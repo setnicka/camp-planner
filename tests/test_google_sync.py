@@ -282,6 +282,28 @@ def test_disconnect_forgets_mapping_and_queue(app, seeded, gcal):
     assert google_sync.pending_count(camp) == 0
 
 
+def test_resync_all_queues_every_slot(app, seeded, gcal):
+    camp = _camp(seeded)
+    _connect(camp)
+    _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    _make_slot(seeded["activity_id"], datetime(2026, 7, 5, 14, 0), datetime(2026, 7, 5, 16, 0))
+
+    assert google_sync.resync_all(camp) == {"queued": 2}
+    assert google_sync.pending_count(camp) == 2          # one upsert per slot
+    assert google_sync.resync_all(camp) == {"queued": 2}  # idempotent — dedupes against queued upserts
+    assert google_sync.pending_count(camp) == 2
+
+    google_sync.drain(camp)
+    assert len(gcal.events) == 2
+
+
+def test_resync_all_noop_when_not_connected(app, seeded):
+    camp = _camp(seeded)
+    _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    assert google_sync.resync_all(camp) == {"queued": 0}
+    assert google_sync.pending_count(camp) == 0
+
+
 def _new_camp(slug, start, length=3, window=240):
     camp = Camp(name=slug.upper(), slug=slug, start_date=start, length_days=length,
                 window_start_min=window, snap_minutes=15)
@@ -532,6 +554,19 @@ def test_connect_and_sync_via_api(client, seeded, gcal):
 
     resp = client.post(f"/api/camps/{slug}/google/sync", headers=editor(slug))
     assert resp.status_code == 200 and resp.get_json()["result"]["failed"] == 0
+
+
+def test_resync_via_api(client, seeded, gcal):
+    slug = seeded["slug"]
+    camp = _camp(seeded)
+    _connect(camp)
+    _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+
+    assert client.post(f"/api/camps/{slug}/google/resync", headers=viewer(slug)).status_code == 403
+    resp = client.post(f"/api/camps/{slug}/google/resync", headers=editor(slug))
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["result"]["queued"] == 1 and body["google"]["pending_ops"] == 1
 
 
 def test_feature_disabled_rejects_connect(client, seeded):

@@ -57,6 +57,7 @@ from camp_planner.schemas import (
     GooglePullApplyIn,
     GooglePullConflictOut,
     GooglePullPreviewEnvelope,
+    GoogleResyncEnvelope,
     GoogleSyncEnvelope,
     MaterialCreate,
     MaterialEnvelope,
@@ -285,6 +286,15 @@ def google_sync_now(slug: str):
     camp = _camp(slug)
     _guard(camp, edit=True)
     return _run(lambda: {"result": google_sync.drain(camp), "google": camps_service.google_status(camp)})
+
+
+@bp.post("/camps/<slug>/google/resync")
+@spec.validate(resp=Response(HTTP_200=GoogleResyncEnvelope, **_AUTH_400), tags=["google"])
+def google_resync(slug: str):
+    """Queue every slot for an outbound push ("Znovu synchronizovat vše")."""
+    camp = _camp(slug)
+    _guard(camp, edit=True)
+    return _run(lambda: {"result": google_sync.resync_all(camp), "google": camps_service.google_status(camp)})
 
 
 @bp.get("/camps/<slug>/google/pull")

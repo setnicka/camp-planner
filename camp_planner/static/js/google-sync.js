@@ -137,6 +137,17 @@
     });
     syncBtn = sync;
 
+    const resync = el("button", { type: "button", class: "cp-mini" }, "Znovu synchronizovat vše");
+    resync.title = "Zařadí všechny sloty k odeslání do Google — oprava, když se kalendář rozejde.";
+    resync.addEventListener("click", async () => {
+      if (!window.confirm("Zařadit všechny sloty k opětovnému odeslání do Google?")) return;
+      const json = await call(resync, "POST", URLS.resync);
+      if (json) {
+        const n = json.result.queued;
+        toast(`Zařazeno k synchronizaci: ${n} ${plural(n, "slot", "sloty", "slotů")}.`);
+      }
+    });
+
     const review = el("div", { class: "cp-google-review" });
     const pull = el("button", { type: "button", class: "cp-mini" }, "Načíst změny z Google");
     pull.addEventListener("click", () => loadReview(review, pull));
@@ -153,7 +164,7 @@
       el("div", { class: "cp-google-info" },
         el("p", null, "Připojeno ke kalendáři: ", el("code", null, status.calendar_id)),
         statusInfoEl,
-        el("div", { class: "cp-google-row" }, sync, pull, disconnect)),
+        el("div", { class: "cp-google-row" }, sync, resync, pull, disconnect)),
       review);
   }
 

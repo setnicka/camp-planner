@@ -18,6 +18,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Filtering and sorting of TODOs in the activity detail.
 - Camp-wide TODOs overview page: a filterable, sortable table of every
   activity's todos showing status, activity, assigned orgs, due date and note.
+- Resync all button on the Google Calendar settings tab.
 
 ### Changed
 

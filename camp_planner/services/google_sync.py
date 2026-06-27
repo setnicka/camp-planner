@@ -80,6 +80,21 @@ def pending_count(camp: Camp) -> int:
     )
 
 
+def resync_all(camp: Camp) -> dict:
+    """Queue an outbound upsert for every slot of the camp, so the next drain re-pushes the
+    whole schedule to Google. Use to repair a calendar that drifted (events hand-edited or
+    deleted in Google) — the drain patches events that still exist and re-inserts any missing.
+    No-op when the camp isn't connected. Owns its transaction. Returns {queued: # of slots}."""
+    if not camp.google_calendar_id:
+        return {"queued": 0}
+    slots = [slot for activity in camp.activities for slot in activity.slots]
+    for slot in slots:
+        enqueue_upsert(camp, slot)  # dedupes against any upsert already queued for the slot
+    db.session.commit()
+    log.info("Google Calendar resync (camp %s): queued %d slots", camp.slug, len(slots))
+    return {"queued": len(slots)}
+
+
 def failure_summary(camp: Camp) -> tuple[int, str | None]:
     """(# of queued ops that have failed at least once, the most recent error text) — lets
     the UI surface a stuck sync, e.g. a calendar shared read-only so every push 403s."""

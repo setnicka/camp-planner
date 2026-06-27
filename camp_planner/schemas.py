@@ -767,6 +767,15 @@ class GoogleSyncEnvelope(_Ok):
     google: GoogleStatusOut
 
 
+class GoogleResyncResultOut(BaseModel):
+    queued: int  # slots queued for an outbound push
+
+
+class GoogleResyncEnvelope(_Ok):
+    result: GoogleResyncResultOut
+    google: GoogleStatusOut
+
+
 class GooglePullPreviewEnvelope(_Ok):
     """The reviewable inbound diff. `changes` items carry a stable `key`, a `kind`
     (time_change | deleted_in_google | new_event), a Czech `label` and the relevant

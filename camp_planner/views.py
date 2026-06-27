@@ -314,6 +314,7 @@ def _render_detail(camp: Camp):
         "urls": {
             "base": url_for("api.google_status", slug=camp.slug),  # GET / PUT / DELETE
             "sync": url_for("api.google_sync_now", slug=camp.slug),
+            "resync": url_for("api.google_resync", slug=camp.slug),
             "pull": url_for("api.google_pull_preview", slug=camp.slug),  # GET preview / POST apply
         },
     }
