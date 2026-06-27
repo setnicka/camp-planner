@@ -30,6 +30,11 @@ from camp_planner.services.timeline import bump_timeline_rev
 # An imported event longer than this is treated as a whole-camp span, not a slot, and skipped.
 _MAX_IMPORT_HOURS = 48
 
+# HTTP statuses that mean a patch target is gone upstream — deleted, or a recurring instance
+# Google cancelled when its series was re-timed. The drain re-creates the slot instead of
+# retrying a patch that 400s forever. (Our event bodies are server-built, so 400 = dead target.)
+_EVENT_GONE = {400, 404, 410}
+
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -219,7 +224,29 @@ def _deliver_queued_ops(camp: Camp) -> dict:
             push_ops.append(google_client.PushOp(key=key, kind="insert", calendar_id=cal, body=body))
 
     outcomes = google_client.batch_push(push_ops) if push_ops else {}
+
+    # Recover patches whose target vanished upstream (→ _EVENT_GONE): forget the dead
+    # google_event_id and re-create the slot as a fresh event in a second batch. Replacing the
+    # patch with its insert (by key) lets the result loop below write the new id back as a create.
+    replacements: dict[str, google_client.PushOp] = {}
     for pop in push_ops:
+        res = outcomes.get(pop.key)
+        if pop.kind != "patch" or res is None or res.ok or res.status not in _EVENT_GONE:
+            continue
+        slot = db.session.get(Slot, op_by_key[pop.key].slot_id)
+        if slot is None:  # slot deleted meanwhile → leave as a normal failure below
+            continue
+        slot.google_event_id = None  # dead mapping — drop it; the re-insert remaps the slot
+        slot_by_key[pop.key] = slot  # where to write the new event id back
+        replacements[pop.key] = google_client.PushOp(key=pop.key, kind="insert", calendar_id=cal,
+                                                     body=google_client.event_body(slot))
+    if replacements:
+        log.info("Google Calendar: %d event(s) gone upstream; re-creating (camp %s)",
+                 len(replacements), camp.slug)
+        outcomes.update(google_client.batch_push(list(replacements.values())))
+
+    for pop in push_ops:
+        pop = replacements.get(pop.key, pop)  # the insert that replaced a gone patch, if any
         op = op_by_key[pop.key]
         res = outcomes.get(pop.key)
         # An insert counts as delivered only if Google returned the new event id — otherwise the

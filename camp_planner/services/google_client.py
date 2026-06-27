@@ -242,10 +242,13 @@ class PushOp(NamedTuple):
 
 class PushResult(NamedTuple):
     """Outcome of one PushOp. `event_id` is the created event id on a successful insert
-    (None otherwise); `error` is the failure text when ok is False."""
+    (None otherwise); `error` is the failure text when ok is False; `status` is the failed
+    request's HTTP status (None on success or a non-HTTP error), letting the drain spot a
+    vanished patch target."""
     ok: bool
     event_id: str | None
     error: str | None
+    status: int | None = None
 
 
 def batch_push(ops: list[PushOp]) -> dict[str, PushResult]:
@@ -270,7 +273,8 @@ def batch_push(ops: list[PushOp]) -> dict[str, PushResult]:
               and exception.resp.status in (404, 410)):
             results[key] = PushResult(True, None, None)  # already gone → success
         else:
-            results[key] = PushResult(False, None, str(exception))
+            status = exception.resp.status if isinstance(exception, HttpError) else None
+            results[key] = PushResult(False, None, str(exception), status)
 
     def _request(op: PushOp):
         if op.kind == "insert":

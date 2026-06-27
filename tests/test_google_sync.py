@@ -31,6 +31,7 @@ class FakeGoogle:
         self.events: dict[str, dict] = {}
         self._n = 0
         self.fail_next = False
+        self.gone: set[str] = set()  # event ids that PATCH 400s (deleted/cancelled upstream)
         self.calls = {"insert": 0, "patch": 0, "delete": 0}
 
     def insert(self, calendar_id, body):
@@ -47,6 +48,8 @@ class FakeGoogle:
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("boom")
+        if event_id in self.gone:  # cancelled recurring instance / deleted event → PATCH 400s
+            raise _http_error(400)
         self.calls["patch"] += 1
         self.events[event_id] = {**self.events.get(event_id, {}), **body, "id": event_id}
 
@@ -59,7 +62,11 @@ class FakeGoogle:
 
     def batch_push(self, ops):
         """Stand-in for google_client.batch_push: dispatch each op to insert/patch/delete (so
-        the calls/events/fail_next bookkeeping stays identical), returning a PushResult per key."""
+        the calls/events/fail_next bookkeeping stays identical), returning a PushResult per key.
+        Mirrors the real callback: an HttpError carries its status (and a delete 404/410 still
+        counts as success), so the drain's gone-target recovery is exercised here too."""
+        from googleapiclient.errors import HttpError
+
         results = {}
         for op in ops:
             try:
@@ -71,6 +78,11 @@ class FakeGoogle:
                 else:
                     self.delete(op.calendar_id, op.event_id)
                     results[op.key] = google_client.PushResult(True, None, None)
+            except HttpError as exc:
+                if op.kind == "delete" and exc.resp.status in (404, 410):
+                    results[op.key] = google_client.PushResult(True, None, None)
+                else:
+                    results[op.key] = google_client.PushResult(False, None, str(exc), exc.resp.status)
             except Exception as exc:  # noqa: BLE001 — mirror real per-op failure capture
                 results[op.key] = google_client.PushResult(False, None, str(exc))
         return results
@@ -302,6 +314,28 @@ def test_resync_all_noop_when_not_connected(app, seeded):
     _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
     assert google_sync.resync_all(camp) == {"queued": 0}
     assert google_sync.pending_count(camp) == 0
+
+
+def test_drain_recreates_event_gone_upstream(app, seeded, gcal):
+    """A slot whose Google event vanished upstream (deleted, or a cancelled recurring instance
+    whose id PATCH-400s forever): the drain forgets the dead id and re-creates the slot as a
+    fresh standalone event, draining the op instead of retrying."""
+    camp = _camp(seeded)
+    slot = _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    camps_service.set_google_calendar(camp, CAL)
+    google_sync.drain(camp)
+    old_id = slot.google_event_id
+    assert old_id
+
+    gcal.gone.add(old_id)             # event cancelled/deleted in Google → PATCH 400s
+    google_sync.enqueue_upsert(camp, slot)
+    db.session.commit()
+
+    result = google_sync.drain(camp)
+    db.session.refresh(slot)
+    assert slot.google_event_id and slot.google_event_id != old_id  # re-created as a fresh event
+    assert result == {"pushed": 1, "failed": 0, "pending": 0}        # op drained, not stuck
+    assert slot.google_event_id in gcal.events                       # the fresh event exists
 
 
 def _new_camp(slug, start, length=3, window=240):

@@ -28,6 +28,13 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Progress (percent) tag values can now be typed directly as a number.
 
+### Fixed
+
+- Google sync: a slot whose Google event vanished upstream (deleted, or a
+  recurring-event instance Google cancelled when its series was re-timed) no
+  longer loops on a 400 Bad Request forever. The drain now forgets the dead
+  event id and re-creates the slot as a fresh standalone event.
+
 ## [0.1.4] - 2026-06-16
 
 ### Added
