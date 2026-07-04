@@ -12,6 +12,14 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Changed
+
+- Timeline: every slot now shows a hover tooltip (heading + time, then any assigned
+  orgs), not only slots that already have organizers.
+- Timeline: the filter row now shows the current time in the camp's timezone, with the
+  timezone name in small grey when it differs from the viewer's own timezone. The
+  current-time line is likewise positioned by the camp's wall clock.
+
 ## [0.2.0] - 2026-06-27
 
 ### Added

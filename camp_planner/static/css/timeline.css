@@ -42,8 +42,13 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
   border: 1px solid var(--cp-border); border-radius: 6px; background: #fff; color: #333;
 }
 
-/* filter row under the legend: org chips + activity picker on one line */
+/* filter row under the legend: current-time clock + org chips + activity picker on one line */
 .cp-tl-frow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; }
+/* camp-timezone clock at the head of the filter row; tz name (shown only when it differs
+   from the viewer's) trails in small grey */
+.cp-tl-clock { display: inline-flex; align-items: baseline; gap: 0.25rem; font-size: 13px; color: #333; margin-left: 0.4rem; }
+.cp-tl-clock-time { font-variant-numeric: tabular-nums; }
+.cp-tl-clock-tz { font-size: 11px; color: #999; }
 .cp-tl-frow .cp-tl-select { margin-left: 0.2rem; }   /* small gap after the "Hra:" label */
 .cp-tl-chip {
   font: inherit; font-size: 12px; font-weight: 600; min-width: 1.6rem; padding: 0.1rem 0.45rem; cursor: pointer;

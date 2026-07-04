@@ -154,11 +154,15 @@
       `<div class="ev-meta"><span class="ev-time" data-id="${s.idx}">${when}</span>${orgs}</div></div>`;
   }
 
-  // Hover tooltip (vis `title`): full org names grouped by role; empty groups omitted.
+  // Hover tooltip (vis `title`): heading + clock, then full org names grouped by role
+  // (empty groups omitted). Shown for every slot, even one with no orgs assigned yet.
   function segmentTitle(s) {
-    if (!s.garants.length && !s.helpers.length && !s.attending.length) return ""; // no orgs → no tooltip
     const names = (ids) => ids.map((id) => escapeHtml(orgById[id]?.name ?? "?")).join(", ");
-    const lines = [`<b>${escapeHtml(s.override_name || s.title)}</b>`];
+    const when = `${fmtClock(s.abs_start_min)}–${fmtClock(s.abs_end_min)}`;
+    const lines = [
+      `<b>${escapeHtml(roleHeading(s.role, s.override_name || s.title))}</b>`,
+      when,
+    ];
     if (s.garants.length) lines.push(`<b>Garant:</b> ${names(s.garants)}`);
     if (s.helpers.length) lines.push(`<b>Pomocník:</b> ${names(s.helpers)}`);
     if (s.attending.length) lines.push(`<b>Účastní se:</b> ${names(s.attending)}`);
@@ -323,16 +327,27 @@
   nowLine.hidden = true;
   let nowDay = null;   // day-row the line last sat on; a change means snap (rollover), not slide
   const DAY_MS = DAY_MIN * 60000;
+  // "Now" positioned on the axis in the camp's wall clock, not the viewer's: the axis renders
+  // browser-local, so shift the real instant by (camp offset − browser offset). Identical when
+  // the viewer sits in the camp timezone.
+  function campNowOnAxis() {
+    const now = Date.now();
+    const d = new Date(now);
+    const campOff = tzOffsetMs(camp.timezone, d);
+    const browserOff = -d.getTimezoneOffset() * 60000;
+    return now + campOff - browserOff;
+  }
   // animate=true (the minute tick) glides the line to its new spot; redraws / zoom / pan /
   // resize / the day rollover snap instantly (animating those would lag or slide backwards).
   function placeNowLine(animate) {
     const center = container.querySelector(".vis-panel.vis-center");
     if (!center) return;
     if (nowLine.parentNode !== center) center.appendChild(nowLine);
-    const day = Math.floor((Date.now() - winStart) / DAY_MS);  // day-row whose window holds now
+    const now = campNowOnAxis();
+    const day = Math.floor((now - winStart) / DAY_MS);         // day-row whose window holds now
     const groupEl = container.querySelectorAll(".vis-foreground .vis-group")[day];
     const win = timeline.getWindow();
-    const nowOnAxis = Date.now() - day * DAY_MS;               // fold now back onto the day-0 window axis
+    const nowOnAxis = now - day * DAY_MS;                       // fold now back onto the day-0 window axis
     const x = ((nowOnAxis - win.start.getTime()) / (win.end.getTime() - win.start.getTime())) * center.clientWidth;
     if (day < 0 || day >= camp.length_days || !groupEl || x < 0 || x > center.clientWidth) {
       nowLine.hidden = true;
@@ -388,6 +403,29 @@
     row.className = "cp-tl-frow";
     const fLabel = (text) => Object.assign(document.createElement("span"), { className: "cp-tl-filter-label", textContent: text });
 
+    // The current time in the camp timezone (appended after the Org/Hra filters below). When that
+    // differs from the viewer's own timezone, the tz name follows in small grey so the wall clock
+    // isn't ambiguous. Ticks every second; formatted directly in the camp tz via Intl (no offset math).
+    const clock = document.createElement("span");
+    clock.className = "cp-tl-clock";
+    clock.title = "Aktuální čas v časovém pásmu tábora";
+    const clockTime = Object.assign(document.createElement("b"), { className: "cp-tl-clock-time" });
+    clock.append("🕒 ", clockTime);
+    let browserTz = "";
+    try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_e) { /* leave "" */ }
+    if (camp.timezone && camp.timezone !== browserTz) {
+      clock.append(Object.assign(document.createElement("span"),
+        { className: "cp-tl-clock-tz", textContent: camp.timezone }));
+    }
+    const fmtCampClock = () => {
+      const opts = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
+      try { return new Intl.DateTimeFormat("cs-CZ", { timeZone: camp.timezone, ...opts }).format(new Date()); }
+      catch (_e) { return new Intl.DateTimeFormat("cs-CZ", opts).format(new Date()); }
+    };
+    const tickClock = () => { clockTime.textContent = fmtCampClock(); };
+    tickClock();
+    setInterval(tickClock, 1000);
+
     // org chips (each org listed once); click cycles garant → účast → off
     const orgChips = [];
     let modeLabel = null;
@@ -415,6 +453,7 @@
       activities.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
       row.append(fLabel("Hra:"), actSel);
     }
+    row.append(clock);   // camp-timezone clock, after the Org/Hra filters
     if (row.children.length) {   // skip an empty row (no orgs and no slotted activities)
       if (legend) legend.after(row);
       else (left || container.parentNode).insertBefore(row, container);
