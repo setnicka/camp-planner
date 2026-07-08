@@ -21,32 +21,65 @@
   const CATEGORIES = DATA.categories;
   const ORGS = DATA.orgs;
   const PINNED = DATA.pinned_tags;          // [{id, name, kind}] — table columns + filter/sort
+  const CAMP = DATA.camp;                   // {start_date, length_days, window_start_min} — chrono day math
 
   const withId = (tpl, id) => tpl.replace(/\d+$/, id);                       // swap the trailing 0 sentinel
   const mergeUrl = (id) => U.activityMerge.replace(/\/0\/merge$/, "/" + id + "/merge");  // .../<id>/merge
   const clampPct = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
-  const slotCount = (r) => r.slots.main + r.slots.prep + r.slots.cleanup;
+  const slotCount = (r) => r.slots.length;                                    // any placed slot (any role)
+  const mainSlots = (r) => r.slots.filter((s) => s.role === "main");          // time-ordered (server-sorted)
   const hasTag = (r, id) => Object.prototype.hasOwnProperty.call(r.tags, id);   // key present = tag applies
+  // Column count is the same in both modes: chronological swaps the trailing "Sloty" count
+  // column for a leading "Čas" column.
   const colCount = () => 6 + PINNED.length + (mayEdit ? 1 : 0);
+
+  // --- camp-day math (chronological mode) ------------------------------------
+  // Group main slots into camp days the same way the timeline does: a day is a 24h window
+  // anchored at window_start_min (not midnight), so a night program past midnight stays on
+  // its day's row. Times are naive wall-clock — no timezone conversion (see models/slot.py).
+  const DAY_MIN = 1440;
+  const CZ_WEEKDAYS = ["Neděle", "Pondělí", "Úterý", "Středa", "Čtvrtek", "Pátek", "Sobota"]; // getUTCDay: 0=Ne
+  const [SD_Y, SD_M, SD_D] = CAMP.start_date.split("-").map(Number);
+  const ORIGIN = Date.UTC(SD_Y, SD_M - 1, SD_D);                             // midnight of start_date, as UTC ms
+  // Camp-day index (0..length_days-1) for a naive ISO datetime. Parse the parts — never
+  // `new Date(str)`, which would apply the browser timezone — into minutes from the camp origin,
+  // then bucket by the 24h window anchored at window_start_min. Clamped to the span so every main
+  // slot lands on a real divider (matches the segment clamping in services/timeline.py).
+  function dayOf(iso) {
+    const [datePart, timePart] = iso.split("T");
+    const [y, mo, d] = datePart.split("-").map(Number);
+    const [hh, mm] = timePart.split(":").map(Number);
+    const abs = Math.round((Date.UTC(y, mo - 1, d) - ORIGIN) / 86400000) * DAY_MIN + hh * 60 + mm;
+    return Math.max(0, Math.min(CAMP.length_days - 1, Math.floor((abs - CAMP.window_start_min) / DAY_MIN)));
+  }
+  // Full-width day-divider label, e.g. "Čtvrtek 9. 7." — parse as UTC so the weekday can't roll.
+  function dayLabel(i) {
+    const dt = new Date(ORIGIN + i * 86400000);
+    return CZ_WEEKDAYS[dt.getUTCDay()] + " " + dt.getUTCDate() + ". " + (dt.getUTCMonth() + 1) + ".";
+  }
+  const fmtTime = (iso) => { const [h, m] = iso.split("T")[1].split(":"); return Number(h) + ":" + m; };
+  const slotRange = (s) => fmtTime(s.start_at) + "–" + fmtTime(s.end_at);
 
   // filter + sort state (cleared by resetFilters → buildShell, which rebuilds the controls)
   const filter = { categoryId: null, unfinishedTodos: false, unfinishedMaterials: false,
                    orgIds: new Set(), garantsOnly: false, tags: new Map() };   // tags: tagId -> "has"|"checked"|"unchecked"
   let sortKey = "title";
   let sortDir = 1;                // 1 = the column's natural order, -1 = reversed (second click)
+  let chrono = false;            // chronological mode: rows = one per main slot, grouped by camp day
   let tbody, countLabel;
   const sortArrows = new Map();   // sortKey -> the direction indicator span, updated in place on sort change
-  const arrowFor = (key) => (key === sortKey ? (sortDir === 1 ? " ▾" : " ▴") : "");
+  const arrowFor = (key) => (!chrono && key === sortKey ? (sortDir === 1 ? " ▾" : " ▴") : "");
   let openPopover = null;         // the currently-open org dropdown panel (closed on outside click)
 
   // --- cell renderers --------------------------------------------------------
   function slotText(r) {
-    const { main, prep, cleanup } = r.slots;
-    if (!main && !prep && !cleanup) return "—";
-    let s = main + " " + plural(main, "slot", "sloty", "slotů");
+    if (!r.slots.length) return "—";
+    const n = { main: 0, prep: 0, cleanup: 0 };
+    r.slots.forEach((s) => { n[s.role]++; });                                 // count by role from the slot list
+    let s = n.main + " " + plural(n.main, "slot", "sloty", "slotů");
     const extra = [];
-    if (prep) extra.push("+" + prep + " " + plural(prep, "příprava", "přípravy", "příprav"));
-    if (cleanup) extra.push("+" + cleanup + " " + plural(cleanup, "úklid", "úklidy", "úklidů"));
+    if (n.prep) extra.push("+" + n.prep + " " + plural(n.prep, "příprava", "přípravy", "příprav"));
+    if (n.cleanup) extra.push("+" + n.cleanup + " " + plural(n.cleanup, "úklid", "úklidy", "úklidů"));
     if (extra.length) s += " (" + extra.join(", ") + ")";
     return s;
   }
@@ -99,16 +132,39 @@
     return el("td", { class: "cp-actions" }, merge, del);
   }
 
-  function activityRow(r) {
-    const tr = el("tr", null,
-      el("td", null, el("a", { href: withId(U.activityDetail, r.id) }, r.title)),
+  // Cells shared by both row layouts, from category through the actions column.
+  function commonCells(r) {
+    const cells = [
       r.category ? el("td", null, swatch(r.category.color), " ", r.category.label) : el("td", { class: "cp-muted" }, "—"),
-      orgCell(r), progressCell(r.todos), progressCell(r.materials));
-    PINNED.forEach((tag) => tr.append(tagCell(tag, r)));
-    tr.append(el("td", { class: "cp-ov-slots" }, slotText(r)));
-    if (mayEdit) tr.append(actionCell(r));
-    return tr;
+      orgCell(r), progressCell(r.todos), progressCell(r.materials)];
+    PINNED.forEach((tag) => cells.push(tagCell(tag, r)));
+    if (!chrono) cells.push(el("td", { class: "cp-ov-slots" }, slotText(r)));   // "Čas" replaces it in chrono mode
+    if (mayEdit) cells.push(actionCell(r));
+    return cells;
   }
+
+  function activityRow(r) {
+    return el("tr", null,
+      el("td", null, el("a", { href: withId(U.activityDetail, r.id) }, r.title)), ...commonCells(r));
+  }
+
+  // One chronological row: a leading time cell + a slot-aware title (override_name primary, with
+  // the activity title in muted parens after it), then the shared activity cells. `slot` is null
+  // for the no-main-slot bottom bucket.
+  function chronoRow(r, slot) {
+    const link = el("a", { href: withId(U.activityDetail, r.id) }, (slot && slot.override_name) || r.title);
+    const title = el("td", null, link);
+    if (slot && slot.override_name) title.append(" ", el("span", { class: "cp-ov-act" }, "(" + r.title + ")"));
+    return el("tr", null,
+      el("td", { class: "cp-ov-time" }, slot ? slotRange(slot) : "—"), title, ...commonCells(r));
+  }
+
+  const dividerRow = (label, cls) =>
+    el("tr", { class: "cp-ov-day" + (cls || "") },
+      el("td", { class: "cp-ov-day-cell", colspan: String(colCount()) }, label));
+  const emptyDayRow = () =>
+    el("tr", { class: "cp-ov-day-empty" },
+      el("td", { class: "cp-muted", colspan: String(colCount()) }, "— žádné aktivity —"));
 
   // --- filter/sort state <-> URL hash ----------------------------------------
   // Persist the whole filter + sort state in the URL hash (as a query string) so the view is
@@ -128,6 +184,9 @@
     filter.orgIds.forEach((id) => p.append("org", id));
     if (filter.garantsOnly) p.set("garants", "1");
     for (const [id, state] of filter.tags) p.set("tag" + id, state);
+    if (chrono) p.set("chrono", "1");
+    // Persist the column sort even while chronological — so switching back (incl. after a reload)
+    // restores it rather than snapping to the default title order.
     if (sortKey !== "title" || sortDir !== 1) { p.set("sort", sortKey); if (sortDir !== 1) p.set("dir", "-1"); }
     return p.toString();
   }
@@ -150,7 +209,8 @@
       const v = p.get("tag" + t.id);
       if (v === "has" || ((v === "checked" || v === "unchecked") && t.kind === "check")) filter.tags.set(t.id, v);
     });
-    const validSort = sortKeyValid(p.get("sort"));
+    chrono = p.get("chrono") === "1";
+    const validSort = sortKeyValid(p.get("sort"));   // kept independent of chrono, so it survives a switch back
     sortKey = validSort || "title";
     sortDir = validSort && p.get("dir") === "-1" ? -1 : 1;
   }
@@ -187,6 +247,7 @@
   }
 
   function renderTableBody() {
+    if (chrono) return renderChronoBody();
     const rows = ROWS.filter(passes).sort(makeSorter());
     tbody.replaceChildren(...rows.map(activityRow));
     if (!rows.length) {
@@ -196,8 +257,52 @@
     countLabel.textContent = "Zobrazeno " + rows.length + " z " + ROWS.length;
   }
 
+  // The chronological rows an activity yields: one {r, slot} per main slot, or a single slot-less
+  // entry (the "Bez hlavního slotu" bucket) when it has none. One place so render + measurement agree.
+  const chronoEntries = (r) => {
+    const main = mainSlots(r);
+    return main.length ? main.map((slot) => ({ r, slot })) : [{ r, slot: null }];
+  };
+
+  // Chronological body: expand each passing activity into one row per main slot, grouped into
+  // camp-day sections (every camp day gets a divider; an empty day gets a placeholder row).
+  // Activities with no main slot fall into a trailing "Bez hlavního slotu" section, shown only
+  // when non-empty. Every passing activity yields ≥1 row, so its count == the filtered length.
+  function renderChronoBody() {
+    const passing = ROWS.filter(passes);
+    const days = Array.from({ length: CAMP.length_days }, () => []);
+    const noMain = [];
+    passing.flatMap(chronoEntries).forEach((e) => {
+      if (e.slot) days[dayOf(e.slot.start_at)].push(e); else noMain.push(e.r);
+    });
+    const byStart = (a, b) =>
+      a.slot.start_at.localeCompare(b.slot.start_at) || a.r.title.localeCompare(b.r.title, "cs");
+    const frag = [];
+    days.forEach((list, i) => {
+      frag.push(dividerRow(dayLabel(i)));
+      if (!list.length) { frag.push(emptyDayRow()); return; }
+      list.sort(byStart).forEach((e) => frag.push(chronoRow(e.r, e.slot)));
+    });
+    noMain.sort((a, b) => a.title.localeCompare(b.title, "cs"));
+    if (noMain.length) {
+      frag.push(dividerRow("Bez hlavního slotu", " cp-ov-day-nomain"));
+      noMain.forEach((r) => frag.push(chronoRow(r, null)));
+    }
+    tbody.replaceChildren(...frag);
+    countLabel.textContent = "Zobrazeno " + passing.length + " z " + ROWS.length;
+  }
+
+  // Unfiltered rows for the up-front width measurement (see buildShell): every activity in
+  // column mode, every main slot (plus no-main activities) in chronological mode.
+  function measureRows() {
+    return chrono
+      ? ROWS.flatMap(chronoEntries).map((e) => chronoRow(e.r, e.slot))
+      : ROWS.map(activityRow);
+  }
+
   // --- header controls (sort + filter live in the column headers) ------------
   function setSort(key) {
+    if (chrono) return;   // chronological mode owns the ordering — column sorting is disabled
     if (key === sortKey) sortDir = -sortDir; else { sortKey = key; sortDir = 1; }   // re-click reverses
     sortArrows.forEach((span, k) => { span.textContent = arrowFor(k); });
     writeHash();
@@ -205,6 +310,8 @@
   }
 
   // A header whose label is a sort toggle. Registers its arrow indicator for in-place updates.
+  // In chronological mode the header keeps its normal look but no longer sorts (setSort no-ops,
+  // and arrowFor drops the arrow since no column owns the order).
   function sortHead(label, key, extraClass) {
     const arrow = el("span", { class: "cp-th-arrow" }, arrowFor(key));
     sortArrows.set(key, arrow);
@@ -288,10 +395,20 @@
     return el("th", { class: "cp-ov-tag", title: tag.name }, titleNode, sel);
   }
 
+  // "Zrušit filtry" clears only the filters; the sort mode (a column or chronological) is left
+  // as-is — the segmented control is the only way in/out of chronological mode.
   function resetFilters() {
     filter.categoryId = null; filter.unfinishedTodos = false; filter.unfinishedMaterials = false;
     filter.orgIds.clear(); filter.tags.clear(); filter.garantsOnly = false;
-    sortKey = "title"; sortDir = 1;
+    writeHash();
+    buildShell();
+  }
+
+  // Switch between column-sort and chronological mode (segmented control). Rebuilds the shell
+  // because the column set (leading "Čas" column) and header affordances differ between modes.
+  function setChrono(on) {
+    if (on === chrono) return;
+    chrono = on;
     writeHash();
     buildShell();
   }
@@ -369,21 +486,32 @@
       sortHead("Název", "title"), categoryHead(), orgsHead(),
       unfinishedHead("Úkoly", "unfinishedTodos"), unfinishedHead("Materiál", "unfinishedMaterials"));
     PINNED.forEach((t) => headRow.append(tagHead(t)));
-    headRow.append(el("th", null, el("span", { class: "cp-th-label" }, "Sloty")));
+    if (!chrono) headRow.append(el("th", null, el("span", { class: "cp-th-label" }, "Sloty")));   // "Čas" replaces it
     if (mayEdit) headRow.append(el("th", { class: "cp-actions" }, ""));
+    // Chronological mode prepends a time column (the leading ordering key).
+    if (chrono) headRow.prepend(el("th", { class: "cp-ov-time" }, el("span", { class: "cp-th-label" }, "Čas")));
+
+    // Segmented sort-mode control: column-sorting vs chronological (day-grouped) mode.
+    const segBtn = (label, mode) => {
+      const b = el("button", { type: "button", class: "cp-seg-btn" + (chrono === mode ? " cp-seg-active" : "") }, label);
+      b.addEventListener("click", () => setChrono(mode));
+      return b;
+    };
+    const seg = el("div", { class: "cp-seg", role: "group" }, segBtn("Tabulka všech", false), segBtn("Chronologicky", true));
 
     const reset = el("button", { type: "button", class: "cp-mini" }, "Zrušit filtry");
     reset.addEventListener("click", resetFilters);
     countLabel = el("span", { class: "cp-muted cp-ov-count" });
-    const toolbar = el("div", { class: "cp-ov-toolbar" }, countLabel, reset);
+    const toolbar = el("div", { class: "cp-ov-toolbar" }, seg, countLabel, reset);
 
     tbody = el("tbody");
     const table = el("table", { class: "cp-table cp-ov-table" }, el("thead", null, headRow), tbody);
     mount.replaceChildren(toolbar, table);
-    // Paint the full set first so the frozen column widths fit the widest content, then apply
-    // any active filter. Pinning the widths up front stops later filtered re-renders — which
-    // show only the matching rows — from reflowing the columns.
-    tbody.replaceChildren(...ROWS.map(activityRow));
+    // Paint the full (unfiltered) set first so the frozen column widths fit the widest content,
+    // then apply any active filter. Pinning the widths up front stops later filtered re-renders —
+    // which show only the matching rows — from reflowing the columns. In chronological mode the
+    // full set is every main slot expanded into its own row.
+    tbody.replaceChildren(...measureRows());
     freezeColumns(table, headRow);
     renderTableBody();
   }

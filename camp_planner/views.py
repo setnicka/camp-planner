@@ -207,6 +207,10 @@ def camp_overview(slug: str):
     data = {
         # order is decided client-side (the table re-sorts on every filter/sort change)
         "activities": [serialize.activity_overview(a) for a in camp.activities],
+        # camp day window — the chronological sort mode groups slots into camp days client-side
+        # (24h rows anchored at window_start_min; see services/timeline.py).
+        "camp": {"start_date": camp.start_date.isoformat(), "length_days": camp.length_days,
+                 "window_start_min": camp.window_start_min},
         # filter/column metadata: categories, orgs, and the pinned tags (= columns)
         "categories": [{"id": c["id"], "label": c["label"], "color": c["color"]} for c in tax["categories"]],
         "orgs": tax["orgs"],

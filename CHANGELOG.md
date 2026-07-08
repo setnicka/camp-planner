@@ -12,6 +12,13 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Activity overview: a chronological sort mode grouping activities by camp day,
+  with one row per main slot ordered by time (with trailing section of
+  activities without main slots). Filters still apply; column sorting is
+  disabled while active.
+
 ## [0.2.1] - 2026-07-04
 
 ### Changed

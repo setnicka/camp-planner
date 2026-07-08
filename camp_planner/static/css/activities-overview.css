@@ -22,6 +22,22 @@
 .cp-ov-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; margin-bottom: 0.5rem; }
 .cp-ov-count { font-size: 12px; }
 
+/* --- sort-mode segmented control (column vs chronological) --- */
+/* margin-right:auto pushes the control to the left while the count + reset stay right-aligned. */
+.cp-seg { display: inline-flex; margin-right: auto; border: 1px solid var(--cp-border); border-radius: 6px; overflow: hidden; }
+.cp-seg-btn { font: inherit; font-size: 12px; padding: 0.25rem 0.7rem; border: 0; background: #fff; color: #333; cursor: pointer; }
+.cp-seg-btn + .cp-seg-btn { border-left: 1px solid var(--cp-border); }
+.cp-seg-btn:hover:not(.cp-seg-active) { background: #f3f3f3; }
+.cp-seg-active { background: var(--cp-accent); color: #fff; font-weight: 600; }
+
+/* --- chronological mode: day dividers + time column --- */
+/* .cp-ov-table prefix raises specificity above .cp-table td (content.css) so the tighter padding wins. */
+.cp-ov-table .cp-ov-day-cell { background: #eef4f0; border-top: 2px solid var(--cp-accent); font-weight: 700; padding: 0.4rem 0.55rem; }
+.cp-ov-day-nomain .cp-ov-day-cell { background: #f4f1ee; border-top-color: var(--cp-muted); color: var(--cp-muted); }
+.cp-ov-day-empty td { padding: 0.3rem 0.55rem; font-size: 12px; font-style: italic; }
+.cp-ov-time { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 13px; }
+.cp-ov-act { color: var(--cp-muted); font-size: 12px; }   /* activity title in parens after a slot's override name */
+
 /* --- in-header sort + filter controls (cp-th-* primitives live in components.css) --- */
 .cp-ov-table thead th { padding-bottom: 0.4rem; }
 .cp-ov-tag .cp-th-sort { text-align: center; }

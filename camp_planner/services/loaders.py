@@ -80,8 +80,9 @@ TODOS_OVERVIEW = (
 
 # GET /camps/<slug>/activities (web overview/status page) — the camp's filter metadata
 # (categories, orgs, tags) plus, per activity, what serialize.activity_overview counts:
-# category, org assignments, tag links (value only — keyed by tag_id), slots (role only),
-# todos (is_done) and needs (is_ready). Notably no slot attendees or need catalog rows.
+# category, org assignments, tag links (value only — keyed by tag_id), slots (role + span +
+# override_name; no attendees), todos (is_done) and needs (is_ready). Notably no slot attendees
+# or need catalog rows.
 ACTIVITIES_OVERVIEW = (
     selectinload(Camp.categories),
     selectinload(Camp.orgs),

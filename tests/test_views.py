@@ -91,6 +91,43 @@ def test_overview_page_renders_with_data(client, seeded):
     assert "/api/activities/0/merge" in html              # activityMerge url resolves
     assert '"may_edit": true' in html                     # admin can edit
     assert "Akce" in html                                 # the seeded activity
+    assert '"slots"' in html                              # per-activity slot list (counts + chrono spans)
+    assert '"window_start_min": 240' in html              # camp day-window block for chrono grouping
+    assert '"length_days": 3' in html
+
+
+def test_activity_overview_serializes_slots(app, seeded):
+    """activity_overview exposes every slot (role + span + override_name), time-ordered, so the
+    overview can derive per-role counts and the chronological sort's main-slot rows client-side."""
+    from datetime import datetime
+
+    from camp_planner.extensions import db
+    from camp_planner.models.activity import Activity
+    from camp_planner.models.slot import Slot, SlotRole
+    from camp_planner.services import serialize
+
+    a = db.session.get(Activity, seeded["activity_id"])
+    db.session.add_all([   # main + prep slots added out of order — the serializer time-sorts them
+        Slot(activity_id=a.id, role=SlotRole.main, override_name="Odpolední",
+             start_at=datetime(2026, 7, 5, 14, 0), end_at=datetime(2026, 7, 5, 15, 0)),
+        Slot(activity_id=a.id, role=SlotRole.main,
+             start_at=datetime(2026, 7, 5, 9, 0), end_at=datetime(2026, 7, 5, 10, 0)),
+        Slot(activity_id=a.id, role=SlotRole.prep, override_name="Příprava",
+             start_at=datetime(2026, 7, 5, 8, 0), end_at=datetime(2026, 7, 5, 8, 30)),
+    ])
+    db.session.commit()
+
+    out = serialize.activity_overview(a)
+    # all roles, time-ordered (prep 08:00 first), each with span + override_name
+    assert [(s["role"], s["start_at"]) for s in out["slots"]] == [
+        ("prep", "2026-07-05T08:00:00"),
+        ("main", "2026-07-05T09:00:00"),
+        ("main", "2026-07-05T14:00:00"),
+    ]
+    main = [s for s in out["slots"] if s["role"] == "main"]
+    assert main[0]["override_name"] is None
+    assert main[1]["override_name"] == "Odpolední"
+    assert main[1]["end_at"] == "2026-07-05T15:00:00"
 
 
 def test_overview_viewer_read_only(client, seeded):

@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 
 from camp_planner.models.activity import OrgRole
 from camp_planner.models.common import czech_sort_key
-from camp_planner.models.slot import SlotRole
 from camp_planner.schemas import (
     ActivityOut,
     AssignmentOut,
@@ -166,6 +165,14 @@ def activity_overview(a: Activity) -> dict:
     and sorting are done client-side from this shape."""
     garants = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.garant), key=czech_sort_key)
     helpers = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.helper), key=czech_sort_key)
+    # Every slot (role + span + display name, naive ISO), time-ordered — the client derives the
+    # per-role counts and, for the chronological sort, the main-slot rows. Lean subset of SlotOut
+    # (no id/attendees — the overview loader deliberately doesn't fetch slot attendees).
+    slots = sorted(
+        ({"role": s.role.value, "start_at": s.start_at.isoformat(), "end_at": s.end_at.isoformat(),
+          "override_name": s.override_name or None}
+         for s in a.slots),
+        key=lambda s: s["start_at"])
     return {
         "id": a.id,
         "title": a.title,
@@ -176,7 +183,7 @@ def activity_overview(a: Activity) -> dict:
         "garant_ids": sorted({x.org_id for x in a.assignments if x.role is OrgRole.garant}),
         "todos": {"done": sum(t.is_done for t in a.todos), "total": len(a.todos)},
         "materials": {"done": sum(n.is_ready for n in a.material_needs), "total": len(a.material_needs)},
-        "slots": {role.value: sum(s.role is role for s in a.slots) for role in SlotRole},
+        "slots": slots,
         "tags": {str(at.tag_id): at.value for at in a.tags},
     }
 
