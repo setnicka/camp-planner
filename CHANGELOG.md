@@ -12,6 +12,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-07-13
+
 ### Fixed
 
 - CSRF token no longer expires on a long-open page: it's refreshed proactively
@@ -129,7 +131,8 @@ overlapping activities across days.
 - Alembic DB migrations with runtime `DB_TABLE_PREFIX` support.
 - Unit tests, README, and deployment docs.
 
-[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/setnicka/camp-planner/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/setnicka/camp-planner/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/setnicka/camp-planner/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/setnicka/camp-planner/compare/v0.1.3...v0.1.4
