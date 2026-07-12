@@ -1,5 +1,5 @@
 {% extends layout %}
-{% from "_macros.html" import camp_nav %}
+{% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}Seznam her – {{ camp.name }}{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
@@ -7,7 +7,7 @@
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/activities-overview.css') }}">
-  <meta name="csrf-token" content="{{ csrf_token() }}">
+  {{ csrf_meta() }}
 {% endblock %}
 
 {% block content %}

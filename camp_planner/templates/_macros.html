@@ -2,6 +2,10 @@
 
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
+{# CSRF token for JS mutations + the endpoint dom.js polls to refresh it. Emit in the <head>. #}
+{% macro csrf_meta() %}<meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="csrf-refresh" content="{{ url_for('main.csrf_refresh') }}">{% endmacro %}
+
 {# The camp heading: camp name plus the four section tabs, on one compact line. Goes through
    the page's `header_nav` block — into the standalone top bar (.cp-header) on full.html, and
    into the .cp-camp-nav band when embedded (bare.html). `active` ∈

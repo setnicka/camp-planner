@@ -8,7 +8,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, escapeHtml, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
-  const { el, api, csrf, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
+  const { el, api, csrf, csrfRefresh, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -504,7 +504,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- save (one PATCH; on success reload the authoritative state) -----------
   // force=true sends rev:null, which makes the server skip the optimistic-lock check
   // and overwrite whatever is there (used from the conflict dialog's "Přepsat").
-  async function save(force) {
+  async function save(force, _retried) {
     if (!hasPending()) return;
     saveBtn.disabled = true;
     const body = {
@@ -522,6 +522,10 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       });
       const json = await resp.json().catch(() => ({}));
       if (resp.status === 409) { openConflict(); return; }
+      // Expired token: refresh + retry once so a batch of edits isn't lost.
+      if (resp.status === 400 && /csrf/i.test(json.error || "") && !_retried && (await csrfRefresh())) {
+        return save(force, true);
+      }
       if (!resp.ok || !json.ok) {
         toast(json.error || "Uložení selhalo.", true);
         saveBtn.disabled = false;

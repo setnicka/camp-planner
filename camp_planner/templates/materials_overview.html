@@ -1,12 +1,12 @@
 {% extends layout %}
-{% from "_macros.html" import camp_nav %}
+{% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}Materiál – {{ camp.name }}{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "materials") }}{% endblock %}
 
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/materials.css') }}">
-  <meta name="csrf-token" content="{{ csrf_token() }}">
+  {{ csrf_meta() }}
 {% endblock %}
 
 {% block content %}

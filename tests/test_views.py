@@ -3,6 +3,10 @@ editors get the edit controls + the API edit-config block; viewers don't."""
 
 from __future__ import annotations
 
+import re
+
+from camp_planner import create_app
+from camp_planner.extensions import db
 from tests.conftest import ADMIN, editor, viewer
 
 
@@ -236,3 +240,35 @@ def test_landing_page_orders_newest_first(client, seeded):
                                     "window_start_min": 240, "snap_minutes": 15}, headers=ADMIN)
     html = client.get("/", headers=ADMIN).get_data(as_text=True)
     assert html.index("Pozdější") < html.index("Tábor")   # newest (2026-09) before older (2026-07)
+
+
+def test_page_carries_csrf_refresh_meta(client, seeded):
+    # every JS-editable page must ship the refresh endpoint URL alongside the token so
+    # dom.js can renew a token that expires on a long-open page (prefix-safe via url_for).
+    html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
+    assert 'name="csrf-token"' in html
+    url = re.search(r'name="csrf-refresh" content="([^"]+)"', html).group(1)
+    assert url.endswith("/csrf-token")
+
+
+def test_csrf_token_endpoint_hands_out_a_working_token():
+    # In a CSRF-enabled app the refresh endpoint returns a freshly-signed token that
+    # actually satisfies the CSRFProtect check on a subsequent mutation.
+    app = create_app("testing")
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app.config["WTF_CSRF_ENABLED"] = True
+    with app.app_context():
+        db.create_all()
+    c = app.test_client()
+    body = {"name": "T", "slug": "t", "start_date": "2026-07-01", "length_days": 3,
+            "timezone": "Europe/Prague", "window_start_min": 240, "snap_minutes": 15}
+
+    # without a token the mutation is rejected with the CSRF-shaped 400 the client detects
+    missing = c.post("/api/camps", json=body, headers=ADMIN)
+    assert missing.status_code == 400
+    assert "csrf" in missing.get_json()["error"].lower()
+
+    # a token from the endpoint passes the CSRF gate (200, not a 400 CSRF error)
+    token = c.get("/csrf-token", headers=ADMIN).get_json()["csrf_token"]
+    ok = c.post("/api/camps", json=body, headers={**ADMIN, "X-CSRFToken": token})
+    assert ok.status_code == 200, ok.get_json()

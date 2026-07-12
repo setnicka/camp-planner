@@ -7,6 +7,7 @@ from datetime import timedelta
 from zoneinfo import available_timezones
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask_wtf.csrf import generate_csrf
 
 from camp_planner.auth.permissions import (
     can_edit,
@@ -67,6 +68,13 @@ def index():
     camps = db.session.scalars(db.select(Camp).order_by(Camp.start_date.desc())).all()
     visible = [camp for camp in camps if can_view(camp)]
     return render_template("index.html", camps=visible)
+
+
+@bp.get("/csrf-token")
+def csrf_refresh() -> dict:
+    """Hand out a freshly-signed CSRF token so a long-open page can refresh the one in its
+    <meta> tag before it expires. GET, so it isn't itself CSRF-protected."""
+    return {"csrf_token": generate_csrf()}
 
 
 def _copy_sources() -> list[Camp]:

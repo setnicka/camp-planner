@@ -21,10 +21,27 @@ window.cpDom = (function () {
 
   const csrf = () => document.querySelector('meta[name="csrf-token"]')?.content ?? "";
 
+  // Fetch a fresh token into the <meta> tag (which every consumer re-reads), so a page left
+  // open past the server's token limit doesn't fail its next mutation. No-op without a refresh
+  // URL; concurrent calls share one in-flight fetch.
+  let refreshing = null;
+  function csrfRefresh() {
+    if (refreshing) return refreshing;
+    const url = document.querySelector('meta[name="csrf-refresh"]')?.content;
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (!url || !meta) return Promise.resolve(false);
+    refreshing = fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j?.csrf_token) { meta.content = j.csrf_token; return true; } return false; })
+      .catch(() => false)
+      .finally(() => { refreshing = null; });
+    return refreshing;
+  }
+
   // JSON call against an /api endpoint: attaches the CSRF header, JSON-encodes `body` when
   // given, parses the {ok, …} envelope and throws Error(json.error) on failure (so callers
-  // just try/catch). Returns the parsed JSON on success.
-  async function api(method, url, body) {
+  // just try/catch). Returns the parsed JSON on success. On an expired token, refresh + retry once.
+  async function api(method, url, body, _retried) {
     const opts = { method, headers: { "X-CSRFToken": csrf() } };
     if (body !== undefined) {
       opts.headers["Content-Type"] = "application/json";
@@ -32,8 +49,17 @@ window.cpDom = (function () {
     }
     const resp = await fetch(url, opts);
     const json = await resp.json().catch(() => ({}));
+    if (resp.status === 400 && /csrf/i.test(json.error || "") && !_retried && (await csrfRefresh())) {
+      return api(method, url, body, true);
+    }
     if (!resp.ok || !json.ok) throw new Error(json.error || "Operace selhala.");
     return json;
+  }
+
+  // Refresh proactively, well before the token's server-side limit, so the reactive retry
+  // above (which also covers laptop sleep) stays a rare fallback.
+  if (document.querySelector('meta[name="csrf-refresh"]')) {
+    setInterval(csrfRefresh, 30 * 60 * 1000);
   }
 
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
@@ -192,6 +218,6 @@ window.cpDom = (function () {
     table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
   }
 
-  return { el, csrf, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash, plural,
-           tabHash, freezeColumns };
+  return { el, csrf, csrfRefresh, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash,
+           plural, tabHash, freezeColumns };
 })();

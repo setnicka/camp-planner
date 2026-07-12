@@ -12,6 +12,12 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Fixed
+
+- CSRF token no longer expires on a long-open page: it's refreshed proactively
+  (every 30 min and on tab refocus), with a transparent refresh-and-retry as a
+  fallback. New `GET /csrf-token` endpoint.
+
 ### Added
 
 - Activity overview: a chronological sort mode grouping activities by camp day,

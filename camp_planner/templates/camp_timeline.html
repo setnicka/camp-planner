@@ -1,5 +1,5 @@
 {% extends layout %}
-{% from "_macros.html" import camp_nav %}
+{% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}{{ camp.name }} – timeline{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
@@ -9,7 +9,7 @@
         href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/timeline.css') }}">
-  <meta name="csrf-token" content="{{ csrf_token() }}">
+  {{ csrf_meta() }}
 {% endblock %}
 
 {% block content %}
