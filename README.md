@@ -99,7 +99,7 @@ camp_planner/
   __init__.py     app factory
   config.py       config + DB-backend selection + table-name prefix
   extensions.py   db, migrate, declarative Base
-  cli.py          init-db / create-user / grant-role / sync-google
+  cli.py          init-db / create-user / grant-role / api-token / sync-google
   api.py          JSON REST API blueprint (/api)
   schemas.py      pydantic request/response models (validation + OpenAPI)
   views.py        HTML pages (camp list, timeline, detail, settings)

@@ -39,7 +39,11 @@ def _state() -> dict[str, Any]:
 
 
 def _load_identity() -> None:
-    g.identity = _state()["provider"].load_identity() or ANONYMOUS
+    # A Bearer token may already have resolved the identity on the api blueprint
+    # (see api._api_token_auth, which stashes g.api_token); otherwise the configured
+    # provider takes over.
+    if g.get("api_token") is None:
+        g.identity = _state()["provider"].load_identity() or ANONYMOUS
 
 
 def _inject() -> dict[str, Any]:

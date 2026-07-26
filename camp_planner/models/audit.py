@@ -33,6 +33,7 @@ class EntityType(str, enum.Enum):
     material_need = "material_need"     # an activity's use of a material
     category = "category"
     org = "org"
+    api_token = "api_token"             # a camp-scoped API bearer token (created / revoked)
 
 
 class AuditLog(Base):

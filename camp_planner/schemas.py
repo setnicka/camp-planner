@@ -27,6 +27,7 @@ from pydantic import (
     model_validator,
 )
 
+from camp_planner.auth.identity import CampRole
 from camp_planner.models.activity import ActivityType, OrgRole
 from camp_planner.models.material import SumStrategy
 from camp_planner.models.audit import AuditAction, EntityType
@@ -697,6 +698,34 @@ class CampEnvelope(_Ok):
 
 class CampListEnvelope(_Ok):
     camps: list[CampOut]
+
+
+# --- api tokens --------------------------------------------------------------
+
+class ApiTokenCreate(BaseModel):
+    """Create a camp-scoped API token (editor or viewer)."""
+    name: str = Field(min_length=1, max_length=255, examples=["import-script"])
+    role: CampRole = CampRole.viewer
+
+
+class ApiTokenOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    role: CampRole
+    created_by: str
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class ApiTokenListEnvelope(_Ok):
+    tokens: list[ApiTokenOut]
+
+
+class ApiTokenCreatedEnvelope(_Ok):
+    """The created token plus its secret — the only time the secret is returned."""
+    token: ApiTokenOut
+    secret: str = Field(examples=["cp_xNf3…"])
 
 
 # --- audit log (read-only history) -------------------------------------------

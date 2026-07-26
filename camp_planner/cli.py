@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import getpass
 import time
 from datetime import datetime
 
@@ -107,6 +108,74 @@ def register_cli(app: Flask) -> None:
         db.session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
         db.session.commit()
         click.echo(f"Granted {grant} to {username!r}.")
+
+    def _camp_by_slug(slug: str):
+        from camp_planner.models.camp import Camp
+
+        camp = db.session.scalar(db.select(Camp).filter_by(slug=slug))
+        if camp is None:
+            raise click.BadParameter(f"no camp with slug {slug!r}")
+        return camp
+
+    @app.cli.group("api-token")
+    def api_token() -> None:
+        """Manage camp-scoped API bearer tokens."""
+
+    @api_token.command("create")
+    @click.argument("name")
+    @click.option("--camp", "slug", required=True, help="Camp slug the token is scoped to.")
+    @click.option("--role", type=click.Choice([r.value for r in CampRole]), default="viewer")
+    @click.option("--created-by", default=None, help="Recorded creator (default: OS user).")
+    def api_token_create(name: str, slug: str, role: str, created_by: str | None) -> None:
+        """Create a token and print its secret once."""
+        from camp_planner.services import api_tokens, errors
+
+        camp = _camp_by_slug(slug)
+        try:
+            _, secret = api_tokens.create(camp, name, CampRole(role),
+                                          created_by or getpass.getuser())
+        except errors.Invalid as exc:
+            raise click.ClickException(str(exc)) from None
+        click.echo(f"Created token {name!r} ({role} on {slug}).")
+        click.echo(f"Secret (shown once): {secret}")
+
+    @api_token.command("list")
+    @click.option("--camp", "slug", default=None, help="Only this camp's tokens.")
+    def api_token_list(slug: str | None) -> None:
+        """List tokens (name, camp, role, creator, last used) — never the secret."""
+        from camp_planner.models.auth import ApiToken
+
+        query = db.select(ApiToken).order_by(ApiToken.name)
+        if slug:
+            query = query.filter_by(camp_id=_camp_by_slug(slug).id)
+        tokens = db.session.scalars(query).all()
+        if not tokens:
+            click.echo("No API tokens.")
+            return
+        for t in tokens:
+            last = t.last_used_at.strftime("%Y-%m-%d %H:%M") if t.last_used_at else "never"
+            click.echo(f"{t.name}\t{t.camp.slug}\t{t.role.value}\tby {t.created_by}\tlast used {last}")
+
+    @api_token.command("revoke")
+    @click.argument("name")
+    @click.option("--camp", "slug", default=None, help="Camp slug (needed if the name isn't unique).")
+    def api_token_revoke(name: str, slug: str | None) -> None:
+        """Revoke (delete) a token by name (names are unique per camp)."""
+        from camp_planner.models.auth import ApiToken
+        from camp_planner.services import api_tokens
+
+        query = db.select(ApiToken).filter_by(name=name)
+        if slug:
+            query = query.filter_by(camp_id=_camp_by_slug(slug).id)
+        tokens = db.session.scalars(query).all()
+        if not tokens:
+            click.echo(f"No token named {name!r}.")
+            return
+        if len(tokens) > 1:
+            camps = ", ".join(t.camp.slug for t in tokens)
+            raise click.ClickException(f"Token {name!r} exists in several camps ({camps}); pass --camp.")
+        api_tokens.revoke(tokens[0])
+        click.echo(f"Revoked token {name!r} ({tokens[0].camp.slug}).")
 
     def _sync_once(slug: str | None, *, quiet_idle: bool = False) -> int:
         """One drain pass over the connected camps; runs as an independent process, so each line

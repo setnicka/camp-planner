@@ -126,6 +126,7 @@ upstream camp_planner { server 127.0.0.1:8000; }
 
 location = /_planner_auth {
     internal;
+    # if ($http_authorization ~* "^Bearer ") { return 200; }  # to make API tokens work, see section 4
     proxy_pass http://127.0.0.1:9000/auth/planner_check;  # the existing app's auth-check URL
     proxy_pass_request_body off;
     proxy_set_header Content-Length "";                    # required: else POSTs hang (body stripped, but length still sent)
@@ -182,3 +183,39 @@ Notes:
   directly exposed process — the headers are client-controlled there.
 - Local dev without nginx: set the `DEV_USER` env var — `"<user_id> [role ...]"` with
   the `X-Remote-Roles` grammar, e.g. `DEV_USER="dev admin"` or `DEV_USER="dev editor:*"`.
+
+## 4. Programmatic API access (bearer tokens)
+
+Scripts authenticate the JSON API with a per-camp token instead of a browser session:
+
+```bash
+uv run flask --app wsgi api-token create import-script --camp smf-2026 --role editor
+# → prints the secret once; use it as: Authorization: Bearer cp_…
+```
+
+A token is scoped to one camp + role (editor/viewer), carries no CSRF requirement
+(a Bearer header can't be sent cross-site), and is resolved by the app in every
+AUTH_MODE. Tokens are also managed per camp under settings → **API tokeny**.
+
+In **embedded** mode the app doesn't run its own CSRF layer, so if the host app
+enforces CSRF globally it will reject a token-only request (no `X-CSRFToken`) before
+the app resolves the token — exempt the mounted `…/api` path from the host's CSRF, or
+use Bearer tokens only in standalone / proxy deployments.
+
+Behind an `auth_request` proxy (§3) a token-only request has no session, so the
+session check rejects it before the app sees it. `auth_request` can't be toggled
+per-request, but the auth endpoint can short-circuit Bearer requests with a 200 so
+nginx forwards them and the app validates the token:
+
+```nginx
+location = /_planner_auth {
+    internal;
+    if ($http_authorization ~* "^Bearer ") { return 200; }   # Bearer → skip the session check
+    # ... (rest of §3, unchanged) ...
+}
+```
+
+The `/planner/` location is unchanged: its `proxy_set_header X-Remote-User $u;` (and
+the `-Name`/`-Roles` twins) override any client-supplied header, so a script can't
+forge one — on the Bearer path `$u` is empty and nginx drops the header, so the app
+authenticates the token instead. An invalid or revoked token → 401 (fails closed).

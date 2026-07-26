@@ -20,14 +20,16 @@ from __future__ import annotations
 
 from typing import Callable
 
-from flask import Blueprint, abort, g, jsonify, request, url_for
+from flask import Blueprint, abort, current_app, g, jsonify, request, url_for
 from spectree import Response, SpecTree
 from werkzeug.exceptions import HTTPException
 
 from camp_planner.auth.permissions import can_create_camp, can_edit, can_edit_camp_meta, can_view
-from camp_planner.extensions import db
+from camp_planner.auth.token import resolve_identity as _resolve_token_identity
+from camp_planner.extensions import csrf, db
 from camp_planner.models.activity import Activity, Todo
 from camp_planner.models.audit import EntityType
+from camp_planner.models.auth import ApiToken
 from camp_planner.models.camp import Camp
 from camp_planner.models.material import Material, MaterialNeed
 from camp_planner.models.slot import Slot
@@ -39,6 +41,9 @@ from camp_planner.schemas import (
     ActivityOrgsEnvelope,
     ActivityOrgsIn,
     ActivityUpdate,
+    ApiTokenCreate,
+    ApiTokenCreatedEnvelope,
+    ApiTokenListEnvelope,
     AuditEnvelope,
     AuditQuery,
     CampCreate,
@@ -91,11 +96,25 @@ from camp_planner.schemas import (
 from camp_planner.services import activities
 from camp_planner.services import camps as camps_service
 from camp_planner.services import google_sync
-from camp_planner.services import audit, errors, loaders, materials, serialize, slots, taxonomy, todos
+from camp_planner.services import (
+    api_tokens,
+    audit,
+    errors,
+    loaders,
+    materials,
+    serialize,
+    slots,
+    taxonomy,
+    todos,
+)
 from camp_planner.services.timeline import build_timeline
 from camp_planner.version import __version__
 
 bp = Blueprint("api", __name__, url_prefix="/api")
+# CSRF defends cookie auth; Bearer-token requests can't be forged cross-site, so the
+# blueprint is exempted from the automatic check and _api_token_auth re-applies it
+# (csrf.protect) only to cookie-authenticated requests.
+csrf.exempt(bp)
 
 # OpenAPI generator: scans the spec.validate-decorated views to build the schema +
 # Swagger UI (served at /apidoc/swagger, spec JSON at /apidoc/openapi.json) once
@@ -124,6 +143,22 @@ _AUTH_400 = {"HTTP_400": BadRequestOut, **_AUTH}
 def _json_error(exc: HTTPException):
     """Render aborts (401/403/404/…) raised inside the API as JSON, not HTML."""
     return jsonify(ok=False, error=exc.description), exc.code or 500
+
+
+@bp.before_request
+def _api_token_auth() -> None:
+    """Authenticate a Bearer token (before the session provider resolves identity);
+    for cookie-authenticated requests, enforce CSRF (a no-op on safe methods)."""
+    identity = _resolve_token_identity()
+    if identity is not None:
+        g.identity = identity   # a token authenticated this request
+        return
+    # A presented-but-unresolved Bearer token is a failed auth attempt, not a browser call:
+    # answer 401 rather than the misleading 400 "CSRF token missing" from csrf.protect().
+    if request.headers.get("Authorization", "").split(" ", 1)[0].lower() == "bearer":
+        abort(401, "Neplatný nebo odvolaný API token.")
+    if current_app.config.get("WTF_CSRF_ENABLED", True):
+        csrf.protect()          # cookie request → enforce CSRF (no-op on safe methods)
 
 
 # --- helpers -----------------------------------------------------------------
@@ -250,6 +285,51 @@ def camp_delete(slug: str):
     if not can_edit_camp_meta(camp):
         _forbid("Mazat akce může jen administrátor.")
     return _run(lambda: camps_service.delete_camp(camp))
+
+
+# --- api tokens (camp-scoped bearer tokens; managed only by a real user) ------
+
+def _no_api_token() -> None:
+    """A token must never manage tokens — reject a token-authenticated request."""
+    if g.get("api_token") is not None:
+        abort(403, "API token nemůže spravovat tokeny.")
+
+
+def _api_token(token_id: int) -> ApiToken:
+    token = db.get_or_404(ApiToken, token_id, description="Token nenalezen.")
+    _guard(token.camp, edit=True)
+    return token
+
+
+@bp.get("/camps/<slug>/tokens")
+@spec.validate(resp=Response(HTTP_200=ApiTokenListEnvelope, **_AUTH), tags=["tokens"])
+def token_list(slug: str):
+    _no_api_token()
+    camp = _camp(slug, edit=True)
+    return _run(lambda: {"tokens": [serialize.api_token(t) for t in api_tokens.list_for_camp(camp)]})
+
+
+@bp.post("/camps/<slug>/tokens")
+@spec.validate(json=ApiTokenCreate, resp=Response(HTTP_200=ApiTokenCreatedEnvelope, **_AUTH_400),
+               tags=["tokens"])
+def token_create(slug: str):
+    _no_api_token()
+    camp = _camp(slug, edit=True)
+    payload = request.context.json
+
+    def run():
+        token, secret = api_tokens.create(camp, payload.name, payload.role, g.identity.user_id)
+        return {"token": serialize.api_token(token), "secret": secret}
+
+    return _run(run)
+
+
+@bp.delete("/tokens/<int:token_id>")
+@spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH), tags=["tokens"])
+def token_revoke(token_id: int):
+    _no_api_token()
+    token = _api_token(token_id)
+    return _run(lambda: api_tokens.revoke(token))
 
 
 # --- Google Calendar sync (connect / disconnect / push) ----------------------

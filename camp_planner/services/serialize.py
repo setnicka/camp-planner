@@ -18,6 +18,7 @@ from camp_planner.models.activity import OrgRole
 from camp_planner.models.common import czech_sort_key
 from camp_planner.schemas import (
     ActivityOut,
+    ApiTokenOut,
     AssignmentOut,
     AuditEntryOut,
     CampOut,
@@ -35,6 +36,7 @@ from camp_planner.schemas import (
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, Todo
     from camp_planner.models.audit import AuditLog
+    from camp_planner.models.auth import ApiToken
     from camp_planner.models.camp import Camp
     from camp_planner.models.material import Material, MaterialNeed
     from camp_planner.models.slot import Slot
@@ -187,3 +189,7 @@ def activity(a: Activity) -> dict:
         todos=[_todo(t) for t in a.todos],
         material_needs=[_material_need(m) for m in a.material_needs],
     ))
+
+
+def api_token(t: ApiToken) -> dict:
+    return _dump(ApiTokenOut.model_validate(t))

@@ -7,6 +7,9 @@ stay empty (identity comes from the proxy headers or the host callback).
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -15,6 +18,9 @@ from camp_planner.auth.identity import CampRole
 from camp_planner.config import fk, table_name
 from camp_planner.extensions import Base
 from camp_planner.models.common import TimestampMixin, portable_enum
+
+if TYPE_CHECKING:
+    from camp_planner.models.camp import Camp
 
 
 class User(TimestampMixin, Base):
@@ -65,3 +71,29 @@ class UserCampRole(Base):
 
     # Relationships:
     user: Mapped[User] = relationship(back_populates="camp_roles")
+
+
+class ApiToken(TimestampMixin, Base):
+    """A bearer token for programmatic API access, scoped to one camp + role.
+
+    Self-contained (not FK'd to User — that table is empty under proxy/embedded).
+    Only the SHA-256 of the secret is stored; the secret is shown once at creation.
+    Deleting the camp cascades its tokens away.
+    """
+
+    __tablename__ = table_name("api_tokens")
+    # Names are unique within a camp, not globally (a token is scoped to one camp).
+    __table_args__ = (UniqueConstraint("camp_id", "name", name="uq_api_token_camp_name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    camp_id: Mapped[int] = mapped_column(ForeignKey(fk("camps.id"), ondelete="CASCADE"))
+    role: Mapped[CampRole] = mapped_column(portable_enum(CampRole, "api_token_role"))
+    created_by: Mapped[str] = mapped_column(String(255))
+    last_used_at: Mapped[datetime | None] = mapped_column()
+
+    camp: Mapped[Camp] = relationship()
+
+    def __repr__(self) -> str:
+        return f"<ApiToken {self.name!r} camp={self.camp_id} role={self.role.value}>"

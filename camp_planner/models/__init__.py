@@ -11,7 +11,7 @@ from camp_planner.models.activity import (
     TodoAssignment,
 )
 from camp_planner.models.audit import AuditLog
-from camp_planner.models.auth import User, UserCampRole
+from camp_planner.models.auth import ApiToken, User, UserCampRole
 from camp_planner.models.camp import Camp, Category, Tag
 from camp_planner.models.google import GoogleSyncOp, SyncOpKind
 from camp_planner.models.material import (
@@ -26,6 +26,7 @@ __all__ = [
     "Activity",
     "ActivityAssignment",
     "ActivityTag",
+    "ApiToken",
     "AuditLog",
     "Camp",
     "Category",

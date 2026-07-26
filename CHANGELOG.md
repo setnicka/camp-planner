@@ -14,6 +14,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Added
 
+- API access tokens: per-camp bearer tokens (`Authorization: Bearer cp_…`) for
+  programmatic access, scoped to one camp + role (editor/viewer), managed with
+  `flask api-token create/list/revoke`. **Adds a DB migration.**
 - Google sync panel shows when changes were last pulled from Google
   („Naposledy načteno z Google“).
 - Google import: selected changes that vanished between preview and apply are
