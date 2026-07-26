@@ -12,9 +12,21 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Security
+
+- Production refuses to start with the built-in default `SECRET_KEY` and marks
+  the session cookie `Secure`/`SameSite=Lax`.
+- `ProxyFix` (trusting `X-Forwarded-*`) is now opt-in via `BEHIND_PROXY=1`.
+  **Upgrade note:** a deployment served under a reverse-proxy path prefix must now
+  set `BEHIND_PROXY=1` — otherwise `url_for` drops the prefix and CSS/JS/links break
+  (previously ProxyFix was always on). The app logs a warning if it sees
+  `X-Forwarded-*` headers while `BEHIND_PROXY` is unset.
+
 ### Fixed
 
 - PATCH endpoints: explicit `null` for a required field is a 400, not a 500.
+- Embedded auth: a malformed grant from the host callback is skipped with a
+  warning instead of turning every request into a 500.
 - Timeline save: slots outside the camp's day range are rejected (they used to
   persist invisibly); seconds in spans are normalized to whole minutes.
 

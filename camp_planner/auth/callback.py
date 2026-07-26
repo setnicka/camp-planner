@@ -23,6 +23,7 @@ ignored. Return None for an unauthenticated request.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Callable
 
 from camp_planner.auth.identity import ANONYMOUS, CampRole, Identity, build_identity
@@ -31,11 +32,18 @@ from camp_planner.auth.scopes import resolve_slug_grants
 if TYPE_CHECKING:
     from camp_planner.auth.identity import Scope
 
+log = logging.getLogger(__name__)
+
 
 def _coerce_grants(raw: list[dict] | None) -> list[tuple[CampRole, Scope]]:
     parsed: list[tuple[CampRole, set[str] | None]] = []  # None scope = all camps
     for item in raw or []:
-        role = CampRole(item["role"])
+        try:
+            role = CampRole(item["role"])
+        except (KeyError, TypeError, ValueError):
+            # Skip rather than 500 every request; same tolerance as proxy.py's unknown roles.
+            log.warning("Ignoring malformed grant from host auth callback: %r", item)
+            continue
         camps = item.get("camps", "all")
         slugs = None if camps == "all" else {str(c) for c in camps}
         parsed.append((role, slugs))

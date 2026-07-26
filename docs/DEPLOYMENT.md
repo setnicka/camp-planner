@@ -109,6 +109,7 @@ overwrites any client-supplied ones.
 ```bash
 # .env (bind to localhost only)
 AUTH_MODE=proxy
+BEHIND_PROXY=1           # trust one hop of X-Forwarded-* (required behind the reverse proxy)
 SECRET_KEY=<random>
 DB_BACKEND=mysql  DB_HOST=localhost  DB_NAME=existing_app_db  DB_USER=camp  DB_PASSWORD=secret
 DB_TABLE_PREFIX=cp_
@@ -174,7 +175,9 @@ Notes:
 - The endpoint returns **200 or 401**, never a 3xx (`auth_request` errors on it); the
   browser redirect is the `error_page 401` line.
 - The trailing slash on `proxy_pass …/` strips `/planner/`; `X-Forwarded-Prefix`,
-  `-Proto` and `-Host` (all honored by `ProxyFix` in [wsgi.py](../wsgi.py)) give the
-  app its public prefix, scheme and host so `url_for` and cookies stay correct. Only
-  `-Prefix` is strictly required for routing; `-Proto`/`-Host` matter behind HTTPS.
+  `-Proto` and `-Host` (honored by `ProxyFix` in [wsgi.py](../wsgi.py) when
+  `BEHIND_PROXY=1` is set) give the app its public prefix, scheme and host so
+  `url_for` and cookies stay correct. Only `-Prefix` is strictly required for
+  routing; `-Proto`/`-Host` matter behind HTTPS. Never set `BEHIND_PROXY` on a
+  directly exposed process — the headers are client-controlled there.
 - Local dev without nginx: set `DEV_USER` in config, e.g. `{"user_id": "dev", "roles": "admin"}`.

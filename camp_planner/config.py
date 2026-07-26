@@ -74,10 +74,14 @@ def _build_database_url(instance_path: str) -> str:
     ).render_as_string(hide_password=False)
 
 
+# Dev fallback; ProductionConfig refuses to start with it (forgeable cookies/CSRF tokens).
+_INSECURE_DEFAULT_SECRET = "dev-insecure-change-me"
+
+
 class Config:
     """Base config, populated from the environment."""
 
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-insecure-change-me")
+    SECRET_KEY = os.environ.get("SECRET_KEY", _INSECURE_DEFAULT_SECRET)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # pool_pre_ping avoids stale-connection errors (esp. MySQL).
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
@@ -108,6 +112,19 @@ class DevelopmentConfig(Config):
 
 class ProductionConfig(Config):
     DEBUG = False
+    # Login session cookie; production is HTTPS-only, so never send it over plain HTTP.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+    @staticmethod
+    def init_app(app: Flask) -> None:
+        Config.init_app(app)
+        if app.config["SECRET_KEY"] == _INSECURE_DEFAULT_SECRET:
+            raise RuntimeError(
+                "SECRET_KEY is not set — with the built-in default, session cookies "
+                "and CSRF tokens are forgeable. Set the SECRET_KEY environment "
+                "variable (e.g. python -c 'import secrets; print(secrets.token_hex(32))')."
+            )
 
 
 class TestingConfig(Config):
