@@ -7,7 +7,7 @@ import re
 
 from camp_planner import create_app
 from camp_planner.extensions import db
-from tests.conftest import ADMIN, editor, viewer
+from tests.conftest import ADMIN, editor, make_camp, viewer
 
 
 def test_timeline_page_edit_wiring_for_editor(client, seeded):
@@ -50,10 +50,7 @@ def test_activity_detail_viewer_cannot_edit(client, seeded):
 def test_activity_detail_404_for_foreign_camp(client, seeded):
     # the activity exists, but not under this (other) camp's slug → 404, no cross-camp leak
     aid = seeded["activity_id"]
-    other = client.post("/api/camps", json={"name": "Jiná", "slug": "jina", "start_date": "2026-08-01",
-                                            "length_days": 3, "timezone": "Europe/Prague",
-                                            "window_start_min": 240, "snap_minutes": 15}, headers=ADMIN)
-    assert other.status_code == 200
+    make_camp(client, "jina", name="Jiná", start_date="2026-08-01")
     assert client.get(f"/camps/jina/activities/{aid}", headers=ADMIN).status_code == 404
 
 
@@ -195,9 +192,7 @@ def test_camp_edit_delete_button_disabled_with_activities(client, seeded):
 
 def test_camp_edit_delete_button_enabled_when_empty(client, seeded):
     # a camp with no activities → the button is present and NOT disabled
-    client.post("/api/camps", json={"name": "Prázdná", "slug": "prazdna", "start_date": "2026-09-01",
-                                    "length_days": 3, "timezone": "Europe/Prague",
-                                    "window_start_min": 240, "snap_minutes": 15}, headers=ADMIN)
+    make_camp(client, "prazdna", name="Prázdná")
     html = client.get("/camps/prazdna/edit", headers=ADMIN).get_data(as_text=True)
     button = html[html.index("data-delete-camp"):html.index("</button>", html.index("data-delete-camp"))]
     assert "disabled" not in button
@@ -257,9 +252,7 @@ def test_landing_page_renders_camp_rows(client, seeded):
 
 def test_landing_page_orders_newest_first(client, seeded):
     # a later camp must appear above the earlier seeded one (ordered by start_date desc)
-    client.post("/api/camps", json={"name": "Pozdější", "slug": "pozd", "start_date": "2026-09-01",
-                                    "length_days": 3, "timezone": "Europe/Prague",
-                                    "window_start_min": 240, "snap_minutes": 15}, headers=ADMIN)
+    make_camp(client, "pozd", name="Pozdější")
     html = client.get("/", headers=ADMIN).get_data(as_text=True)
     assert html.index("Pozdější") < html.index("Tábor")   # newest (2026-09) before older (2026-07)
 
@@ -276,8 +269,7 @@ def test_page_carries_csrf_refresh_meta(client, seeded):
 def test_csrf_token_endpoint_hands_out_a_working_token():
     # In a CSRF-enabled app the refresh endpoint returns a freshly-signed token that
     # actually satisfies the CSRFProtect check on a subsequent mutation.
-    app = create_app("testing")
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app = create_app("testing")   # in-memory SQLite (TestingConfig)
     app.config["WTF_CSRF_ENABLED"] = True
     with app.app_context():
         db.create_all()

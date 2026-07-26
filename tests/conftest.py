@@ -3,17 +3,17 @@
 Runs the app in proxy-auth mode so a test can "log in" just by setting the
 X-Remote-User / X-Remote-Roles headers (admin, or editor/viewer scoped to a camp
 slug). CSRF is disabled so JSON mutations don't need a token. The DB is a fresh
-per-test SQLite file.
+in-memory SQLite per test (TestingConfig).
 """
 
 from __future__ import annotations
 
 import os
 
-# Must be set before camp_planner.config is imported (the Config class reads it
-# at import time to pick the auth provider wired by create_app).
-os.environ.setdefault("AUTH_MODE", "proxy")
-os.environ.setdefault("SECRET_KEY", "test-secret")
+# Must be set before camp_planner.config is imported (read at import time). Hard
+# assignment so a developer's exported AUTH_MODE can't flip the suite.
+os.environ["AUTH_MODE"] = "proxy"
+os.environ["SECRET_KEY"] = "test-secret"
 
 from datetime import date  # noqa: E402
 
@@ -27,15 +27,13 @@ from camp_planner.models.org import Org  # noqa: E402
 
 
 @pytest.fixture
-def app(tmp_path):
-    app = create_app("testing")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{tmp_path / 'test.sqlite'}"
+def app():
+    app = create_app("testing")   # in-memory SQLite; evaporates with the app's engine
     app.config["WTF_CSRF_ENABLED"] = False
     with app.app_context():
         db.create_all()
         yield app
         db.session.remove()
-        db.drop_all()
 
 
 @pytest.fixture
@@ -62,6 +60,16 @@ def seeded(app):
         "slug": camp.slug, "camp_id": camp.id, "cat_id": cat.id,
         "org_id": org.id, "tag_id": tag.id, "activity_id": activity.id,
     }
+
+
+def make_camp(client, slug, **overrides) -> dict:
+    """Create a camp via the API (as admin) and return its envelope dict."""
+    body = {"name": slug.capitalize(), "slug": slug, "start_date": "2026-09-01",
+            "length_days": 3, "timezone": "Europe/Prague",
+            "window_start_min": 240, "snap_minutes": 15, **overrides}
+    resp = client.post("/api/camps", json=body, headers=ADMIN)
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()["camp"]
 
 
 # --- auth header helpers -----------------------------------------------------

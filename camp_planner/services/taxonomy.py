@@ -64,7 +64,8 @@ def _reconcile(
     display: Callable, block_delete: Callable | None = None,
 ) -> None:
     """Sync `current` rows to match `items` (schema-validated models, in final order).
-    Raises errors.Invalid (after rollback) on a duplicate or a blocked delete.
+    Raises errors.Invalid on a duplicate or a blocked delete (no rollback — request
+    teardown discards the uncommitted session).
 
     unique_of(obj) is the row's unique value (an in-list repeat → dup_msg). display(obj) is
     a human-readable line per row, captured before/after into the audit diff (so add /
@@ -85,14 +86,12 @@ def _reconcile(
         apply_fn(obj, item, idx)
         value = unique_of(obj)
         if value in seen_unique:
-            db.session.rollback()
             raise errors.Invalid(dup_msg(value))
         seen_unique.add(value)
         final.append(obj)
     for oid, obj in existing.items():
         if oid not in seen:
             if block_delete and (error := block_delete(obj)):
-                db.session.rollback()
                 raise errors.Invalid(error)
             db.session.delete(obj)
     after = [display(obj) for obj in final]

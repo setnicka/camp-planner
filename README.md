@@ -41,9 +41,10 @@ runs.
 
 ## Authentication modes
 
-The same codebase runs in three shapes, chosen by **`AUTH_MODE`** — they differ only in how
-the current user is identified; identical role rules apply on top. Full walkthroughs are in
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The same codebase runs in three shapes — they differ only in how the current user is
+identified; identical role rules apply on top. **`AUTH_MODE`** picks `standalone` or
+`proxy`; embedded mode is entered by mounting the blueprints on a host app instead.
+Full walkthroughs are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 - **`standalone`** (default) — own users + login. Bootstrap the first admin with `create-user`;
   admins then manage users in-app at `/auth/users`.
@@ -98,7 +99,7 @@ camp_planner/
   __init__.py     app factory
   config.py       config + DB-backend selection + table-name prefix
   extensions.py   db, migrate, declarative Base
-  cli.py          init-db / create-user / grant-role
+  cli.py          init-db / create-user / grant-role / sync-google
   api.py          JSON REST API blueprint (/api)
   schemas.py      pydantic request/response models (validation + OpenAPI)
   views.py        HTML pages (camp list, timeline, detail, settings)

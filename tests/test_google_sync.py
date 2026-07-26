@@ -1,9 +1,8 @@
 """Google Calendar sync — service + API tests.
 
-The Google boundary (services/google_client) is replaced by an in-memory fake, so these
-exercise enqueue → drain, the timezone round-trip, connect/disconnect, and the API
-permission envelope without any network. event_body / parse_event_times are pure, so they
-run for real.
+The Google boundary is faked at the googleapiclient *service* level (over an in-memory
+event store), so the real batch_push, list_events and verify_access run in every test.
+event_body / parse_event_times are pure and run for real too.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from datetime import date, datetime
 import pytest
 
 from camp_planner.extensions import db
-from camp_planner.models.camp import Camp
+from camp_planner.models.camp import Camp, Category
 from camp_planner.models.google import GoogleSyncOp
 from camp_planner.models.slot import Slot, SlotRole
 from camp_planner.services import camps as camps_service
@@ -24,71 +23,62 @@ from tests.conftest import ADMIN, editor, viewer
 CAL = "cal@group.calendar.google.com"
 
 
+def _http_error(status):
+    from googleapiclient.errors import HttpError  # available; only the network is faked
+
+    resp = type("Resp", (), {"status": status, "reason": "x"})()
+    return HttpError(resp, b"{}")
+
+
 class FakeGoogle:
-    """A stand-in calendar: records events by id, can be told to fail one call."""
+    """An in-memory calendar, with per-test failure knobs:
+    fail_next (next op raises), fail_batch (next whole batch HTTP call dies),
+    gone (event ids whose PATCH 400s — deleted/cancelled upstream),
+    error_ids (event ids whose ops 500), no_insert_id (insert response lacks the id)."""
 
     def __init__(self):
         self.events: dict[str, dict] = {}
         self._n = 0
-        self.fail_next = False
-        self.gone: set[str] = set()  # event ids that PATCH 400s (deleted/cancelled upstream)
         self.calls = {"insert": 0, "patch": 0, "delete": 0}
+        self.batch_count = 0
+        self.fail_next = False
+        self.fail_batch = False
+        self.gone: set[str] = set()
+        self.error_ids: set[str] = set()
+        self.no_insert_id = False
+        self.page_size: int | None = None  # when set, list() paginates in chunks this big
+        self.list_calls = 0
 
-    def insert(self, calendar_id, body):
+    def _maybe_fail(self, event_id):
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("boom")
+        if event_id in self.error_ids:
+            raise _http_error(500)
+
+    def insert(self, calendar_id, body):
+        self._maybe_fail(None)
         self.calls["insert"] += 1
         self._n += 1
         eid = f"evt{self._n}"
         self.events[eid] = {**body, "id": eid}
-        return eid
+        return {} if self.no_insert_id else {"id": eid}
 
     def patch(self, calendar_id, event_id, body):
-        if self.fail_next:
-            self.fail_next = False
-            raise RuntimeError("boom")
+        self._maybe_fail(event_id)
         if event_id in self.gone:  # cancelled recurring instance / deleted event → PATCH 400s
             raise _http_error(400)
         self.calls["patch"] += 1
         self.events[event_id] = {**self.events.get(event_id, {}), **body, "id": event_id}
+        return {"id": event_id}
 
     def delete(self, calendar_id, event_id):
-        if self.fail_next:
-            self.fail_next = False
-            raise RuntimeError("boom")
+        self._maybe_fail(event_id)
+        if event_id not in self.events:
+            raise _http_error(404)  # like Google: deleting an already-gone event 404s
         self.calls["delete"] += 1
-        self.events.pop(event_id, None)
-
-    def batch_push(self, ops):
-        """Stand-in for google_client.batch_push: dispatch each op to insert/patch/delete (so
-        the calls/events/fail_next bookkeeping stays identical), returning a PushResult per key.
-        Mirrors the real callback: an HttpError carries its status (and a delete 404/410 still
-        counts as success), so the drain's gone-target recovery is exercised here too."""
-        from googleapiclient.errors import HttpError
-
-        results = {}
-        for op in ops:
-            try:
-                if op.kind == "insert":
-                    results[op.key] = google_client.PushResult(True, self.insert(op.calendar_id, op.body), None)
-                elif op.kind == "patch":
-                    self.patch(op.calendar_id, op.event_id, op.body)
-                    results[op.key] = google_client.PushResult(True, None, None)
-                else:
-                    self.delete(op.calendar_id, op.event_id)
-                    results[op.key] = google_client.PushResult(True, None, None)
-            except HttpError as exc:
-                if op.kind == "delete" and exc.resp.status in (404, 410):
-                    results[op.key] = google_client.PushResult(True, None, None)
-                else:
-                    results[op.key] = google_client.PushResult(False, None, str(exc), exc.resp.status)
-            except Exception as exc:  # noqa: BLE001 — mirror real per-op failure capture
-                results[op.key] = google_client.PushResult(False, None, str(exc))
-        return results
-
-    def list_events(self, calendar_id):
-        return list(self.events.values())
+        del self.events[event_id]
+        return {}
 
     def add_external(self, eid, summary, start, end):
         """A user-created event (no cpSlotId marker), as if added directly in Google."""
@@ -98,6 +88,78 @@ class FakeGoogle:
             "end": {"dateTime": end, "timeZone": "Europe/Prague"},
         }
         return self.events[eid]
+
+
+# The googleapiclient surface the client touches: events() request builders (deferred)
+# and batches that fire the callback per op.
+
+class _Req:
+    def __init__(self, fn):
+        self.execute = fn
+
+
+class _FakeEvents:
+    def __init__(self, g):
+        self._g = g
+
+    def insert(self, calendarId, body):
+        return _Req(lambda: self._g.insert(calendarId, body))
+
+    def patch(self, calendarId, eventId, body):
+        return _Req(lambda: self._g.patch(calendarId, eventId, body))
+
+    def delete(self, calendarId, eventId):
+        return _Req(lambda: self._g.delete(calendarId, eventId))
+
+    def list(self, **params):
+        return _Req(lambda: self._page(params))
+
+    def _page(self, params):
+        """One page of the event listing. With no page_size, everything at once (the common
+        case). With page_size set, paginate: return a chunk + a nextPageToken until the last."""
+        self._g.list_calls += 1
+        items = list(self._g.events.values())
+        size = self._g.page_size
+        if not size:
+            return {"items": items}
+        offset = int(params.get("pageToken", 0))
+        chunk = items[offset:offset + size]
+        resp: dict = {"items": chunk}
+        if offset + size < len(items):
+            resp["nextPageToken"] = str(offset + size)
+        return resp
+
+
+class _FakeBatch:
+    def __init__(self, g, callback):
+        self._g = g
+        self._callback = callback
+        self._reqs = []
+
+    def add(self, request, request_id):
+        self._reqs.append((request_id, request))
+
+    def execute(self):
+        if self._g.fail_batch:
+            self._g.fail_batch = False
+            raise RuntimeError("network down")
+        for rid, req in self._reqs:
+            try:
+                self._callback(rid, req.execute(), None)
+            except Exception as exc:  # noqa: BLE001 — the real batch reports errors via the callback
+                self._callback(rid, None, exc)
+
+
+class _FakeService:
+    def __init__(self, g):
+        self._g = g
+
+    def events(self):
+        return _FakeEvents(self._g)
+
+    def new_batch_http_request(self, callback):
+        self._g.batch_count += 1
+        return _FakeBatch(self._g, callback)
 
 
 @pytest.fixture(autouse=True)
@@ -111,20 +173,14 @@ def _identity(app):
     g.identity = build_identity(user_id="tester", is_admin=True)
 
 
-# A trimmed stand-in for Google's fixed event palette (id → background hex).
-FAKE_PALETTE = {"1": "#7986cb", "2": "#33b679", "8": "#616161", "10": "#0b8043", "11": "#d50000"}
-
-
 @pytest.fixture
 def gcal(app, monkeypatch):
-    """Enable the feature and route the adapter at an in-memory fake calendar."""
+    """Enable the feature and point google_client's HTTP client at the in-memory fake;
+    everything above it (batch_push, list_events, verify_access) runs for real."""
     fake = FakeGoogle()
     monkeypatch.setattr(google_client, "is_configured", lambda: True)
     monkeypatch.setattr(google_client, "service_account_email", lambda: "sa@test.iam")
-    monkeypatch.setattr(google_client, "verify_access", lambda calendar_id: None)
-    monkeypatch.setattr(google_client, "batch_push", fake.batch_push)
-    monkeypatch.setattr(google_client, "list_events", fake.list_events)
-    monkeypatch.setattr(google_client, "color_palette", lambda: FAKE_PALETTE)
+    monkeypatch.setattr(google_client, "client", lambda: _FakeService(fake))
     return fake
 
 
@@ -191,77 +247,98 @@ def test_parse_all_day_event_returns_none(app, seeded):
         {"start": {"date": "2026-07-04"}, "end": {"date": "2026-07-05"}}, "Europe/Prague") is None
 
 
-# --- batch_push (the real batched HTTP path, with a fake Google service) --------------
-# The gcal fixture stubs batch_push wholesale, so the chunking + callback wiring + 404/410
-# handling that batch_push itself adds is exercised only here, against a fake calendar service.
+# --- inbound field parsing (pure; the apply paths are covered by the e2e tests below) --
 
-def _http_error(status):
-    from googleapiclient.errors import HttpError  # available; only the network is faked
-
-    resp = type("Resp", (), {"status": status, "reason": "x"})()
-    return HttpError(resp, b"{}")
-
-
-class _FakeBatchService:
-    """Mimics the slice of the Google client batch_push touches: events() request builders,
-    new_batch_http_request(callback), and a batch whose execute() fires the callback per add()."""
-
-    def __init__(self):
-        self.batch_count = 0
-
-    def events(self):
-        return self
-
-    # request builders return a (response, exception) plan the fake batch will replay
-    def insert(self, calendarId, body):
-        return ({"id": "evt-" + body["summary"]}, None)
-
-    def patch(self, calendarId, eventId, body):
-        return ({"id": eventId}, None)
-
-    def delete(self, calendarId, eventId):
-        if eventId == "gone":
-            return (None, _http_error(404))   # already deleted in Google
-        if eventId == "boom":
-            return (None, _http_error(500))   # a real failure
-        return ({}, None)
-
-    def new_batch_http_request(self, callback):
-        self.batch_count += 1
-        return _FakeBatch(callback)
+@pytest.fixture
+def roster_camp(app, seeded):
+    """The seeded camp (org "K") with a few more orgs for the parsing matrices."""
+    camp = _camp(seeded)
+    for ini, name in [("M", "Marek"), ("P", "Petr"), ("H", "Hugo"),
+                      ("Á", "Ája"), ("B", "Bob"), ("L", "Lola")]:
+        _add_org(camp, ini, name)
+    db.session.commit()
+    return camp
 
 
-class _FakeBatch:
-    def __init__(self, callback):
-        self.callback = callback
-        self.added = []
-
-    def add(self, request, request_id):
-        self.added.append((request_id, request))
-
-    def execute(self):
-        for request_id, (response, exception) in self.added:
-            self.callback(request_id, response, exception)
+def _names(camp, org_ids):
+    by_id = {o.id: o.initials for o in camp.orgs}
+    return [by_id[i] for i in org_ids]
 
 
-def test_batch_push_chunks_and_maps_outcomes(monkeypatch):
-    svc = _FakeBatchService()
-    monkeypatch.setattr(google_client, "client", lambda: svc)
+@pytest.mark.parametrize(("text", "matched", "unknown"), [
+    ("K", ["K"], []),
+    ("K, M", ["K", "M"], []),
+    ("K + M", ["K", "M"], []),           # plus separates like a comma
+    ("k;m", ["K", "M"], []),             # case-insensitive; semicolons too
+    ("(K) M", ["K", "M"], []),           # parentheses are ignored
+    ("K, ZZ", ["K"], ["ZZ"]),            # unmatched token → unknown
+    ("K K", ["K"], []),                  # duplicates collapse
+    (None, [], []),
+])
+def test_match_initials_matrix(roster_camp, text, matched, unknown):
+    ids, unk = google_sync._match_initials(roster_camp, text)
+    assert _names(roster_camp, ids) == matched
+    assert unk == unknown
+
+
+@pytest.mark.parametrize(("text", "garants", "helpers", "unknown"), [
+    ("K", ["K"], [], []),
+    ("K+M, P", ["K", "M"], ["P"], []),               # '+' joins garants; later items = helpers
+    ("H (Á, B, L)", ["H"], ["Á", "B", "L"], []),     # parens act as commas
+    ("(K M), (P)", ["K", "M"], ["P"], []),           # spaces separate within an item
+    ("K, ZZ", ["K"], [], ["ZZ"]),
+    (None, [], [], []),
+])
+def test_parse_location_matrix(roster_camp, text, garants, helpers, unknown):
+    garant_ids, helper_ids, unk = google_sync._parse_location(roster_camp, text)
+    assert _names(roster_camp, garant_ids) == garants
+    assert _names(roster_camp, helper_ids) == helpers
+    assert unk == unknown
+
+
+def test_color_to_category_snaps_to_nearest(app, seeded):
+    camp = _camp(seeded)                                 # seeded category is #0b8043 (Basil)
+    red = Category(camp_id=camp.id, key="vystraha", label="Výstraha",
+                   color="#d50000", sort_order=1)
+    db.session.add(red)
+    db.session.commit()
+
+    assert google_sync._color_to_category(camp, "10") == seeded["cat_id"]  # Basil → green
+    assert google_sync._color_to_category(camp, "11") == red.id            # Tomato → red
+    assert google_sync._color_to_category(camp, None) is None
+
+
+# --- batch_push (chunking + outcome mapping over the fake service) --------------------
+
+def test_batch_push_chunks_and_maps_outcomes(app, gcal):
     Op = google_client.PushOp
+    gcal.error_ids.add("boom")
 
     ops = [Op(key=f"i{i}", kind="insert", calendar_id=CAL, body={"summary": str(i)}) for i in range(120)]
     ops += [Op(key="p", kind="patch", calendar_id=CAL, event_id="evtP", body={"summary": "P"}),
-            Op(key="dgone", kind="delete", calendar_id=CAL, event_id="gone"),
+            Op(key="dgone", kind="delete", calendar_id=CAL, event_id="not-there"),
             Op(key="dboom", kind="delete", calendar_id=CAL, event_id="boom")]
 
     results = google_client.batch_push(ops)
 
-    assert svc.batch_count == 5                       # 123 ops at ≤25/batch → 5 round-trips
-    assert results["i0"].ok and results["i0"].event_id == "evt-0"   # insert id captured
+    assert gcal.batch_count == 5                      # 123 ops at ≤25/batch → 5 round-trips
+    assert results["i0"].ok and results["i0"].event_id == "evt1"    # insert id captured
     assert results["p"].ok                            # patch succeeded
     assert results["dgone"].ok and results["dgone"].event_id is None  # 404 → already gone → success
     assert not results["dboom"].ok and results["dboom"].error        # 500 → genuine failure
     assert len(results) == len(ops)                   # every op got an outcome
+
+
+def test_list_events_paginates_across_pages(app, gcal):
+    # Three events, one per page → list_events must follow nextPageToken and accumulate all.
+    for i in range(3):
+        gcal.add_external(f"ext{i}", f"E{i}", "2030-01-01T10:00:00", "2030-01-01T11:00:00")
+    gcal.page_size = 1
+
+    events = google_client.list_events(CAL)
+
+    assert [e["id"] for e in events] == ["ext0", "ext1", "ext2"]  # every page collected, in order
+    assert gcal.list_calls == 3                                    # re-entered the loop per page
 
 
 # --- connect / disconnect ------------------------------------------------------------
@@ -572,6 +649,47 @@ def test_drain_failure_keeps_op_and_records_error(app, seeded, gcal):
     assert result["pushed"] == 1 and google_sync.pending_count(camp) == 0
 
 
+def test_drain_whole_batch_failure_fails_all_ops(app, seeded, gcal):
+    """A network-level failure of the whole batch HTTP call fails every op in it; the ops
+    stay queued with their error recorded and the next drain delivers them."""
+    camp = _camp(seeded)
+    _connect(camp)
+    for day in (4, 5):
+        slot = _make_slot(seeded["activity_id"], datetime(2026, 7, day, 14, 0),
+                          datetime(2026, 7, day, 16, 0))
+        google_sync.enqueue_upsert(camp, slot)
+    db.session.commit()
+
+    gcal.fail_batch = True
+    result = google_sync.drain(camp)
+    assert result == {"pushed": 0, "failed": 2, "pending": 2}
+    assert all(op.attempts == 1 and op.last_error
+               for op in db.session.scalars(db.select(GoogleSyncOp)))
+
+    result = google_sync.drain(camp)
+    assert result == {"pushed": 2, "failed": 0, "pending": 0}
+
+
+def test_drain_insert_without_id_is_kept_for_retry(app, seeded, gcal):
+    """An insert whose response carries no event id must count as failed and stay queued —
+    dropping the op would leave the slot unmapped forever."""
+    camp = _camp(seeded)
+    _connect(camp)
+    slot = _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    google_sync.enqueue_upsert(camp, slot)
+    db.session.commit()
+
+    gcal.no_insert_id = True
+    result = google_sync.drain(camp)
+    assert result == {"pushed": 0, "failed": 1, "pending": 1}
+    assert db.session.get(Slot, slot.id).google_event_id is None
+    assert "nevrátil id" in db.session.scalar(db.select(GoogleSyncOp)).last_error
+
+    gcal.no_insert_id = False
+    result = google_sync.drain(camp)  # retry maps the slot
+    assert result["pushed"] == 1 and db.session.get(Slot, slot.id).google_event_id
+
+
 # --- API permissions / feature gating ------------------------------------------------
 
 def test_status_endpoint_requires_edit(client, seeded, gcal):
@@ -638,6 +756,31 @@ def test_preview_classifies_changes(client, seeded, gcal):
     assert set(kinds) == {"time_change", "new_event"}
     assert kinds["new_event"]["summary"] == "Táborák"
     assert kinds["time_change"]["new_start"].endswith("15:00:00")
+
+
+def test_out_of_window_inbound_changes_are_skipped(client, seeded, gcal):
+    # camp window is [2026-07-04 04:00, 2026-07-07 04:00) (start_date + window_start_min 240, 3 days).
+    camp, slot = _connected_with_event(seeded)
+    # our slot's event moved to end past the last-day window end → the time_change is dropped
+    gcal.events[slot.google_event_id]["start"]["dateTime"] = "2026-07-06T20:00:00"
+    gcal.events[slot.google_event_id]["end"]["dateTime"] = "2026-07-08T02:00:00"
+    # a new event that starts in-window but runs past it → not offered for import
+    gcal.add_external("ext1", "Přesčas", "2026-07-06T22:00:00", "2026-07-08T03:00:00")
+
+    body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
+                      headers=editor(seeded["slug"])).get_json()
+    kinds = {c["kind"] for c in body["changes"]}
+    assert "time_change" not in kinds and "new_event" not in kinds
+
+
+def test_inbound_event_ending_exactly_at_window_end_is_kept(client, seeded, gcal):
+    # the window is [.. , 2026-07-07 04:00); an event ending exactly at window_end is in-window
+    # (inclusive upper bound) and must NOT be skipped.
+    _connected_with_event(seeded)
+    gcal.add_external("ext1", "Noční", "2026-07-06T22:00:00", "2026-07-07T04:00:00")
+    body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
+                      headers=editor(seeded["slug"])).get_json()
+    assert any(c["kind"] == "new_event" and c["summary"] == "Noční" for c in body["changes"])
 
 
 def test_apply_time_change_and_import_new(client, seeded, gcal):
@@ -745,6 +888,32 @@ def test_apply_attach_and_delete(client, seeded, gcal):
     assert attached is not None and attached.activity_id == seeded["activity_id"]
 
 
+def test_preview_pull_requires_connection(client, seeded, gcal):
+    resp = client.get(f"/api/camps/{seeded['slug']}/google/pull", headers=editor(seeded["slug"]))
+    assert resp.status_code == 400
+    assert "není připojen" in resp.get_json()["error"]
+
+
+def test_apply_attach_rejects_foreign_activity(client, seeded, gcal):
+    from camp_planner.models.activity import Activity
+
+    camp = _camp(seeded)
+    _connect(camp)
+    gcal.add_external("extf", "Cizí", "2026-07-05T10:00:00", "2026-07-05T12:00:00")
+    other = _new_camp("jina", date(2026, 8, 1))
+    foreign = Activity(camp_id=other.id, title="Cizí aktivita")
+    db.session.add(foreign)
+    db.session.commit()
+
+    resp = client.post(f"/api/camps/{seeded['slug']}/google/pull",
+                       json={"decisions": [{"key": "new:extf", "action": "attach",
+                                            "target_activity_id": foreign.id}]},
+                       headers=editor(seeded["slug"]))
+    assert resp.status_code == 400
+    assert "nepatří" in resp.get_json()["error"]
+    assert db.session.scalar(db.select(Slot).where(Slot.google_event_id == "extf")) is None
+
+
 def test_unchecked_changes_are_skipped(client, seeded, gcal):
     camp, slot = _connected_with_event(seeded)
     gcal.add_external("ext3", "Nezvolená", "2026-07-06T10:00:00", "2026-07-06T12:00:00")
@@ -824,66 +993,8 @@ def test_inbound_attendants_change(client, seeded, gcal):
     assert {a.org_id for a in db.session.get(Slot, slot.id).assignments} == {seeded["org_id"]}
 
 
-def test_inbound_orgs_split_on_plus(client, seeded, gcal):
-    camp, slot = _connected_with_event(seeded)
-    marek = _add_org(camp, "M", "Marek")
-    db.session.commit()
-    gcal.events[slot.google_event_id]["description"] = "K + M"  # plus-separated
-
-    body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
-                      headers=editor(seeded["slug"])).get_json()
-    att = next(c for c in body["changes"] if c["kind"] == "attendants_change")
-    assert set(att["new_initials"]) == {"K", "M"} and not att["unknown"]
-
-    client.post(f"/api/camps/{seeded['slug']}/google/pull",
-                json={"decisions": [{"key": att["key"], "action": "apply"}]},
-                headers=editor(seeded["slug"]))
-    db.session.expire_all()
-    assert {a.org_id for a in db.session.get(Slot, slot.id).assignments} == {seeded["org_id"], marek.id}
-
-
-def test_inbound_orgs_strip_parens_and_split_on_space(client, seeded, gcal):
-    from camp_planner.models.activity import Activity, OrgRole
-
-    camp, slot = _connected_with_event(seeded)
-    marek = _add_org(camp, "M", "Marek")
-    petr = _add_org(camp, "P", "Petr")
-    db.session.commit()
-    # spaces separate; parens are ignored: first comma-item = garants, rest = helpers
-    gcal.events[slot.google_event_id]["location"] = "(K M), (P)"
-    gcal.events[slot.google_event_id]["description"] = "(K) M"
-
-    body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
-                      headers=editor(seeded["slug"])).get_json()
-    gar = next(c for c in body["changes"] if c["kind"] == "garant_change")
-    assert set(gar["new_garants"]) == {"K", "M"} and gar["new_helpers"] == ["P"]
-    att = next(c for c in body["changes"] if c["kind"] == "attendants_change")
-    assert set(att["new_initials"]) == {"K", "M"} and not att["unknown"]
-
-    for key in (gar["key"], att["key"]):
-        client.post(f"/api/camps/{seeded['slug']}/google/pull",
-                    json={"decisions": [{"key": key, "action": "apply"}]},
-                    headers=editor(seeded["slug"]))
-    db.session.expire_all()
-    activity = db.session.get(Activity, seeded["activity_id"])
-    assert {a.org_id for a in activity.assignments if a.role == OrgRole.garant} == {seeded["org_id"], marek.id}
-    assert {a.org_id for a in activity.assignments if a.role == OrgRole.helper} == {petr.id}
-
-
-def test_parse_location_parens_act_as_commas(app, seeded):
-    from camp_planner.services.google_sync import _parse_location
-
-    camp = _camp(seeded)  # seeded already has org "K"
-    for ini, name in [("H", "Hugo"), ("Á", "Ája"), ("B", "Bob"), ("L", "Lola")]:
-        _add_org(camp, ini, name)
-    db.session.commit()
-    by_id = {o.id: o.initials for o in camp.orgs}
-
-    gar, helpers, unknown = _parse_location(camp, "H (Á, B, L)")
-    assert [by_id[i] for i in gar] == ["H"]                  # first item → garant
-    assert {by_id[i] for i in helpers} == {"Á", "B", "L"}    # parenthesised → helpers
-    assert unknown == []
-
+# The initials/location grammar itself is unit-tested below (test_match_initials_matrix /
+# test_parse_location_matrix); the e2e tests here keep one round-trip per change kind.
 
 def test_inbound_garant_change(client, seeded, gcal):
     from camp_planner.models.activity import Activity, OrgRole
