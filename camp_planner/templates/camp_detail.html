@@ -57,6 +57,9 @@
           class="cp-google-badge{% if google_data.status.failed_ops %} cp-google-badge-fail{% endif %}"
           data-google-badge{% if not pend %} hidden{% endif %}>{{ pend or '' }}</span></button>
       {% endif %}
+      {% if tokens_data.may_edit %}
+        <button type="button" class="cp-tabbtn" data-tax-tab="tokens">API tokeny</button>
+      {% endif %}
       <button type="button" class="cp-tabbtn" data-tax-tab="history">Historie změn</button>
     </div>
     {{ tax_pane("categories", "Kategorie") }}
@@ -69,6 +72,14 @@
       <section class="cp-tabpane cp-section" data-tax-pane="google" data-google-root hidden>
         <div data-google-flash class="cp-flash-area" aria-live="polite"></div>
         <div data-google-body></div>
+      </section>
+    {% endif %}
+    {# API tokens pane — rendered by token-admin.js (no data-tax attribute → the taxonomy
+       editor skips it). Editor-gated here and re-checked server-side. #}
+    {% if tokens_data.may_edit %}
+      <section class="cp-tabpane cp-section" data-tax-pane="tokens" data-tokens-root hidden>
+        <div data-tokens-flash class="cp-flash-area" aria-live="polite"></div>
+        <div data-tokens-body></div>
       </section>
     {% endif %}
     {# Change-history pane — rendered by history-feed.js into data-history-root. No data-tax
@@ -88,6 +99,9 @@
   {% if show_google %}
     <script id="cp-google-data" type="application/json">{{ google_data | tojson }}</script>
   {% endif %}
+  {% if tokens_data.may_edit %}
+    <script id="cp-tokens-data" type="application/json">{{ tokens_data | tojson }}</script>
+  {% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -97,5 +111,8 @@
   {% if google_data.status.enabled and google_data.may_edit %}
     <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
     <script src="{{ url_for('main.static', filename='js/google-sync.js') }}"></script>
+  {% endif %}
+  {% if tokens_data.may_edit %}
+    <script src="{{ url_for('main.static', filename='js/token-admin.js') }}"></script>
   {% endif %}
 {% endblock %}

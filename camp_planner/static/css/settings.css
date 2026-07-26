@@ -14,3 +14,13 @@ a.cp-edit-toggle { display: inline-block; text-decoration: none; }
 /* change-history pane: the mode toggle is the shared .cp-seg; only its spacing + hint here */
 .cp-hist-modes { margin-bottom: 1rem; }
 .cp-hist-mode-hint { opacity: 0.65; font-weight: 400; }
+
+/* API tokens pane: reuses .cp-form (create row) and .cp-table (list); wider than the
+   taxonomy panes for the 6-column table. */
+[data-tax-pane="tokens"], [data-tax-pane="tokens"] .cp-table { max-width: none; }
+.cp-token-new { margin-bottom: 1.25rem; }
+.cp-token-secretrow { display: flex; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
+.cp-token-secret {
+  flex: 1 1 auto; font-family: monospace; padding: 0.4rem 0.5rem;
+  border: 1px solid var(--cp-border); border-radius: 6px;
+}

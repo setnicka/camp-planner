@@ -176,6 +176,29 @@ def test_camp_detail_has_history_tab(client, seeded):
     assert "js/history-feed.js" in html
 
 
+def test_camp_detail_token_tab_for_editor(client, seeded):
+    slug = seeded["slug"]
+    # a token is embedded so the list-with-data path renders too
+    client.post(f"/api/camps/{slug}/tokens", json={"name": "sync", "role": "editor"}, headers=ADMIN)
+    html = client.get(f"/camps/{slug}/detail", headers=editor(slug)).get_data(as_text=True)
+    assert 'data-tax-tab="tokens"' in html               # the tab button (editor sees it)
+    assert 'data-tokens-root' in html                     # the panel mount
+    assert 'id="cp-tokens-data"' in html                  # embedded JSON
+    assert "js/token-admin.js" in html
+    assert f"/api/camps/{slug}/tokens" in html            # list/create url resolves
+    assert "/api/tokens/0" in html                        # revoke url (0 sentinel)
+    assert '"sync"' in html and '"created_by"' in html    # the embedded token, without its secret
+    assert "token_hash" not in html
+
+
+def test_camp_detail_token_tab_hidden_from_viewer(client, seeded):
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/detail", headers=viewer(slug)).get_data(as_text=True)
+    assert 'data-tax-tab="tokens"' not in html
+    assert 'id="cp-tokens-data"' not in html
+    assert "js/token-admin.js" not in html
+
+
 # --- camp settings: delete button ---------------------------------------------------
 
 def test_camp_edit_delete_button_disabled_with_activities(client, seeded):

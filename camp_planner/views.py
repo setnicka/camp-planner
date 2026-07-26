@@ -22,7 +22,7 @@ from camp_planner.models.camp import Camp
 from camp_planner.models.common import czech_sort_key
 from camp_planner.services import camps as camps_service
 from camp_planner.services import errors as svc_errors
-from camp_planner.services import loaders, serialize, taxonomy
+from camp_planner.services import api_tokens, loaders, serialize, taxonomy
 from camp_planner.services.timeline import build_timeline
 
 bp = Blueprint("main", __name__, template_folder="templates", static_folder="static")
@@ -335,6 +335,18 @@ def _render_detail(camp: Camp):
             "pull": url_for("api.google_pull_preview", slug=camp.slug),  # GET preview / POST apply
         },
     }
+    # API tokens panel — editor-gated (re-checked by the api). may_edit false → the
+    # template omits the tab, the data and the script entirely.
+    may_edit = can_edit(camp)
+    tokens_data = {
+        "may_edit": may_edit,
+        "roles": [["editor", "Editor (zápis)"], ["viewer", "Jen čtení"]],
+        "urls": {
+            "list": url_for("api.token_list", slug=camp.slug),  # GET list / POST create
+            "item": url_for("api.token_revoke", token_id=0),    # DELETE (0 sentinel)
+        },
+        "tokens": [serialize.api_token(t) for t in api_tokens.list_for_camp(camp)] if may_edit else [],
+    }
     return render_template(
         "camp_detail.html",
         camp=camp,
@@ -343,6 +355,7 @@ def _render_detail(camp: Camp):
         window_start=_fmt_window_start(camp.window_start_min),
         tax_data=tax_data,
         google_data=google_data,
+        tokens_data=tokens_data,
     )
 
 # All taxonomy mutations (categories/orgs/tags batch save) live in the api blueprint;
