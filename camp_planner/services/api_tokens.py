@@ -39,8 +39,7 @@ def _now() -> datetime:
 
 
 def _audit(token: ApiToken, action: AuditAction) -> None:
-    """Stage an audit row for a token lifecycle event. Only in a request context — CLI
-    management runs without an identity, so those changes aren't attributed."""
+    """Stage a token-event audit row; skipped outside a request (CLI has no identity)."""
     if g.get("identity") is None:
         return
     fields = {"name": token.name, "role": token.role}   # never the secret / hash
@@ -61,7 +60,7 @@ def create(camp: Camp, name: str, role: CampRole, created_by: str) -> tuple[ApiT
                      role=role, created_by=created_by)
     db.session.add(token)
     try:
-        db.session.flush()   # assign token.id and surface a duplicate name before we audit
+        db.session.flush()   # get token.id + catch a duplicate name before auditing
     except IntegrityError:
         db.session.rollback()
         raise errors.Invalid(f"Token „{name}“ už v tomto táboře existuje.") from None

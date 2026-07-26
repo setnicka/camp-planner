@@ -1,9 +1,7 @@
 // Camp Planner — API tokens tab (camp settings page).
 //
-// Renders the token list + create form from the JSON the server embeds in
-// #cp-tokens-data (no fetch on load) and drives create / revoke through the /api
-// endpoints via cpDom.api. The secret is shown once, in a modal, right after creation.
-// Loaded only when the user may edit; the api re-checks server-side.
+// Renders the token list + create form from #cp-tokens-data (no fetch on load) and drives
+// create / revoke via cpDom.api. The secret is shown once, in a modal, right after creation.
 "use strict";
 
 (function () {

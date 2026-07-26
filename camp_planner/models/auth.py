@@ -82,7 +82,7 @@ class ApiToken(TimestampMixin, Base):
     """
 
     __tablename__ = table_name("api_tokens")
-    # Names are unique within a camp, not globally (a token is scoped to one camp).
+    # Unique per camp, not globally.
     __table_args__ = (UniqueConstraint("camp_id", "name", name="uq_api_token_camp_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)

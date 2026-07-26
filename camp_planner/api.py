@@ -153,8 +153,7 @@ def _api_token_auth() -> None:
     if identity is not None:
         g.identity = identity   # a token authenticated this request
         return
-    # A presented-but-unresolved Bearer token is a failed auth attempt, not a browser call:
-    # answer 401 rather than the misleading 400 "CSRF token missing" from csrf.protect().
+    # Bearer present but unresolved = failed auth → 401, not csrf.protect()'s misleading 400.
     if request.headers.get("Authorization", "").split(" ", 1)[0].lower() == "bearer":
         abort(401, "Neplatný nebo odvolaný API token.")
     if current_app.config.get("WTF_CSRF_ENABLED", True):

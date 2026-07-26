@@ -514,9 +514,8 @@
     window.addEventListener("hashchange", () => apply(tokenFromHash(), false));    // external links / back button
     apply(tokenFromHash(), false);   // initial state from the URL
 
-    // After a save, the activity list may have changed (a slot created for a brand-new
-    // activity); orgs/categories don't change via a timeline save, so only the activity
-    // <select> + the VALID token set are rebuilt. The current selection is kept if still valid.
+    // After a save the activity list may change; orgs/categories don't, so rebuild only the
+    // activity <select> + VALID token set, keeping the current selection if still valid.
     refreshFilterFacets = () => {
       const map = new Map();
       payload.segments.forEach((s) => { if (!map.has(s.activity_id)) map.set(s.activity_id, s.title); });
@@ -535,9 +534,8 @@
     };
   })();
 
-  // Re-render from a fresh server payload (after a save) without a page reload: rebuild the
-  // item DataSet in place (the editor keeps its `items` reference), re-add the day/night
-  // backgrounds, refresh the derived filter facets, and take the new optimistic-lock rev.
+  // Re-render from a fresh payload after a save without reloading: rebuild the items in
+  // place, re-add day/night backgrounds, refresh the filter facets, take the new rev.
   function rehydrate(fresh) {
     payload.segments = fresh.segments;
     camp.rev = fresh.camp.rev;

@@ -29,8 +29,7 @@ def resolve_identity() -> Identity | None:
         return None
     g.api_token = token
     return build_identity(
-        # token id, not name: names are unique only within a camp, and a revoked+recreated
-        # same-name token is a distinct principal in the audit trail.
+        # id, not name — names are unique only per camp
         user_id=f"token:{token.id}",
         raw_grants=[(token.role, frozenset({token.camp_id}))],
     )
