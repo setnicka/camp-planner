@@ -109,6 +109,11 @@ class MaterialNeed(Base):
     note: Mapped[str | None] = mapped_column(Text)
     is_ready: Mapped[bool] = mapped_column(default=False)
 
+    @property
+    def effective_unit(self) -> str | None:
+        """The need's unit override, else its material's catalog default."""
+        return self.unit if self.unit is not None else self.material.unit
+
     # Relationships:
     activity: Mapped[Activity] = relationship(back_populates="material_needs")
     material: Mapped[Material] = relationship(back_populates="needs")

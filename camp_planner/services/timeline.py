@@ -20,9 +20,9 @@ from camp_planner.models.activity import OrgRole
 from camp_planner.models.common import czech_sort_key
 from camp_planner.schemas import (
     TimelineCamp,
-    TimelineCategory,
+    CategoryOut,
     TimelineGroup,
-    TimelineOrg,
+    OrgOut,
     TimelinePayload,
     TimelineSegment,
     TimelineTag,
@@ -92,15 +92,15 @@ def _groups(camp: Camp) -> list[TimelineGroup]:
             for i in range(camp.length_days)]
 
 
-def _categories(camp: Camp) -> list[TimelineCategory]:
+def _categories(camp: Camp) -> list[CategoryOut]:
     """The camp's categories (user sort_order); segments reference them by cat_key."""
-    return [TimelineCategory(id=c.id, key=c.key, label=c.label, color=c.color) for c in camp.categories]
+    return [CategoryOut(id=c.id, key=c.key, label=c.label, color=c.color) for c in camp.categories]
 
 
-def _orgs(camp: Camp) -> list[TimelineOrg]:
+def _orgs(camp: Camp) -> list[OrgOut]:
     """All camp orgs (Czech-collated by initials); segments reference them by id."""
     orgs = sorted(camp.orgs, key=lambda o: czech_sort_key(o.initials))
-    return [TimelineOrg(id=o.id, initials=o.initials, name=o.name) for o in orgs]
+    return [OrgOut(id=o.id, initials=o.initials, name=o.name) for o in orgs]
 
 
 def _tags(camp: Camp) -> list[TimelineTag]:

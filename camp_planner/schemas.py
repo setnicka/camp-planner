@@ -124,9 +124,32 @@ class TodoUpdate(BaseModel):
     org_ids: OrgIds | None = None   # absent/null → unchanged; [] → clear
 
 
-class TodoOrgOut(BaseModel):
+# --- shared reference shapes (reused across todo/slot/material/timeline) -----
+
+class OrgRefOut(BaseModel):
+    """An org reference on an assignable row (initials for compact display)."""
     org_id: int
     initials: str
+
+
+class CategoryOut(BaseModel):
+    id: int
+    key: str
+    label: str
+    color: str
+
+
+class OrgOut(BaseModel):
+    id: int
+    initials: str
+    name: str
+
+
+class TagDefOut(BaseModel):
+    id: int
+    name: str
+    kind: TagKind
+    pinned: bool
 
 
 class TodoOut(BaseModel):
@@ -137,7 +160,7 @@ class TodoOut(BaseModel):
     note: str | None
     due_date: date | None
     is_done: bool
-    orgs: list[TodoOrgOut] = []
+    orgs: list[OrgRefOut] = []
 
 
 class TodoEnvelope(_Ok):
@@ -169,11 +192,6 @@ class SlotUpdateIn(BaseModel):
         return self
 
 
-class SlotOrgOut(BaseModel):
-    org_id: int
-    initials: str
-
-
 class SlotOut(BaseModel):
     id: int
     activity_id: int
@@ -181,11 +199,11 @@ class SlotOut(BaseModel):
     start_at: NaiveDatetime
     end_at: NaiveDatetime
     override_name: str | None = None
-    orgs: list[SlotOrgOut]
+    orgs: list[OrgRefOut]
 
 
 class SlotEnvelope(_Ok):
-    orgs: list[SlotOrgOut]
+    orgs: list[OrgRefOut]
     override_name: str | None = None
 
 
@@ -262,20 +280,6 @@ class TimelineCamp(BaseModel):
     rev: int
 
 
-class TimelineCategory(BaseModel):
-    id: int
-    key: str
-    label: str
-    color: str
-
-
-class TimelineOrg(BaseModel):
-    """A camp org; segments reference it by id (garants/helpers/attending)."""
-    id: int
-    initials: str
-    name: str
-
-
 class TimelineTag(BaseModel):
     """A camp tag; segments reference it by id (tag_ids)."""
     id: int
@@ -310,8 +314,8 @@ class TimelineSegment(BaseModel):
 
 class TimelinePayload(BaseModel):
     camp: TimelineCamp
-    categories: list[TimelineCategory]
-    orgs: list[TimelineOrg]
+    categories: list[CategoryOut]
+    orgs: list[OrgOut]      # czech-sorted; segments reference them by id
     tags: list[TimelineTag]
     groups: list[TimelineGroup]
     segments: list[TimelineSegment]
@@ -399,12 +403,6 @@ class TagLinkOut(BaseModel):
     value: str | None
 
 
-class MaterialOrgOut(BaseModel):
-    """An org responsible for a catalog material (initials for compact display)."""
-    org_id: int
-    initials: str
-
-
 class MaterialOut(BaseModel):
     """A catalog material (registry) — also returned by the catalog endpoints."""
     model_config = ConfigDict(from_attributes=True)
@@ -415,7 +413,7 @@ class MaterialOut(BaseModel):
     url: str | None
     acquisition_labels: list[str] = []       # free "how/where to obtain" tokens ("prefix: value" → scoped tag)
     sum_strategy: SumStrategy                 # how per-activity needs aggregate (sum vs max)
-    orgs: list[MaterialOrgOut] = []          # responsible orgs (czech-sorted by initials)
+    orgs: list[OrgRefOut] = []               # responsible orgs (czech-sorted by initials)
 
 
 class MaterialNeedOut(BaseModel):
@@ -619,33 +617,7 @@ class TagListIn(BaseModel):
     items: list[TagDefIn] = []
 
 
-class CategoryOut(BaseModel):
-    id: int
-    key: str
-    label: str
-    color: str
-
-
-class OrgOut(BaseModel):
-    id: int
-    initials: str
-    name: str
-
-
-class TagDefOut(BaseModel):
-    id: int
-    name: str
-    kind: TagKind
-    pinned: bool
-
-
-class TaxonomyEnvelope(_Ok):
-    """Response of the batch-save PUTs (one kind per endpoint)."""
-    items: list[dict]            # CategoryOut | OrgOut | TagDefOut (one kind per endpoint)
-    message: str = "Uloženo."
-
-
-# Per-collection read envelopes — symmetric with the per-collection PUTs.
+# Per-collection envelopes, shared by the GET reads and the batch-save PUTs.
 class CategoriesEnvelope(_Ok):
     items: list[CategoryOut]
 

@@ -13,9 +13,8 @@ from typing import TYPE_CHECKING
 
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
-from camp_planner.models.common import czech_sort_key
 from camp_planner.models.slot import Slot, SlotAssignment
-from camp_planner.services import audit, errors, google_sync, serialize
+from camp_planner.services import audit, errors, google_sync, orgs, serialize
 from camp_planner.services.timeline import build_timeline, bump_timeline_rev, span_in_window
 
 if TYPE_CHECKING:
@@ -33,16 +32,9 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
     changes: dict = {}
 
     if "org_ids" in fields and payload.org_ids is not None:  # explicit null → unchanged; [] → clear
-        org_ids = payload.org_ids
-        initials = {o.id: o.initials for o in camp.orgs}
-        for org_id in org_ids:  # schema already rejected duplicate ids
-            if org_id not in initials:
-                raise errors.Invalid("Orgové: neznámý org této akce.")
-        current = {a.org_id for a in slot.assignments}
-        if current != set(org_ids):
-            by_czech = lambda ids: sorted((initials[i] for i in ids), key=czech_sort_key)  # noqa: E731
-            changes["orgs"] = [by_czech(current), by_czech(org_ids)]
-            slot.assignments = [SlotAssignment(org_id=i) for i in org_ids]  # delete-orphan drops the old rows
+        orgs_diff = orgs.replace_assignments(slot, camp, payload.org_ids, SlotAssignment)
+        if orgs_diff:
+            changes["orgs"] = orgs_diff
 
     if "override_name" in fields:
         new_name = (payload.override_name or "").strip() or None

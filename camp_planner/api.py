@@ -79,7 +79,6 @@ from camp_planner.schemas import (
     TagsEnvelope,
     TagsIn,
     TagValueUpdate,
-    TaxonomyEnvelope,
     TimelineOut,
     TimelineSaveEnvelope,
     TimelineSaveIn,
@@ -151,29 +150,42 @@ def _run(fn: Callable[[], dict]):
         return jsonify(ok=False, error=str(exc), **exc.extra), 409
 
 
-def _camp(slug: str, *options) -> Camp:
-    """Resolve a camp by slug (404 if absent). Pass loaders.* options to eager-load the
-    graph a read serializes, avoiding N+1; omit them for mutations that don't walk it."""
-    return db.first_or_404(
+def _camp(slug: str, *options, edit: bool | None) -> Camp:
+    """Resolve a camp by slug (404) and enforce the camp permission (401/403):
+    edit=True for mutations, False for reads, None when the caller does its own
+    stricter check. loaders.* options eager-load the graph a read serializes."""
+    camp = db.first_or_404(
         db.select(Camp).filter_by(slug=slug).options(*options), description="Akce nenalezena.")
+    if edit is not None:
+        _guard(camp, edit=edit)
+    return camp
 
 
-def _activity(activity_id: int, *options) -> Activity:
-    return db.first_or_404(
+def _activity(activity_id: int, *options, edit: bool | None) -> Activity:
+    activity = db.first_or_404(
         db.select(Activity).filter_by(id=activity_id).options(*options),
         description="Aktivita nenalezena.")
+    if edit is not None:
+        _guard(activity.camp, edit=edit)
+    return activity
 
 
-def _slot(slot_id: int) -> Slot:
-    return db.get_or_404(Slot, slot_id, description="Slot nenalezen.")
+def _slot(slot_id: int, *, edit: bool) -> Slot:
+    slot = db.get_or_404(Slot, slot_id, description="Slot nenalezen.")
+    _guard(slot.activity.camp, edit=edit)
+    return slot
 
 
-def _todo(todo_id: int) -> Todo:
-    return db.get_or_404(Todo, todo_id, description="Úkol nenalezen.")
+def _todo(todo_id: int, *, edit: bool) -> Todo:
+    todo = db.get_or_404(Todo, todo_id, description="Úkol nenalezen.")
+    _guard(todo.activity.camp, edit=edit)
+    return todo
 
 
-def _need(need_id: int) -> MaterialNeed:
-    return db.get_or_404(MaterialNeed, need_id, description="Potřeba materiálu nenalezena.")
+def _need(need_id: int, *, edit: bool) -> MaterialNeed:
+    need = db.get_or_404(MaterialNeed, need_id, description="Potřeba materiálu nenalezena.")
+    _guard(need.activity.camp, edit=edit)
+    return need
 
 
 def _material(camp: Camp, material_id: int) -> Material:
@@ -195,8 +207,7 @@ def camp_list():
 @bp.get("/camps/<slug>")
 @spec.validate(resp=Response(HTTP_200=CampEnvelope, **_AUTH), tags=["camps"])
 def camp_get(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=False)
+    camp = _camp(slug, edit=False)
     return _run(lambda: {"camp": serialize.camp(camp)})
 
 
@@ -208,16 +219,9 @@ def camp_create():
     payload = request.context.json
 
     def run():
-        source = None
-        if payload.copy_from:
-            source = db.session.scalar(db.select(Camp).filter_by(slug=payload.copy_from))
-            if source is None or not can_view(source):
-                raise errors.Invalid("Převzít z akce: vyberte platnou akci.")
-        data = payload.model_dump(exclude={"copy_from", "copy_parts"})
-        data["slug"] = data["slug"] or camps_service.slugify(data["name"])
-        camp = camps_service.create_camp(data, copy_from=source, copy_parts=payload.copy_parts)
-        if camp is None:
-            raise errors.Invalid(f"Slug {data['slug']!r} už používá jiná akce.")
+        camp = camps_service.create_camp(
+            payload.model_dump(exclude={"copy_from", "copy_parts"}),
+            copy_from_slug=payload.copy_from, copy_parts=payload.copy_parts)
         return {"camp": serialize.camp(camp)}
 
     return _run(run)
@@ -227,8 +231,7 @@ def camp_create():
 @spec.validate(json=CampUpdate, resp=Response(HTTP_200=CampEnvelope, **_AUTH), tags=["camps"])
 def camp_update(slug: str):
     """Partial update of a camp's scalar settings; name/slug are admin-only (server-side)."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     allow_meta = can_edit_camp_meta(camp)
     data = request.context.json.model_dump(exclude_unset=True)
 
@@ -243,7 +246,7 @@ def camp_update(slug: str):
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH_400), tags=["camps"])
 def camp_delete(slug: str):
     """Delete a camp. Admin-only, and refused (400) while it still has activities."""
-    camp = _camp(slug)
+    camp = _camp(slug, edit=None)  # admin-gated below
     if not can_edit_camp_meta(camp):
         _forbid("Mazat akce může jen administrátor.")
     return _run(lambda: camps_service.delete_camp(camp))
@@ -255,8 +258,7 @@ def camp_delete(slug: str):
 @spec.validate(resp=Response(HTTP_200=GoogleEnvelope, **_AUTH), tags=["google"])
 def google_status(slug: str):
     """Current Google Calendar connection state for the camp."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: {"google": camps_service.google_status(camp)})
 
 
@@ -264,8 +266,7 @@ def google_status(slug: str):
 @spec.validate(json=GoogleConnectIn, resp=Response(HTTP_200=GoogleEnvelope, **_AUTH_400), tags=["google"])
 def google_connect(slug: str):
     """Connect the camp to a Google calendar by id (verifies access, queues an export)."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: camps_service.set_google_calendar(camp, request.context.json.calendar_id))
 
 
@@ -273,8 +274,7 @@ def google_connect(slug: str):
 @spec.validate(resp=Response(HTTP_200=GoogleEnvelope, **_AUTH_400), tags=["google"])
 def google_disconnect(slug: str):
     """Disconnect the camp from Google (leaves the events already in the calendar)."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: camps_service.disconnect_google(camp))
 
 
@@ -282,8 +282,7 @@ def google_disconnect(slug: str):
 @spec.validate(resp=Response(HTTP_200=GoogleSyncEnvelope, **_AUTH_400), tags=["google"])
 def google_sync_now(slug: str):
     """Deliver any queued outbound changes to Google now ("Synchronizovat nyní")."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: {"result": google_sync.drain(camp), "google": camps_service.google_status(camp)})
 
 
@@ -291,8 +290,7 @@ def google_sync_now(slug: str):
 @spec.validate(resp=Response(HTTP_200=GoogleResyncEnvelope, **_AUTH_400), tags=["google"])
 def google_resync(slug: str):
     """Queue every slot for an outbound push ("Znovu synchronizovat vše")."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: {"result": google_sync.resync_all(camp), "google": camps_service.google_status(camp)})
 
 
@@ -300,8 +298,7 @@ def google_resync(slug: str):
 @spec.validate(resp=Response(HTTP_200=GooglePullPreviewEnvelope, **_AUTH_400), tags=["google"])
 def google_pull_preview(slug: str):
     """Compute the reviewable list of changes made in Google ("Načíst změny z Google")."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: google_sync.preview_pull(camp))
 
 
@@ -312,8 +309,7 @@ def google_pull_preview(slug: str):
 def google_pull_apply(slug: str):
     """Apply the user-selected subset of inbound changes from the review screen. A stale
     `rev` (the timeline changed since the preview) yields 409."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     payload = request.context.json
     return _run(lambda: google_sync.apply_pull(camp, payload.decisions, rev=payload.rev))
 
@@ -323,54 +319,48 @@ def google_pull_apply(slug: str):
 def _save_taxonomy(camp: Camp, save_fn: Callable):
     """The items were shape-validated by the schema; the service does the cross-item
     reconcile (raising errors.Invalid on a duplicate or blocked delete)."""
-    return _run(lambda: {"items": save_fn(camp, request.context.json.items), "message": "Uloženo."})
+    return _run(lambda: {"items": save_fn(camp, request.context.json.items)})
 
 
 @bp.get("/camps/<slug>/categories")
 @spec.validate(resp=Response(HTTP_200=CategoriesEnvelope, **_AUTH), tags=["taxonomy"])
 def categories_get(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=False)
+    camp = _camp(slug, edit=False)
     return _run(lambda: {"items": taxonomy.categories(camp)})
 
 
 @bp.put("/camps/<slug>/categories")
-@spec.validate(json=CategoryListIn, resp=Response(HTTP_200=TaxonomyEnvelope, **_AUTH_400), tags=["taxonomy"])
+@spec.validate(json=CategoryListIn, resp=Response(HTTP_200=CategoriesEnvelope, **_AUTH_400), tags=["taxonomy"])
 def categories_save(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _save_taxonomy(camp, taxonomy.save_categories)
 
 
 @bp.get("/camps/<slug>/orgs")
 @spec.validate(resp=Response(HTTP_200=OrgsEnvelope, **_AUTH), tags=["taxonomy"])
 def orgs_get(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=False)
+    camp = _camp(slug, edit=False)
     return _run(lambda: {"items": taxonomy.orgs(camp)})
 
 
 @bp.put("/camps/<slug>/orgs")
-@spec.validate(json=OrgListIn, resp=Response(HTTP_200=TaxonomyEnvelope, **_AUTH_400), tags=["taxonomy"])
+@spec.validate(json=OrgListIn, resp=Response(HTTP_200=OrgsEnvelope, **_AUTH_400), tags=["taxonomy"])
 def orgs_save(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _save_taxonomy(camp, taxonomy.save_orgs)
 
 
 @bp.get("/camps/<slug>/tags")
 @spec.validate(resp=Response(HTTP_200=TagDefsEnvelope, **_AUTH), tags=["taxonomy"])
 def tags_get(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=False)
+    camp = _camp(slug, edit=False)
     return _run(lambda: {"items": taxonomy.tags(camp)})
 
 
 @bp.put("/camps/<slug>/tags")
-@spec.validate(json=TagListIn, resp=Response(HTTP_200=TaxonomyEnvelope, **_AUTH_400), tags=["taxonomy"])
+@spec.validate(json=TagListIn, resp=Response(HTTP_200=TagDefsEnvelope, **_AUTH_400), tags=["taxonomy"])
 def tags_save(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _save_taxonomy(camp, taxonomy.save_tags)
 
 
@@ -379,8 +369,7 @@ def tags_save(slug: str):
 @bp.get("/camps/<slug>/timeline")
 @spec.validate(resp=Response(HTTP_200=TimelineOut, **_AUTH), tags=["timeline"])
 def timeline_get(slug: str):
-    camp = _camp(slug, *loaders.TIMELINE)
-    _guard(camp, edit=False)
+    camp = _camp(slug, *loaders.TIMELINE, edit=False)
     return _run(lambda: build_timeline(camp))
 
 
@@ -388,10 +377,8 @@ def timeline_get(slug: str):
 @spec.validate(json=TimelineSaveIn, resp=Response(HTTP_200=TimelineSaveEnvelope, HTTP_409=ConflictOut, **_AUTH_400),
                tags=["timeline"])
 def timeline_save(slug: str):
-    # loaders.TIMELINE: save_timeline walks every activity's slots (and a stale-rev
-    # conflict re-serializes the whole timeline) — lazy loading would be N+1 per save.
-    camp = _camp(slug, *loaders.TIMELINE)
-    _guard(camp, edit=True)
+    # Eager-load: save_timeline walks every activity's slots — lazy would be N+1 per save.
+    camp = _camp(slug, *loaders.TIMELINE, edit=True)
     return _run(lambda: slots.save_timeline(camp, request.context.json))
 
 
@@ -400,32 +387,28 @@ def timeline_save(slug: str):
 @bp.get("/camps/<slug>/activities")
 @spec.validate(resp=Response(HTTP_200=ActivityListEnvelope, **_AUTH), tags=["activities"])
 def activity_list(slug: str):
-    camp = _camp(slug, *loaders.ACTIVITIES)
-    _guard(camp, edit=False)
+    camp = _camp(slug, *loaders.ACTIVITIES, edit=False)
     return _run(lambda: {"activities": [serialize.activity(a) for a in camp.activities]})
 
 
 @bp.get("/activities/<int:activity_id>")
 @spec.validate(resp=Response(HTTP_200=ActivityEnvelope, **_AUTH), tags=["activities"])
 def activity_get(activity_id: int):
-    activity = _activity(activity_id, *loaders.ACTIVITY)
-    _guard(activity.camp, edit=False)
+    activity = _activity(activity_id, *loaders.ACTIVITY, edit=False)
     return _run(lambda: {"activity": serialize.activity(activity)})
 
 
 @bp.post("/camps/<slug>/activities")
 @spec.validate(json=ActivityCreate, resp=Response(HTTP_200=ActivityEnvelope, **_AUTH_400), tags=["activities"])
 def activity_create(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: activities.create_activity(camp, request.context.json))
 
 
 @bp.patch("/activities/<int:activity_id>")
 @spec.validate(json=ActivityUpdate, resp=Response(HTTP_200=ActivityEnvelope, **_AUTH_400), tags=["activities"])
 def activity_update(activity_id: int):
-    activity = _activity(activity_id, *loaders.ACTIVITY)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, *loaders.ACTIVITY, edit=True)
     return _run(lambda: activities.update_activity(activity, request.context.json))
 
 
@@ -433,8 +416,7 @@ def activity_update(activity_id: int):
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH_400), tags=["activities"])
 def activity_delete(activity_id: int):
     """Delete an activity; refused (400) while it still has slots on the timeline."""
-    activity = _activity(activity_id)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, edit=True)
     return _run(lambda: activities.delete_activity(activity))
 
 
@@ -443,9 +425,8 @@ def activity_delete(activity_id: int):
 def activity_merge(source_id: int):
     """Merge activity <source_id> INTO `into`: its todos/slots/needs move over, the source is
     deleted. Both must belong to the same camp."""
-    source = _activity(source_id)
-    _guard(source.camp, edit=True)
-    target = _activity(request.context.json.into)
+    source = _activity(source_id, edit=True)
+    target = _activity(request.context.json.into, edit=None)  # service enforces same-camp
     return _run(lambda: activities.merge_activities(source, target))
 
 
@@ -453,16 +434,14 @@ def activity_merge(source_id: int):
 @spec.validate(json=ActivityOrgsIn, resp=Response(HTTP_200=ActivityOrgsEnvelope, **_AUTH_400), tags=["activities"])
 def activity_orgs(activity_id: int):
     """Set the activity's garant/helper orgs (each org carries a role)."""
-    activity = _activity(activity_id)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, edit=True)
     return _run(lambda: activities.set_orgs(activity, request.context.json))
 
 
 @bp.put("/activities/<int:activity_id>/tags")
 @spec.validate(json=TagsIn, resp=Response(HTTP_200=TagsEnvelope, **_AUTH_400), tags=["activities"])
 def activity_tags(activity_id: int):
-    activity = _activity(activity_id)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, edit=True)
     return _run(lambda: activities.set_tags(activity, request.context.json))
 
 
@@ -471,8 +450,7 @@ def activity_tags(activity_id: int):
 def activity_tag_value(activity_id: int, tag_id: int):
     """Update one applied tag's value (the part that changes over time); membership
     is set via PUT …/tags."""
-    activity = _activity(activity_id)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, edit=True)
     link = next((t for t in activity.tags if t.tag_id == tag_id), None)
     if link is None:
         abort(404, "Tag není na této aktivitě použit.")
@@ -489,8 +467,7 @@ def activity_tag_value(activity_id: int, tag_id: int):
 @spec.validate(json=SlotUpdateIn, resp=Response(HTTP_200=SlotEnvelope, **_AUTH_400), tags=["timeline"])
 def update_slot(slot_id: int):
     """Set which orgs attend this slot and/or its display-name override."""
-    slot = _slot(slot_id)
-    _guard(slot.activity.camp, edit=True)
+    slot = _slot(slot_id, edit=True)
     return _run(lambda: slots.update_slot(slot, request.context.json))
 
 
@@ -501,8 +478,7 @@ def update_slot(slot_id: int):
 @bp.get("/camps/<slug>/materials")
 @spec.validate(resp=Response(HTTP_200=MaterialListEnvelope, **_AUTH), tags=["materials"])
 def material_list(slug: str):
-    camp = _camp(slug, *loaders.MATERIALS)
-    _guard(camp, edit=False)
+    camp = _camp(slug, *loaders.MATERIALS, edit=False)
     return _run(lambda: materials.list_materials(camp))
 
 
@@ -511,16 +487,14 @@ def material_list(slug: str):
 def material_overview(slug: str):
     """Camp-wide materials page: every catalog material with the activity needs using it
     (the frontend computes per-unit sums)."""
-    camp = _camp(slug, *loaders.MATERIALS_OVERVIEW)
-    _guard(camp, edit=False)
+    camp = _camp(slug, *loaders.MATERIALS_OVERVIEW, edit=False)
     return _run(lambda: materials.list_materials_overview(camp))
 
 
 @bp.post("/camps/<slug>/materials")
 @spec.validate(json=MaterialCreate, resp=Response(HTTP_200=MaterialEnvelope, **_AUTH_400), tags=["materials"])
 def material_create(slug: str):
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     return _run(lambda: materials.create_material(camp, request.context.json))
 
 
@@ -528,8 +502,7 @@ def material_create(slug: str):
 @spec.validate(json=MaterialUpdateIn, resp=Response(HTTP_200=MaterialEnvelope, **_AUTH_400), tags=["materials"])
 def material_update(slug: str, material_id: int):
     """Edit a catalog material (name / default unit / note / url)."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     material = _material(camp, material_id)
     return _run(lambda: materials.update_material(material, request.context.json))
 
@@ -538,8 +511,7 @@ def material_update(slug: str, material_id: int):
 @spec.validate(json=MaterialMergeIn, resp=Response(HTTP_200=MaterialEnvelope, **_AUTH_400), tags=["materials"])
 def material_merge(slug: str, source_id: int):
     """Merge the catalog material <source_id> INTO `into`: usages migrate, source is deleted."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     source = _material(camp, source_id)
     target = _material(camp, request.context.json.into)
     return _run(lambda: materials.merge_materials(camp, source, target))
@@ -549,8 +521,7 @@ def material_merge(slug: str, source_id: int):
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH_400), tags=["materials"])
 def material_delete(slug: str, material_id: int):
     """Delete a catalog material; refused (400) while activities still use it."""
-    camp = _camp(slug)
-    _guard(camp, edit=True)
+    camp = _camp(slug, edit=True)
     material = _material(camp, material_id)
     return _run(lambda: materials.delete_material(material))
 
@@ -558,24 +529,21 @@ def material_delete(slug: str, material_id: int):
 @bp.post("/activities/<int:activity_id>/materials")
 @spec.validate(json=MaterialNeedAddIn, resp=Response(HTTP_200=MaterialNeedEnvelope, **_AUTH_400), tags=["materials"])
 def material_need_add(activity_id: int):
-    activity = _activity(activity_id)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, edit=True)
     return _run(lambda: materials.add_need(activity, request.context.json))
 
 
 @bp.patch("/material-needs/<int:need_id>")
-@spec.validate(json=MaterialNeedUpdateIn, resp=Response(HTTP_200=MaterialNeedEnvelope, **_AUTH), tags=["materials"])
+@spec.validate(json=MaterialNeedUpdateIn, resp=Response(HTTP_200=MaterialNeedEnvelope, **_AUTH_400), tags=["materials"])
 def material_need_update(need_id: int):
-    need = _need(need_id)
-    _guard(need.activity.camp, edit=True)
+    need = _need(need_id, edit=True)
     return _run(lambda: materials.update_need(need, request.context.json))
 
 
 @bp.delete("/material-needs/<int:need_id>")
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH), tags=["materials"])
 def material_need_delete(need_id: int):
-    need = _need(need_id)
-    _guard(need.activity.camp, edit=True)
+    need = _need(need_id, edit=True)
     return _run(lambda: materials.delete_need(need))
 
 
@@ -585,32 +553,28 @@ def material_need_delete(need_id: int):
 @spec.validate(resp=Response(HTTP_200=TodoOverviewEnvelope, **_AUTH), tags=["todos"])
 def todo_overview(slug: str):
     """Camp-wide TODO overview: every activity's todos, each carrying its activity."""
-    camp = _camp(slug, *loaders.TODOS_OVERVIEW)
-    _guard(camp, edit=False)
+    camp = _camp(slug, *loaders.TODOS_OVERVIEW, edit=False)
     return _run(lambda: todos.list_todos_overview(camp))
 
 
 @bp.post("/activities/<int:activity_id>/todos")
-@spec.validate(json=TodoCreate, resp=Response(HTTP_200=TodoEnvelope, **_AUTH), tags=["todos"])
+@spec.validate(json=TodoCreate, resp=Response(HTTP_200=TodoEnvelope, **_AUTH_400), tags=["todos"])
 def todo_create(activity_id: int):
-    activity = _activity(activity_id)
-    _guard(activity.camp, edit=True)
+    activity = _activity(activity_id, edit=True)
     return _run(lambda: todos.create_todo(activity, request.context.json))
 
 
 @bp.patch("/todos/<int:todo_id>")
-@spec.validate(json=TodoUpdate, resp=Response(HTTP_200=TodoEnvelope, **_AUTH), tags=["todos"])
+@spec.validate(json=TodoUpdate, resp=Response(HTTP_200=TodoEnvelope, **_AUTH_400), tags=["todos"])
 def todo_update(todo_id: int):
-    todo = _todo(todo_id)
-    _guard(todo.activity.camp, edit=True)
+    todo = _todo(todo_id, edit=True)
     return _run(lambda: todos.update_todo(todo, request.context.json))
 
 
 @bp.delete("/todos/<int:todo_id>")
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH), tags=["todos"])
 def todo_delete(todo_id: int):
-    todo = _todo(todo_id)
-    _guard(todo.activity.camp, edit=True)
+    todo = _todo(todo_id, edit=True)
     return _run(lambda: todos.delete_todo(todo))
 
 
@@ -622,8 +586,7 @@ def audit_list(slug: str):
     """Camp change history, newest first. No filter → whole-camp feed; activity_id →
     one activity's thread; entity_type+entity_id → one row's history; camp_level →
     high-level structural changes only."""
-    camp = _camp(slug)
-    _guard(camp, edit=False)
+    camp = _camp(slug, edit=False)
     q = request.context.query
 
     def run():

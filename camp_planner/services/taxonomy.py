@@ -14,10 +14,10 @@ from sqlalchemy.exc import IntegrityError
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Category, Tag, TagKind
-from camp_planner.models.common import czech_sort_key
+from camp_planner.models.common import czech_sort_key, slugify
 from camp_planner.models.org import Org
+from camp_planner.schemas import CategoryOut, OrgOut, TagDefOut
 from camp_planner.services import audit, errors
-from camp_planner.services.camps import slugify
 
 if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
@@ -33,19 +33,20 @@ TAG_KIND_LABELS: dict[str, str] = {
 
 
 # --- serialization (initial page embed + save responses) ---------------------
+# Built from the *Out response models so the shape is defined once, in schemas.py.
 
 def categories(camp: Camp) -> list[dict]:
-    return [{"id": c.id, "key": c.key, "label": c.label, "color": c.color}
+    return [CategoryOut(id=c.id, key=c.key, label=c.label, color=c.color).model_dump(mode="json")
             for c in camp.categories]
 
 
 def orgs(camp: Camp) -> list[dict]:
-    return [{"id": o.id, "initials": o.initials, "name": o.name}
+    return [OrgOut(id=o.id, initials=o.initials, name=o.name).model_dump(mode="json")
             for o in sorted(camp.orgs, key=lambda o: czech_sort_key(o.initials))]
 
 
 def tags(camp: Camp) -> list[dict]:
-    return [{"id": t.id, "name": t.name, "kind": t.kind.value, "pinned": t.pinned}
+    return [TagDefOut(id=t.id, name=t.name, kind=t.kind, pinned=t.pinned).model_dump(mode="json")
             for t in camp.tags]
 
 

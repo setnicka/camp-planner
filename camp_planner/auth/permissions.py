@@ -96,8 +96,10 @@ def _camp_guard(check: Callable[[Camp], bool]) -> Callable:
     def decorator(view: Callable) -> Callable:
         @wraps(view)
         def wrapper(*args, **kwargs):
-            if not check(_resolve_camp(kwargs)):
+            camp = _resolve_camp(kwargs)
+            if not check(camp):
                 return _deny()
+            g.camp = camp  # let the view reuse the resolved row instead of re-querying
             return view(*args, **kwargs)
 
         return wrapper

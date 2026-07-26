@@ -13,9 +13,8 @@ from sqlalchemy.exc import IntegrityError
 
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
-from camp_planner.models.common import czech_sort_key
-from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed, SumStrategy
-from camp_planner.services import audit, errors, serialize
+from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
+from camp_planner.services import audit, errors, orgs, serialize
 
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity
@@ -61,58 +60,18 @@ def create_material(camp: Camp, payload: MaterialCreate) -> dict:
 _EDITABLE = ("name", "unit", "note", "url")  # name's @validates resyncs normalized_name
 
 
-def _set_orgs(material: Material, org_ids: list[int]) -> list | None:
-    """Replace the material's responsible orgs with `org_ids` (validated against the camp
-    roster). Returns the audit diff [before, after] (czech-sorted initials) when it changed,
-    else None — unchanged means no reassignment (avoids delete-orphan churn) and no audit."""
-    initials = {o.id: o.initials for o in material.camp.orgs}
-    for oid in org_ids:
-        if oid not in initials:
-            raise errors.Invalid("Orgové: neznámý org této akce.")
-    before = sorted((a.org.initials for a in material.assignments), key=czech_sort_key)
-    after = sorted((initials[oid] for oid in org_ids), key=czech_sort_key)
-    if before == after:
-        return None
-    material.assignments = [MaterialAssignment(org_id=oid) for oid in org_ids]
-    return [before, after]
-
-
-def _set_labels(material: Material, labels: list[str]) -> list | None:
-    """Replace the material's acquisition labels (already cleaned/deduped by the schema).
-    Returns the audit diff [before, after] when it changed, else None."""
-    before = material.acquisition_labels
-    if before == labels:
-        return None
-    material.acquisition_labels = labels
-    return [before, labels]
-
-
-def _set_strategy(material: Material, strategy: SumStrategy) -> list | None:
-    """Set the amount-aggregation strategy. Handled apart from apply_patch because the column
-    is NOT NULL — a sent null must stay 'unchanged', not clear it. Returns the diff or None."""
-    if material.sum_strategy == strategy:
-        return None
-    before = material.sum_strategy
-    material.sum_strategy = strategy
-    return [before, strategy]
-
-
 def update_material(material: Material, payload: MaterialUpdateIn) -> dict:
     """Update a catalog material's fields (only those sent). A rename colliding with
     another material's normalized name is rejected (uq_material_camp_norm)."""
     changes = audit.apply_patch(material, payload, _EDITABLE)
-    # The list/enum fields below are applied apart from apply_patch so a sent null reads as
-    # "unchanged" (not "clear"); each helper returns its audit diff [before, after] or None.
-    if payload.acquisition_labels is not None:
-        labels_diff = _set_labels(material, payload.acquisition_labels)
-        if labels_diff:
-            changes["acquisition_labels"] = labels_diff
-    if payload.sum_strategy is not None:
-        strat_diff = _set_strategy(material, payload.sum_strategy)
-        if strat_diff:
-            changes["sum_strategy"] = strat_diff
+    # Applied apart from apply_patch: a sent null means "unchanged" for these fields.
+    for field in ("acquisition_labels", "sum_strategy"):
+        value = getattr(payload, field)
+        if value is not None:
+            changes.update(audit.apply_changes(material, {field: value}))
     if payload.org_ids is not None:
-        orgs_diff = _set_orgs(material, payload.org_ids)
+        orgs_diff = orgs.replace_assignments(
+            material, material.camp, payload.org_ids, MaterialAssignment)
         if orgs_diff:
             changes["orgs"] = orgs_diff
     if not changes:
@@ -137,9 +96,6 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
     if source.id == target.id:
         raise errors.Invalid("Nelze sloučit materiál sám se sebou.")
 
-    def _unit(need, material):  # effective unit: the need's override, else the catalog default
-        return need.unit if need.unit is not None else material.unit
-
     def _unit_phrase(unit):  # natural Czech: 'v „ks“' or 'bez jednotky'
         return f"v „{unit}“" if unit else "bez jednotky"
 
@@ -150,7 +106,7 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
         existing = target_need_by_activity.get(need.activity_id)
         if existing is None or need.amount is None:
             continue  # nothing to sum into → no unit conflict possible
-        su, tu = _unit(need, source), _unit(existing, target)
+        su, tu = need.effective_unit, existing.effective_unit
         if su != tu:
             raise errors.Invalid(
                 f"Nelze sloučit: aktivita „{need.activity.title}“ používá „{source.name}“ "

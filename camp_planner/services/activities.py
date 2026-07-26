@@ -86,16 +86,13 @@ def merge_activities(source: Activity, target: Activity) -> dict:
     if source.camp_id != target.camp_id:
         raise errors.Invalid("Nelze sloučit aktivity z různých akcí.")
 
-    def _unit(need):  # effective unit: the need's override, else the catalog default
-        return need.unit if need.unit is not None else need.material.unit
-
     # pre-check unit conflicts on materials both activities use, before mutating anything
     target_need_by_material = {n.material_id: n for n in target.material_needs}
     for need in source.material_needs:
         existing = target_need_by_material.get(need.material_id)
         if existing is None or need.amount is None:
             continue  # nothing to sum into → no unit conflict possible
-        if _unit(need) != _unit(existing):
+        if need.effective_unit != existing.effective_unit:
             raise errors.Invalid(
                 f"Nelze sloučit: materiál „{need.material.name}“ má v obou aktivitách "
                 f"různé jednotky. Nejprve je sjednoť.")

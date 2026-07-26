@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING
 from camp_planner.extensions import db
 from camp_planner.models.activity import Todo, TodoAssignment
 from camp_planner.models.audit import AuditAction, EntityType
-from camp_planner.models.common import czech_sort_key
-from camp_planner.services import audit, errors, serialize
+from camp_planner.services import audit, orgs, serialize
 
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity
@@ -30,28 +29,12 @@ def list_todos_overview(camp: Camp) -> dict:
     return {"todos": [serialize.todo_overview(t) for a in camp.activities for t in a.todos]}
 
 
-def _set_orgs(todo: Todo, camp: Camp, org_ids: list[int]) -> list | None:
-    """Replace the todo's responsible orgs with `org_ids` (validated against the camp roster).
-    Returns the audit diff [before, after] (czech-sorted initials) when it changed, else None
-    — unchanged means no reassignment (avoids delete-orphan churn) and no audit entry."""
-    initials = {o.id: o.initials for o in camp.orgs}
-    for oid in org_ids:
-        if oid not in initials:
-            raise errors.Invalid("Orgové: neznámý org této akce.")
-    before = sorted((a.org.initials for a in todo.assignments), key=czech_sort_key)
-    after = sorted((initials[oid] for oid in org_ids), key=czech_sort_key)
-    if before == after:
-        return None
-    todo.assignments = [TodoAssignment(org_id=oid) for oid in org_ids]
-    return [before, after]
-
-
 def create_todo(activity: Activity, payload: TodoCreate) -> dict:
     todo = Todo(activity_id=activity.id, title=payload.title, note=payload.note,
                 due_date=payload.due_date, is_done=payload.is_done)
     db.session.add(todo)
     changes: dict[str, list] = {"title": [None, todo.title]}
-    orgs_diff = _set_orgs(todo, activity.camp, payload.org_ids)
+    orgs_diff = orgs.replace_assignments(todo, activity.camp, payload.org_ids, TodoAssignment)
     if orgs_diff:
         changes["orgs"] = orgs_diff
     db.session.flush()
@@ -64,7 +47,8 @@ def create_todo(activity: Activity, payload: TodoCreate) -> dict:
 def update_todo(todo: Todo, payload: TodoUpdate) -> dict:
     changes = audit.apply_patch(todo, payload, _EDITABLE)
     if payload.org_ids is not None:
-        orgs_diff = _set_orgs(todo, todo.activity.camp, payload.org_ids)
+        orgs_diff = orgs.replace_assignments(
+            todo, todo.activity.camp, payload.org_ids, TodoAssignment)
         if orgs_diff:
             changes["orgs"] = orgs_diff
     if changes:

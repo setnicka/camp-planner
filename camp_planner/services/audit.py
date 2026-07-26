@@ -71,17 +71,19 @@ def apply_patch(target, payload, fields) -> dict[str, list]:
     For each name in `fields`: if it was actually sent (in payload.model_fields_set)
     and its value differs from the row's, set it and record `{field: [old, new]}`.
     Returns the (possibly empty) diff so the caller can skip a no-op audit/commit.
-
-    Patch schemas type required fields as `X | None` to mean "absent = unchanged", so
-    an *explicitly sent* null passes pydantic; writing it to a NOT NULL column would
-    500 on commit — reject it here instead (one guard covers every patch schema).
     """
+    return apply_changes(
+        target, {f: getattr(payload, f) for f in fields if f in payload.model_fields_set})
+
+
+def apply_changes(target, data: dict) -> dict[str, list]:
+    """apply_patch's core, taking a plain {field: new_value} dict: set each value
+    that differs and return the {field: [old, new]} diff (in `data` order)."""
     changes: dict[str, list] = {}
-    for field in fields:
-        if field not in payload.model_fields_set:
-            continue
-        old, new = getattr(target, field), getattr(payload, field)
+    for field, new in data.items():
+        old = getattr(target, field)
         if new is None and not target.__table__.columns[field].nullable:
+            # an explicitly sent null would 500 on the NOT NULL column at commit
             raise errors.Invalid(f"Pole '{field}' nesmí být null.")
         if old != new:
             changes[field] = [old, new]

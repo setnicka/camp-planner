@@ -22,14 +22,12 @@ from camp_planner.schemas import (
     AuditEntryOut,
     CampOut,
     MaterialNeedOut,
-    MaterialOrgOut,
     MaterialOut,
     MaterialUsageOut,
     MaterialWithUsagesOut,
-    SlotOrgOut,
+    OrgRefOut,
     SlotOut,
     TagLinkOut,
-    TodoOrgOut,
     TodoOut,
     TodoWithActivityOut,
 )
@@ -48,14 +46,17 @@ def _dump(model) -> dict:
 
 # --- model builders (reused standalone and nested inside activity) -----------
 
-def _slot_orgs(s: Slot) -> list[SlotOrgOut]:
-    return [SlotOrgOut(org_id=a.org_id, initials=a.org.initials) for a in s.assignments]
+def _org_refs(assignments) -> list[OrgRefOut]:
+    """Org references from assignment rows, czech-sorted by initials."""
+    return [OrgRefOut(org_id=a.org_id, initials=a.org.initials)
+            for a in sorted(assignments, key=lambda a: czech_sort_key(a.org.initials))]
 
 
 def _slot(s: Slot) -> SlotOut:
     return SlotOut(
         id=s.id, activity_id=s.activity_id, role=s.role,
-        start_at=s.start_at, end_at=s.end_at, override_name=s.override_name, orgs=_slot_orgs(s),
+        start_at=s.start_at, end_at=s.end_at, override_name=s.override_name,
+        orgs=_org_refs(s.assignments),
     )
 
 
@@ -81,7 +82,7 @@ def slot(s: Slot) -> dict:
 
 
 def slot_orgs(s: Slot) -> list[dict]:
-    return [_dump(o) for o in _slot_orgs(s)]
+    return [_dump(o) for o in _org_refs(s.assignments)]
 
 
 def assignment(a: ActivityAssignment) -> dict:
@@ -92,17 +93,11 @@ def tag_link(t: ActivityTag) -> dict:
     return _dump(_tag_link(t))
 
 
-def _todo_orgs(t: Todo) -> list[TodoOrgOut]:
-    """The todo's responsible orgs, czech-sorted by initials."""
-    return [TodoOrgOut(org_id=a.org_id, initials=a.org.initials)
-            for a in sorted(t.assignments, key=lambda a: czech_sort_key(a.org.initials))]
-
-
 def _todo_fields(t: Todo) -> dict:
     """The base TodoOut fields from a Todo row — the single source of the todo shape, fed to
     both TodoOut and (with activity_title) TodoWithActivityOut so they can't drift."""
     return dict(id=t.id, activity_id=t.activity_id, title=t.title, note=t.note,
-                due_date=t.due_date, is_done=t.is_done, orgs=_todo_orgs(t))
+                due_date=t.due_date, is_done=t.is_done, orgs=_org_refs(t.assignments))
 
 
 def _todo(t: Todo) -> TodoOut:
@@ -118,16 +113,10 @@ def todo_overview(t: Todo) -> dict:
     return _dump(TodoWithActivityOut(**_todo_fields(t), activity_title=t.activity.title))
 
 
-def _material_orgs(m: Material) -> list[MaterialOrgOut]:
-    """The material's responsible orgs, czech-sorted by initials."""
-    return [MaterialOrgOut(org_id=a.org_id, initials=a.org.initials)
-            for a in sorted(m.assignments, key=lambda a: czech_sort_key(a.org.initials))]
-
-
 def _material(m: Material) -> MaterialOut:
     return MaterialOut(id=m.id, name=m.name, unit=m.unit, note=m.note, url=m.url,
                        acquisition_labels=m.acquisition_labels, sum_strategy=m.sum_strategy,
-                       orgs=_material_orgs(m))
+                       orgs=_org_refs(m.assignments))
 
 
 def material(m: Material) -> dict:

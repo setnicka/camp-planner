@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from zoneinfo import available_timezones
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, g, redirect, render_template, request, url_for
 from flask_wtf.csrf import generate_csrf
 
 from camp_planner.auth.permissions import (
@@ -53,6 +53,9 @@ _NEW_CAMP_DEFAULTS = {
 
 
 def _camp_or_404(slug: str) -> Camp:
+    camp = getattr(g, "camp", None)  # stashed by @require_view/@require_edit
+    if camp is not None and camp.slug == slug:
+        return camp
     return db.first_or_404(db.select(Camp).filter_by(slug=slug))
 
 
@@ -93,17 +96,14 @@ def camp_new():
 @require_admin
 def camp_create():
     data, errors = camps_service.validate_camp_form(request.form)
-    source = None
-    source_slug = (request.form.get("copy_from") or "").strip()
     copy_parts = [p for p in taxonomy.COPY_PARTS if request.form.get(f"copy_{p}")]
-    if source_slug:
-        source = db.session.scalar(db.select(Camp).filter_by(slug=source_slug))
-        if source is None or not can_view(source):
-            errors.append("Převzít z akce: vyberte platnou akci.")
     if not errors:
-        camp = camps_service.create_camp(data, copy_from=source, copy_parts=copy_parts)
-        if camp is None:
-            errors.append(f"Slug {data['slug']!r} už používá jiná akce.")
+        try:
+            camp = camps_service.create_camp(
+                data, copy_from_slug=(request.form.get("copy_from") or "").strip() or None,
+                copy_parts=copy_parts)
+        except svc_errors.Invalid as exc:  # unknown copy source / slug collision
+            errors.append(str(exc))
         else:
             flash(f"Akce „{camp.name}“ vytvořena.")
             return redirect(url_for("main.camp_timeline", slug=camp.slug))

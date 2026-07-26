@@ -7,6 +7,7 @@ slot.py); this module holds only what's shared across models.
 from __future__ import annotations
 
 import enum
+import re
 import unicodedata
 from datetime import datetime
 
@@ -18,6 +19,15 @@ def strip_diacritics(text: str) -> str:
     """Drop accents/diacritics via NFKD decomposition."""
     decomposed = unicodedata.normalize("NFKD", text)
     return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+_SLUG_STRIP = re.compile(r"[^a-z0-9]+")
+
+
+def slugify(name: str) -> str:
+    """Lowercase, strip diacritics, collapse non-alphanumeric runs to single
+    hyphens, trim. Capped at the slug columns' 80 chars."""
+    return _SLUG_STRIP.sub("-", strip_diacritics(name.lower())).strip("-")[:80]
 
 
 def czech_sort_key(text: str):
