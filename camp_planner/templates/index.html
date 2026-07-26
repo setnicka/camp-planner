@@ -1,4 +1,5 @@
 {% extends layout %}
+{% from "_macros.html" import camp_sections %}
 {% block title %}Akce – Camp Planner{% endblock %}
 {# "Akce" rides in the navigation header (where camp pages show the camp name). #}
 {% block header_nav %}<span class="cp-camp-name">Akce</span>{% endblock %}
@@ -23,10 +24,9 @@
             · {{ days }} {{ 'den' if days == 1 else ('dny' if days <= 4 else 'dní') }}
           </span>
           <nav class="cp-camp-row-links">
-            <a href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">Timeline</a>
-            <a href="{{ url_for('main.camp_materials', slug=camp.slug) }}">Materiál</a>
-            <a href="{{ url_for('main.camp_overview', slug=camp.slug) }}">Seznam her</a>
-            <a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">Nastavení akce</a>
+            {% for key, endpoint, label in camp_sections %}
+              <a href="{{ url_for(endpoint, slug=camp.slug) }}">{{ label }}</a>
+            {% endfor %}
           </nav>
         </li>
       {% endfor %}

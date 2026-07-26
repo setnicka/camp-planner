@@ -6,4 +6,12 @@
   <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>
   {% block header_nav %}{% endblock %}
 </nav>
+<noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul class="cp-flashes">
+      {% for category, message in messages %}<li class="cp-flash-{{ category }}">{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
 {% block content %}{% endblock %}

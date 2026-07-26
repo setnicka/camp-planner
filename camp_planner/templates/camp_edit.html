@@ -33,10 +33,12 @@
              data-camp-name="{{ camp.name }}">
       <h2>Smazat akci</h2>
       <p>Smaže akci i s jejími kategoriemi, orgy, tagy, materiály a historií změn. Tuto akci nelze vrátit.</p>
-      <button type="button" class="cp-danger" data-delete-camp
-        {% if not can_delete %}disabled title="Akci nelze smazat, dokud má aktivity – nejdřív odstraňte všechny aktivity."{% endif %}>
+      <button type="button" class="cp-danger" data-delete-camp {% if not can_delete %}disabled{% endif %}>
         Smazat akci
       </button>
+      {% if not can_delete %}
+        <p class="cp-muted"><small>Akci nelze smazat, dokud má aktivity – nejdřív odstraňte všechny aktivity.</small></p>
+      {% endif %}
     </section>
   {% endif %}
 {% endblock %}

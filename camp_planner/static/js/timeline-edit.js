@@ -409,7 +409,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const [id] = timeline.getSelection();
     const it = id != null && items.get(id);
     const aid = it && it._seg && it._seg.activity_id;
-    if (aid != null) location.href = withId(EDIT.activityDetail, aid);
+    if (aid != null) location.href = withId(container.dataset.activityDetail, aid);
   });
   document.body.append(actionBar);
 

@@ -1,13 +1,13 @@
 {% extends layout %}
 {% from "_macros.html" import csrf %}
-{% block title %}Login – Camp Planner{% endblock %}
+{% block title %}Přihlášení – Camp Planner{% endblock %}
 {% block content %}
-  <h1>Login</h1>
+  <h1>Přihlášení</h1>
   <form class="cp-form" method="post" action="{{ url_for('auth.login') }}">
     {{ csrf() }}
     <input type="hidden" name="next" value="{{ next }}">
-    <label>Uživatelské jméno <input name="username" autofocus required></label>
+    <label>Uživatelské jméno <input name="username" value="{{ username }}" autofocus required></label>
     <label>Heslo <input name="password" type="password" required></label>
-    <button type="submit">Login</button>
+    <button type="submit">Přihlásit se</button>
   </form>
 {% endblock %}

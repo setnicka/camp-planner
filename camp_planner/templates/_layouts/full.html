@@ -18,16 +18,17 @@
       {% if identity.is_authenticated %}<span class="cp-user">{{ identity.display_name }}</span>{% endif %}
       {% if auth_enabled and can_manage_users() %}<a href="{{ url_for('auth.users') }}">Uživatelé</a>{% endif %}
       {% if identity.is_authenticated and auth_enabled %}
-        <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}<button type="submit">Logout</button></form>
+        <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}<button type="submit">Odhlásit se</button></form>
       {% elif auth_enabled %}
-        <a href="{{ url_for('auth.login') }}">Login</a>
+        <a href="{{ url_for('auth.login') }}">Přihlásit se</a>
       {% endif %}
     </div>
   </header>
-  {% with messages = get_flashed_messages() %}
+  <noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
+  {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <ul class="cp-flashes">
-        {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+        {% for category, message in messages %}<li class="cp-flash-{{ category }}">{{ message }}</li>{% endfor %}
       </ul>
     {% endif %}
   {% endwith %}

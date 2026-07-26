@@ -79,8 +79,9 @@ def login():
             return redirect(_safe_next(request.form.get("next")) or url_for("main.index"))
         if user is None:
             check_password_hash(_DUMMY_HASH, password)  # equalize timing vs. a real check
-        flash("Neplatné uživatelské jméno nebo heslo.")
-    return render_template("auth/login.html", next=request.values.get("next", ""))
+        flash("Neplatné uživatelské jméno nebo heslo.", "error")
+    return render_template("auth/login.html", next=request.values.get("next", ""),
+                           username=request.form.get("username", ""))
 
 
 @bp.post("/logout")
@@ -110,15 +111,15 @@ def create_user():
     display_name = request.form.get("display_name", "").strip()
     is_admin = bool(request.form.get("is_admin"))
     if not username or not password:
-        flash("Uživatelské jméno a heslo jsou povinné.")
+        flash("Uživatelské jméno a heslo jsou povinné.", "error")
     elif db.session.scalar(db.select(User).filter_by(username=username)):
-        flash(f"Uživatel {username!r} už existuje.")
+        flash(f"Uživatel {username!r} už existuje.", "error")
     else:
         user = User(username=username, display_name=display_name or username, is_admin=is_admin)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
-        flash(f"Uživatel {username!r} byl vytvořen.")
+        flash(f"Uživatel {username!r} byl vytvořen.", "success")
     return redirect(url_for("auth.users"))
 
 
@@ -128,11 +129,11 @@ def delete_user(user_id: int):
     user = db.get_or_404(User, user_id)
     if _is_self(user):
         # Refusing self-deletion also guarantees at least one admin always survives.
-        flash("Nemůžete smazat vlastní účet.")
+        flash("Nemůžete smazat vlastní účet.", "error")
     else:
         db.session.delete(user)
         db.session.commit()
-        flash(f"Uživatel {user.username!r} byl smazán.")
+        flash(f"Uživatel {user.username!r} byl smazán.", "success")
     return redirect(url_for("auth.users"))
 
 
@@ -164,9 +165,9 @@ def update_profile(user_id: int):
 
     clash = db.session.scalar(db.select(User).filter_by(username=username)) if username else None
     if not username or not display_name:
-        flash("Uživatelské jméno a zobrazované jméno jsou povinné.")
+        flash("Uživatelské jméno a zobrazované jméno jsou povinné.", "error")
     elif clash is not None and clash.id != user.id:
-        flash(f"Uživatelské jméno {username!r} je už obsazené.")
+        flash(f"Uživatelské jméno {username!r} je už obsazené.", "error")
     else:
         user.username = username
         user.display_name = display_name
@@ -174,7 +175,7 @@ def update_profile(user_id: int):
         if password:
             user.set_password(password)
         db.session.commit()
-        flash(f"Uživatel {user.username!r} byl upraven.")
+        flash(f"Uživatel {user.username!r} byl upraven.", "success")
     return redirect(url_for("auth.user_detail", user_id=user.id))
 
 
@@ -185,20 +186,20 @@ def add_grant(user_id: int):
     try:
         role = CampRole(request.form.get("role", ""))
     except ValueError:
-        flash("Neznámá role.")
+        flash("Neznámá role.", "error")
         return redirect(url_for("auth.user_detail", user_id=user.id))
     camp_raw = request.form.get("camp_id", "").strip()
     camp_id = int(camp_raw) if camp_raw else None       # blank = all camps
     if camp_id is not None and db.session.get(Camp, camp_id) is None:
-        flash(f"Akce s id {camp_id} neexistuje.")
+        flash(f"Akce s id {camp_id} neexistuje.", "error")
     elif db.session.scalar(
         db.select(UserCampRole).filter_by(user_id=user.id, camp_id=camp_id, role=role)
     ):
-        flash("Toto oprávnění už existuje.")
+        flash("Toto oprávnění už existuje.", "error")
     else:
         db.session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
         db.session.commit()
-        flash("Oprávnění bylo přidáno.")
+        flash("Oprávnění bylo přidáno.", "success")
     return redirect(url_for("auth.user_detail", user_id=user.id))
 
 
@@ -210,5 +211,5 @@ def remove_grant(user_id: int, grant_id: int):
         abort(404)
     db.session.delete(grant)
     db.session.commit()
-    flash("Oprávnění bylo odebráno.")
+    flash("Oprávnění bylo odebráno.", "success")
     return redirect(url_for("auth.user_detail", user_id=user_id))

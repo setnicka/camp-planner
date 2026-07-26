@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +30,7 @@ _FORM_ERRORS = {
     "slug": "Slug: povolena jsou jen malá písmena bez diakritiky, číslice a pomlčky.",
     "start_date": "Začátek: zadejte datum ve tvaru RRRR-MM-DD.",
     "length_days": "Počet dní: musí být celé číslo, alespoň 1.",
-    "window_start_min": "Začátek dne: musí být 0–1439 minut.",
+    "window_start_min": "Začátek dne: zadejte čas ve tvaru HH:MM.",
     "snap_minutes": f"Krok mřížky: povolené hodnoty {list(SNAP_CHOICES)}.",
     "timezone": "Časové pásmo: neznámé pásmo.",
     "latitude": "Zeměpisná šířka: musí být číslo v rozsahu -90 až 90.",
@@ -48,10 +49,13 @@ def validate_camp_form(form, *, require_meta: bool = True) -> tuple[dict, list[s
         return (form.get(field) or "").strip()
 
     snap = text("snap_minutes")
+    win = text("window_start_min")
+    if re.fullmatch(r"\d{2}:\d{2}", win):  # <input type="time"> posts HH:MM
+        win = int(win[:2]) * 60 + int(win[3:])
     raw: dict = {
         "start_date": text("start_date"),
         "length_days": text("length_days"),
-        "window_start_min": text("window_start_min"),
+        "window_start_min": win,
         "snap_minutes": int(snap) if snap.isdigit() else snap,  # Literal[] won't coerce strings
         "timezone": text("timezone") or "Europe/Prague",
         "latitude": text("latitude") or None,    # blank coordinate → not set

@@ -25,6 +25,9 @@ def test_timeline_page_read_only_for_viewer(client, seeded):
     html = client.get(f"/camps/{slug}", headers=viewer(slug)).get_data(as_text=True)
     assert 'id="cp-edit-toggle"' not in html
     assert 'id="cp-timeline-edit"' not in html
+    # viewers still get the way into the activity detail (slot select → Detail button)
+    assert f'data-activity-detail="/camps/{slug}/activities/0"' in html
+    assert "Filtruj" in html                        # the filter help isn't editor-only
 
 
 def test_activity_detail_page_renders_with_data(client, seeded):
@@ -179,13 +182,15 @@ def test_camp_detail_has_history_tab(client, seeded):
 # --- camp settings: delete button ---------------------------------------------------
 
 def test_camp_edit_delete_button_disabled_with_activities(client, seeded):
-    # admin sees the delete button, but the seeded camp has an activity → disabled + tooltip
+    # admin sees the delete button, but the seeded camp has an activity → disabled,
+    # with the reason as visible text (not a hover-only tooltip)
     html = client.get(f"/camps/{seeded['slug']}/edit", headers=ADMIN).get_data(as_text=True)
     assert "data-delete-camp" in html
     assert f"/api/camps/{seeded['slug']}" in html      # the DELETE url resolves
     assert "js/camp-settings.js" in html
     button = html[html.index("data-delete-camp"):html.index("</button>", html.index("data-delete-camp"))]
-    assert "disabled" in button and "title=" in button
+    assert "disabled" in button
+    assert "Akci nelze smazat, dokud má aktivity" in html
 
 
 def test_camp_edit_delete_button_enabled_when_empty(client, seeded):
@@ -196,6 +201,22 @@ def test_camp_edit_delete_button_enabled_when_empty(client, seeded):
     html = client.get("/camps/prazdna/edit", headers=ADMIN).get_data(as_text=True)
     button = html[html.index("data-delete-camp"):html.index("</button>", html.index("data-delete-camp"))]
     assert "disabled" not in button
+
+
+def test_camp_edit_form_time_input_roundtrip(client, seeded):
+    # "Začátek dne" is an <input type="time">: pre-filled as HH:MM, posted as HH:MM,
+    # stored as minutes past midnight
+    slug = seeded["slug"]
+    html = client.get(f"/camps/{slug}/edit", headers=ADMIN).get_data(as_text=True)
+    assert 'type="time" name="window_start_min" value="04:00"' in html   # seeded 240 min
+
+    resp = client.post(f"/camps/{slug}/edit", data={
+        "name": "Tábor", "slug": slug, "start_date": "2026-07-04", "length_days": "3",
+        "timezone": "Europe/Prague", "window_start_min": "06:30", "snap_minutes": "15",
+    }, headers=ADMIN)
+    assert resp.status_code == 302
+    camp = client.get(f"/api/camps/{slug}", headers=ADMIN).get_json()["camp"]
+    assert camp["window_start_min"] == 390
 
 
 def test_camp_edit_no_delete_button_for_editor(client, seeded):
@@ -228,6 +249,7 @@ def test_landing_page_renders_camp_rows(client, seeded):
     html = client.get("/", headers=ADMIN).get_data(as_text=True)
     assert "css/landing.css" in html
     assert "cp-camp-rows" in html and "cp-camp-row-name" in html
+    assert "Úkoly" in html                                # row links come from the shared sections list
     assert "Tábor" in html                                # seeded camp name (3-day camp → a range)
     assert "4. 7. 2026 – 6. 7. 2026" in html              # start_date.end_date via Camp.end_date
     assert "3 dny" in html                                # Czech plural for length_days

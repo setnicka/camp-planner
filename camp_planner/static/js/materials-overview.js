@@ -470,6 +470,14 @@
   if (hashId != null) expanded.add(hashId);
   else readHash();   // otherwise the hash carries the filters (#label=…&org=…)
 
+  // React to external hash changes (links / back button); writeHash uses replaceState
+  // so it doesn't fire hashchange — no loop. A #material-<id> deep link isn't a filter.
+  window.addEventListener("hashchange", () => {
+    if (/^#material-\d+$/.test(location.hash)) return;
+    readHash();
+    buildShell();
+  });
+
   buildShell();
 
   if (hashId != null) {

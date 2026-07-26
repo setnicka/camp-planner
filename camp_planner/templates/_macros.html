@@ -6,21 +6,23 @@
 {% macro csrf_meta() %}<meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="csrf-refresh" content="{{ url_for('main.csrf_refresh') }}">{% endmacro %}
 
-{# The camp heading: camp name plus the four section tabs, on one compact line. Goes through
+{# The camp sections, shared by the header nav below and the landing-page row links. #}
+{% set camp_sections = [
+  ("timeline",  "main.camp_timeline",  "Timeline"),
+  ("materials", "main.camp_materials", "Materiál"),
+  ("overview",  "main.camp_overview",  "Seznam her"),
+  ("todos",     "main.camp_todos",     "Úkoly"),
+  ("settings",  "main.camp_detail",    "Nastavení akce"),
+] %}
+
+{# The camp heading: camp name plus the section tabs, on one compact line. Goes through
    the page's `header_nav` block — into the standalone top bar (.cp-header) on full.html, and
    into the .cp-camp-nav band when embedded (bare.html). `active` ∈
    timeline|materials|overview|todos|settings highlights the current one; drill-downs pick
    their nearest section (activity detail uses "overview"); pass "" for none. #}
 {% macro camp_nav(camp, active="") %}
-  {% set sections = [
-    ("timeline",  "main.camp_timeline",  "Timeline"),
-    ("materials", "main.camp_materials", "Materiál"),
-    ("overview",  "main.camp_overview",  "Seznam her"),
-    ("todos",     "main.camp_todos",     "Úkoly"),
-    ("settings",  "main.camp_detail",    "Nastavení akce"),
-  ] %}
   <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
-  {% for key, endpoint, label in sections %}
+  {% for key, endpoint, label in camp_sections %}
     <a class="cp-camp-link {{ 'is-active' if active == key }}"
        href="{{ url_for(endpoint, slug=camp.slug) }}"
        {{ 'aria-current=page' if active == key }}>{{ label }}</a>
@@ -29,7 +31,7 @@
 
 {% macro errors_list(errors) %}
   {% if errors %}
-    <ul class="cp-flashes">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    <ul class="cp-flashes">{% for e in errors %}<li class="cp-flash-error">{{ e }}</li>{% endfor %}</ul>
   {% endif %}
 {% endmacro %}
 
@@ -54,9 +56,8 @@
   <label>Začátek<input type="date" name="start_date" value="{{ values.get('start_date', '') }}" required></label>
   <label>Počet dní<input type="number" name="length_days" min="1" value="{{ values.get('length_days', '') }}"></label>
   <label>Časové pásmo{{ tz_select(values.get('timezone'), timezones, tz_fixed) }}</label>
-  <label>Začátek dne (min)
-    <input type="number" name="window_start_min" min="0" max="1439"
-           value="{{ values.get('window_start_min', '') }}"></label>
+  <label>Začátek dne
+    <input type="time" name="window_start_min" value="{{ values.get('window_start_min', '') }}"></label>
   <label>Krok mřížky (min)
     <select name="snap_minutes">
       {% for m in snap_choices %}

@@ -253,9 +253,12 @@ window.cpHistoryFeed = (function () {
       busy = true;
       if (moreBtn) { moreBtn.remove(); moreBtn = null; }
       if (!older) { cursor = null; feed.replaceChildren(); }
+      const loading = el("li", { class: "cp-muted" }, "Načítám…");
+      feed.append(loading);
       try {
         const q = qstr(older && cursor ? { before: cursor } : {});
         const j = await api("GET", baseUrl + (q ? "?" + q : ""));
+        loading.remove();
         cursor = j.next_before;
         (j.entries || []).forEach((e) => feed.append(entryNode(e)));
         if (!feed.childElementCount) feed.append(el("li", { class: "cp-muted" }, emptyText));
@@ -265,6 +268,7 @@ window.cpHistoryFeed = (function () {
           host.append(moreBtn);
         }
       } catch (e) {
+        loading.remove();
         toast(e.message, true);
         if (!feed.childElementCount) feed.append(el("li", { class: "cp-muted" }, "Historii se nepodařilo načíst."));
       } finally {

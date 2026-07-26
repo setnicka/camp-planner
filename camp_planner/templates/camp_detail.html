@@ -20,7 +20,7 @@
       <tr><th>Slug</th><td><code>{{ camp.slug }}</code></td></tr>
       <tr><th>Trvání</th><td>{{ camp.start_date.isoformat() }} — {{ end_date.isoformat() }} ({{ camp.length_days }} dní)</td></tr>
       <tr><th>Časové pásmo</th><td>{{ tz_label }}</td></tr>
-      <tr><th>Začátek dne</th><td>{{ camp.window_start_min }} min od půlnoci</td></tr>
+      <tr><th>Začátek dne</th><td>{{ window_start }}</td></tr>
       <tr><th>Krok mřížky</th><td>{{ camp.snap_minutes }} min</td></tr>
       {% if camp.latitude is not none and camp.longitude is not none %}
         <tr><th>Poloha</th><td>

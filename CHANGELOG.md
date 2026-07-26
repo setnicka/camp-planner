@@ -23,6 +23,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 - The settings taxonomy editor warns before leaving the page with unsaved rows.
 - Timeline edit mode: „✎ Upravit slot“ edits the slot name and attendees in one
   dialog.
+- Read-only timeline: clicking a slot offers „ℹ️ Detail“ into the activity
+  detail; the filter help is shown to viewers too.
+- Notice when JavaScript is disabled.
 
 ### Security
 
@@ -47,6 +50,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline save: slots outside the camp's day range are rejected (they used to
   persist invisibly); seconds in spans are normalized to whole minutes. Google
   import likewise skips out-of-window events instead of importing them clipped.
+- Embedded mode renders server messages — they were silently dropped.
+- Small fixes: visible reason on the disabled „Smazat akci“ button, loading
+  state in the change history, back-button support on the materials overview.
 
 ### Removed
 
@@ -64,6 +70,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline save: `rev` is required; the conflict-dialog overwrite is an explicit
   `force: true`.
 - Camp settings: `PUT` → `PATCH /api/camps/<slug>`, all fields optional.
+- „Začátek dne“ is entered and shown as a time („06:30“), not minutes.
+- Server messages are color-coded (success / error); the login page is Czech
+  and keeps the username after a failed attempt; the landing page links all
+  camp sections (added „Úkoly“).
 
 ## [0.2.2] - 2026-07-13
 

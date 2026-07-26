@@ -523,5 +523,40 @@
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
       fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase,
     });
+  } else {
+    // Read-only: selecting a slot shows a floating "Detail" button into the activity
+    // detail (viewers otherwise only get the hover tooltip).
+    const detailTpl = container.dataset.activityDetail;   // url template, 0 = activity id
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cp-tl-detail";
+    btn.textContent = "ℹ️ Detail";
+    const bar = document.createElement("div");
+    bar.className = "cp-tl-actions";
+    bar.hidden = true;
+    bar.append(btn);
+    document.body.append(bar);
+    const hideBar = () => { bar.hidden = true; };
+    btn.addEventListener("click", () => {
+      const [id] = timeline.getSelection();
+      const it = id != null && items.get(id);
+      const aid = it && it._seg && it._seg.activity_id;
+      if (aid != null) location.href = detailTpl.replace(/\d+$/, aid);
+    });
+    timeline.on("select", (props) => {
+      if (!props.items.length) return hideBar();
+      requestAnimationFrame(() => {
+        const sel = container.querySelector(".vis-item.vis-selected");
+        if (!sel) return hideBar();
+        const r = sel.getBoundingClientRect();
+        bar.hidden = false;
+        bar.style.left = Math.max(4, Math.min(r.left, window.innerWidth - bar.offsetWidth - 4)) + "px";
+        bar.style.top = Math.max(4, r.top - bar.offsetHeight - 6) + "px";
+      });
+    });
+    timeline.on("rangechange", hideBar);   // pan/zoom slides the slot out from under it
+    document.addEventListener("pointerdown", (e) => {
+      if (!container.contains(e.target) && !bar.contains(e.target)) { hideBar(); timeline.setSelection([]); }
+    });
   }
 })();

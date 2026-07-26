@@ -47,9 +47,14 @@ _TZ_LABELS = {key: label for label, key in _TZ_FIXED}
 _NEW_CAMP_DEFAULTS = {
     "length_days": 7,
     "timezone": "Europe/Prague",
-    "window_start_min": 4 * 60,
+    "window_start_min": "04:00",
     "snap_minutes": 15,
 }
+
+
+def _fmt_window_start(minutes: int) -> str:
+    """Minutes past midnight → the "HH:MM" the time input / settings table shows."""
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
 def _camp_or_404(slug: str) -> Camp:
@@ -105,7 +110,7 @@ def camp_create():
         except svc_errors.Invalid as exc:  # unknown copy source / slug collision
             errors.append(str(exc))
         else:
-            flash(f"Akce „{camp.name}“ vytvořena.")
+            flash(f"Akce „{camp.name}“ vytvořena.", "success")
             return redirect(url_for("main.camp_timeline", slug=camp.slug))
     return render_template("camp_form.html", values=request.form, errors=errors,
                            copy_sources=_copy_sources(), submitted=True)
@@ -281,7 +286,7 @@ def camp_edit_save(slug: str):
         camps_service.save_camp_settings(camp, data, allow_meta=allow_meta)
     except svc_errors.Invalid as exc:  # e.g. a date change clashing on a shared Google calendar
         return render_template("camp_edit.html", camp=camp, values=request.form, errors=[str(exc)])
-    flash("Nastavení uloženo.")
+    flash("Nastavení uloženo.", "success")
     return redirect(url_for("main.camp_detail", slug=camp.slug))
 
 
@@ -293,7 +298,7 @@ def _camp_values(camp: Camp) -> dict:
         "start_date": camp.start_date.isoformat(),
         "length_days": camp.length_days,
         "timezone": camp.timezone,
-        "window_start_min": camp.window_start_min,
+        "window_start_min": _fmt_window_start(camp.window_start_min),
         "snap_minutes": camp.snap_minutes,
         "latitude": "" if camp.latitude is None else camp.latitude,
         "longitude": "" if camp.longitude is None else camp.longitude,
@@ -335,6 +340,7 @@ def _render_detail(camp: Camp):
         camp=camp,
         end_date=camp.end_date,
         tz_label=_TZ_LABELS.get(camp.timezone, camp.timezone),
+        window_start=_fmt_window_start(camp.window_start_min),
         tax_data=tax_data,
         google_data=google_data,
     )
