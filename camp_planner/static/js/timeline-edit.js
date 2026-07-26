@@ -7,7 +7,7 @@
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase, rehydrate } = ctx;
   const { el, api, withId, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -28,9 +28,13 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // Slots sliced across the window boundary render as several items; locking those
   // from drag avoids desyncing the pieces (delete still works, keyed by slot_id).
   const segCount = {};
-  items.get().forEach((it) => {
-    if (it.slotId != null) segCount[it.slotId] = (segCount[it.slotId] || 0) + 1;
-  });
+  function recomputeSegCount() {
+    for (const k in segCount) delete segCount[k];
+    items.get().forEach((it) => {
+      if (it.slotId != null) segCount[it.slotId] = (segCount[it.slotId] || 0) + 1;
+    });
+  }
+  recomputeSegCount();   // re-run after a save: a slot's segmentation can change
   const isLocked = (it) => it.slotId != null && segCount[it.slotId] > 1;
   // every rendered piece of a slot (a window-crossing slot has several rows)
   const segsOf = (slotId) => items.get({ filter: (it) => it.slotId === slotId });
@@ -490,7 +494,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     });
   }
 
-  // --- save (one PATCH; on success reload the authoritative state) -----------
+  // --- save (one PATCH, then refresh the authoritative state in place) -------
   // force=true makes the server skip the optimistic-lock check and overwrite
   // whatever is there (used from the conflict dialog's "Přepsat").
   async function save(force) {
@@ -505,13 +509,26 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       deletes: [...deletes],
     };
     try {
-      await api("PATCH", EDIT.save, body);   // CSRF refresh-and-retry handled inside
-      toastNext("Časový plán uložen");       // survives the reload below
-      reload(); // simplest correct refresh: server re-slices + fresh rev
+      await api("PATCH", EDIT.save, body);        // CSRF refresh-and-retry handled inside
     } catch (e) {
       if (e.status === 409) { openConflict(); return; }
       toast(e.message, true);
       saveBtn.disabled = false;
+      return;
+    }
+    // PATCH committed. Refresh in place; if anything about that fails, reload for the
+    // authoritative state rather than leave committed changes shown as pending.
+    try {
+      const fresh = await api("GET", EDIT.save);  // same URL, GET = the re-sliced timeline
+      moves.clear(); retypes.clear(); deletes.clear(); creates.clear();
+      history.length = 0; redoStack.length = 0;
+      rehydrate(fresh);      // rebuild the items + fresh rev, no page reload
+      recomputeSegCount();
+      setEditing(false);     // leave edit mode, as the old reload did
+      toast("Časový plán uložen");
+    } catch (e) {
+      toastNext("Časový plán uložen");            // survives the reload
+      reload();
     }
   }
 

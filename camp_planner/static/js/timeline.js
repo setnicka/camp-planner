@@ -179,25 +179,27 @@
       (s.cont_fwd ? " cut-r" : "");
   }
 
-  const items = new vis.DataSet(
-    payload.segments.map((s) => {
-      const base = segmentBase(s);
-      return {
-        id: s.idx,
-        group: s.day,
-        start: mToDate(s.rel_start_min),
-        end: mToDate(s.rel_end_min),
-        content: segmentContent(s),
-        title: segmentTitle(s),   // hover tooltip: orgs by role (full names)
-        className: base,     // `solo` (double height) is added by applyHeights()
-        slotId: s.slot_id,   // editing maps a vis item back to its slot (Phase 2)
-        role: s.role,
-        _seg: s,             // the source segment, for attendee re-render in the editor
-        _base: base,         // class without `solo`, for live height recompute
-        _title: s.title,     // for the change-log labels
-      };
-    })
-  );
+  // One vis item per segment. Pulled out so a post-save refresh can rebuild the DataSet
+  // from a fresh payload without a page reload (see rehydrate).
+  function buildItem(s) {
+    const base = segmentBase(s);
+    return {
+      id: s.idx,
+      group: s.day,
+      start: mToDate(s.rel_start_min),
+      end: mToDate(s.rel_end_min),
+      content: segmentContent(s),
+      title: segmentTitle(s),   // hover tooltip: orgs by role (full names)
+      className: base,     // `solo` (double height) is added by applyHeights()
+      slotId: s.slot_id,   // editing maps a vis item back to its slot (Phase 2)
+      role: s.role,
+      _seg: s,             // the source segment, for attendee re-render in the editor
+      _base: base,         // class without `solo`, for live height recompute
+      _title: s.title,     // for the change-log labels
+    };
+  }
+
+  const items = new vis.DataSet(payload.segments.map(buildItem));
 
   // Half-height when a box overlaps another in its row, double-height when solo.
   // Called once now and re-run live during editing as drags change overlaps;
@@ -391,6 +393,9 @@
   // every state is a "type:value" token, also the #filter= hash payload, so applying / reading /
   // deep-linking share one mapping.
   const ORG_MODE = { garant: "garant/pomocník", attending: "účast na slotu" };
+  // Rebuilds the activity-dependent facets from payload.segments; reassigned by setupFilter
+  // and called by rehydrate after a save (a new activity may have appeared). No-op until then.
+  let refreshFilterFacets = () => {};
   (function setupFilter() {
     const legend = document.querySelector(".cp-tl-legend");
     const orgs = payload.orgs.slice().sort((a, b) => a.initials.localeCompare(b.initials, "cs"));
@@ -460,7 +465,7 @@
     }
 
     const catChips = legend ? [...legend.querySelectorAll("[data-filter]")] : [];
-    const VALID = new Set([
+    let VALID = new Set([
       ...catChips.map((c) => c.dataset.filter),
       ...orgs.flatMap((o) => [`garant:${o.id}`, `attending:${o.id}`]),
       ...activities.map(([id]) => `activity:${id}`),
@@ -508,7 +513,41 @@
     if (actSel) actSel.addEventListener("change", () => apply(actSel.value, true));
     window.addEventListener("hashchange", () => apply(tokenFromHash(), false));    // external links / back button
     apply(tokenFromHash(), false);   // initial state from the URL
+
+    // After a save, the activity list may have changed (a slot created for a brand-new
+    // activity); orgs/categories don't change via a timeline save, so only the activity
+    // <select> + the VALID token set are rebuilt. The current selection is kept if still valid.
+    refreshFilterFacets = () => {
+      const map = new Map();
+      payload.segments.forEach((s) => { if (!map.has(s.activity_id)) map.set(s.activity_id, s.title); });
+      const acts = [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], "cs"));
+      VALID = new Set([
+        ...catChips.map((c) => c.dataset.filter),
+        ...orgs.flatMap((o) => [`garant:${o.id}`, `attending:${o.id}`]),
+        ...acts.map(([id]) => `activity:${id}`),
+      ]);
+      if (actSel) {
+        const keep = actSel.value;
+        actSel.length = 1;   // drop all but the "— vybrat hru —" placeholder
+        acts.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
+        actSel.value = VALID.has(keep) ? keep : "";
+      }
+    };
   })();
+
+  // Re-render from a fresh server payload (after a save) without a page reload: rebuild the
+  // item DataSet in place (the editor keeps its `items` reference), re-add the day/night
+  // backgrounds, refresh the derived filter facets, and take the new optimistic-lock rev.
+  function rehydrate(fresh) {
+    payload.segments = fresh.segments;
+    camp.rev = fresh.camp.rev;
+    payload.segments.forEach((s, idx) => { s.idx = idx; });
+    items.clear();
+    items.add(payload.segments.map(buildItem));
+    if (hasLocation) items.add(dayNightBackgrounds());
+    applyHeights();
+    refreshFilterFacets();
+  }
 
   // --- editing (Phase 2) -----------------------------------------------------
   // Present only when the server embedded the edit config (i.e. the user can edit).
@@ -522,6 +561,7 @@
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
       fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase,
+      rehydrate,
     });
   } else {
     // Read-only: selecting a slot shows a floating "Detail" button into the activity
