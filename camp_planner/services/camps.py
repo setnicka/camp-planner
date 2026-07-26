@@ -230,6 +230,7 @@ def google_status(camp: Camp) -> dict:
         "pending_ops": google_sync.pending_count(camp) if connected else 0,
         "failed_ops": failed,        # ops that have failed at least once (e.g. read-only share)
         "last_error": last_error,    # most recent push error, for the UI to show
+        "last_pull_at": camp.google_last_pull_at.isoformat() if camp.google_last_pull_at else None,
     }
 
 

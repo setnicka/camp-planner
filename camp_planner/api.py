@@ -311,7 +311,10 @@ def google_pull_apply(slug: str):
     `rev` (the timeline changed since the preview) yields 409."""
     camp = _camp(slug, edit=True)
     payload = request.context.json
-    return _run(lambda: google_sync.apply_pull(camp, payload.decisions, rev=payload.rev))
+    return _run(lambda: {
+        **google_sync.apply_pull(camp, payload.decisions, rev=payload.rev),
+        "google": camps_service.google_status(camp),  # fresh status — saves the client a GET
+    })
 
 
 # --- taxonomy (batch list reconcile: PUT the whole desired list) -------------

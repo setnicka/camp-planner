@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 
+from camp_planner import schemas
 from camp_planner.extensions import db
 from camp_planner.models.activity import Activity, ActivityAssignment, OrgRole
 from camp_planner.models.audit import AuditAction, EntityType
@@ -92,9 +93,12 @@ def resync_all(camp: Camp) -> dict:
     No-op when the camp isn't connected. Owns its transaction. Returns {queued: # of slots}."""
     if not camp.google_calendar_id:
         return {"queued": 0}
+    # One query for the already-queued slot ids (enqueue_upsert would issue one per slot).
+    queued = set(db.session.scalars(db.select(GoogleSyncOp.slot_id).where(
+        GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.op == SyncOpKind.upsert)))
     slots = [slot for activity in camp.activities for slot in activity.slots]
-    for slot in slots:
-        enqueue_upsert(camp, slot)  # dedupes against any upsert already queued for the slot
+    db.session.add_all(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert)
+                       for slot in slots if slot.id not in queued)
     db.session.commit()
     log.info("Google Calendar resync (camp %s): queued %d slots", camp.slug, len(slots))
     return {"queued": len(slots)}
@@ -149,6 +153,25 @@ def _drain_lock(camp: Camp):
                 conn.execute(db.text(release), {"k": key})
     finally:
         conn.close()
+
+
+# Czech descriptions of the failure statuses a push realistically hits.
+_PUSH_ERROR_CZECH = {
+    403: "Kalendář odmítl zápis — zkontrolujte sdílení se service accountem "
+         "s právem „Provádět změny v událostech“.",
+    404: "Kalendář nebo událost nebyly nalezeny.",
+    429: "Google omezil počet požadavků (kvóta) — zkuste to později.",
+}
+
+
+def _czech_push_error(res: google_client.PushResult) -> str:
+    if res.status in _PUSH_ERROR_CZECH:
+        return _PUSH_ERROR_CZECH[res.status]
+    if res.status and res.status >= 500:
+        return f"Chyba na straně Google ({res.status}) — zkuste to později."
+    if res.status:
+        return f"Google vrátil chybu {res.status}."
+    return "Síťová chyba při komunikaci s Google."
 
 
 def drain(camp: Camp) -> dict:
@@ -266,16 +289,17 @@ def _deliver_queued_ops(camp: Camp) -> dict:
             result["pushed"] += 1
         else:
             if res is None:
-                err = "Žádná odpověď z dávky."
+                czech = raw = "Žádná odpověď z dávky."
             elif res.ok:  # insert succeeded but Google returned no event id
-                err = "Google nevrátil id vytvořené události."
+                czech = raw = "Google nevrátil id vytvořené události."
             else:
-                err = res.error or ""
+                # The UI shows last_error verbatim → store Czech; the raw error goes to the log.
+                czech, raw = _czech_push_error(res), res.error or ""
             op.attempts += 1
-            op.last_error = err[:500]
+            op.last_error = czech[:500]
             result["failed"] += 1
             log.warning("Google Calendar push failed (camp %s, %s, slot=%s, event=%s, attempt %d): %s",
-                        camp.slug, op.op.value, op.slot_id, op.google_event_id, op.attempts, err)
+                        camp.slug, op.op.value, op.slot_id, op.google_event_id, op.attempts, raw)
 
     if done_ids:  # one bulk delete (tolerates already-gone rows) rather than per-row ORM deletes
         db.session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id.in_(done_ids)))
@@ -385,6 +409,9 @@ def _detect(camp: Camp) -> list[dict]:
     seen_garant: set[int] = set()
     seen_category: set[int] = set()
     changes: list[dict] = []
+    # Inbound edits outside the camp's window are skipped, not imported: a slot there renders
+    # clipped/invisible (slice_segments clamps it) — the same rule save_timeline enforces.
+    window_start, window_end = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
 
     for slot in (s for a in camp.activities for s in a.slots):
         if not slot.google_event_id:
@@ -398,8 +425,12 @@ def _detect(camp: Camp) -> list[dict]:
 
         times = google_client.parse_event_times(ev, tz)
         if times and (times[0] != slot.start_at or times[1] != slot.end_at):
-            changes.append({"kind": "time_change", "key": f"time:{slot.id}", "slot": slot,
-                            "new_start": times[0], "new_end": times[1]})
+            if window_start <= times[0] and times[1] <= window_end:
+                changes.append({"kind": "time_change", "key": f"time:{slot.id}", "slot": slot,
+                                "new_start": times[0], "new_end": times[1]})
+            else:
+                log.warning("Skipping out-of-window time change for slot %s in %s (%s–%s)",
+                            slot.id, camp.slug, times[0], times[1])
 
         # attendants (slot-level) from DESCRIPTION
         att_ids, att_unknown = _match_initials(camp, ev.get("description"))
@@ -440,7 +471,6 @@ def _detect(camp: Camp) -> list[dict]:
                                     "activity": activity, "new_category_id": new_cat,
                                     "new_label": label, "old_label": old_label})
 
-    window_start, window_end = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
     own_slot_ids = {s.id for a in camp.activities for s in a.slots}
     # Events we've already queued for deletion (slot deleted here, delete op not yet drained, or
     # the push keeps failing). Their marker is our own now-gone slot id, so they'd otherwise look
@@ -464,6 +494,10 @@ def _detect(camp: Camp) -> list[dict]:
         start, end = times
         if not (window_start <= start < window_end):
             continue  # outside the camp's timeframe
+        if end > window_end:
+            log.warning("Skipping Google event %s in %s: ends past the day window (%s–%s)",
+                        eid, camp.slug, start, end)
+            continue  # starts in-window but runs past it → would render clipped
         if end - start > timedelta(hours=_MAX_IMPORT_HOURS):
             continue  # whole-camp span event, not a single program block
         gar_ids, help_ids, unk_loc = _parse_location(camp, ev.get("location"))
@@ -495,46 +529,80 @@ def _change_start(c: dict) -> datetime:
     return min(starts) if starts else datetime.max
 
 
-def _serialize_change(c: dict) -> dict:
-    """JSON-safe view of one change for the review UI (stable `key`, Czech `label`).
-    `unknown` (when present) lists initials in Google that match no camp org."""
+_UNKNOWN_WARNING = ("Neexistující orgové budou z události odstraněni při jakékoliv změně "
+                    "v Camp Planneru. Zvažte, zda chcete pokračovat.")
+
+
+def _fmt_range(start: datetime, end: datetime) -> str:
+    return f"{start:%Y-%m-%d %H:%M}–{end:%H:%M}"
+
+
+def _fmt_diff(old: list[str], new: list[str]) -> str:
+    join = lambda items: ", ".join(items) or "—"  # noqa: E731
+    return f"{join(old)} → {join(new)}"
+
+
+def _serialize_change(c: dict) -> schemas._GoogleChangeBase:
+    """One change as its response model (Czech label + pre-formatted details rows)."""
     kind = c["kind"]
+    details = []
+    if c.get("unknown"):
+        details.append(schemas.GoogleChangeDetailOut(
+            name="Pozor", warn=True,
+            value=f"Neznámí orgové: {', '.join(c['unknown'])}. {_UNKNOWN_WARNING}"))
+
     if kind == "new_event":
-        return {"key": c["key"], "kind": kind, "summary": c["summary"],
-                "label": f"Nová událost: {c['summary']}",
-                "new_start": c["new_start"].isoformat(), "new_end": c["new_end"].isoformat(),
-                "garant_initials": c["garant_initials"],
-                "helper_initials": c["helper_initials"],
-                "attendant_initials": c["attendant_initials"],
-                "category_id": c["category_id"],              # inferred from the event color (or null)
-                "foreign_slot": c["foreign_slot"],            # carried another camp's slot id
-                "unknown": c["unknown"]}
+        head = [schemas.GoogleChangeDetailOut(name="Datum", value=_fmt_range(c["new_start"], c["new_end"]))]
+        for name, initials in (("Garanti", c["garant_initials"]), ("Pomocníci", c["helper_initials"]),
+                               ("Účastníci", c["attendant_initials"])):
+            if initials:
+                head.append(schemas.GoogleChangeDetailOut(name=name, value=", ".join(initials)))
+        if c["foreign_slot"]:
+            head.append(schemas.GoogleChangeDetailOut(name="⚠", value="Nesedící slot ID", warn=True))
+        return schemas.GoogleNewEventOut(
+            key=c["key"], label=f"Nová událost: {c['summary']}", details=head + details,
+            summary=c["summary"], new_start=c["new_start"], new_end=c["new_end"],
+            garant_initials=c["garant_initials"], helper_initials=c["helper_initials"],
+            attendant_initials=c["attendant_initials"], category_id=c["category_id"],
+            foreign_slot=c["foreign_slot"], unknown=c["unknown"])
+
     if kind == "garant_change":
-        return {"key": c["key"], "kind": kind, "activity_title": c["activity"].title,
-                "label": f"Změna garantů a pomocníků: {c['activity'].title}",
-                "new_garants": c["new_garants"], "new_helpers": c["new_helpers"],
-                "old_garants": c["old_garants"], "old_helpers": c["old_helpers"],
-                "unknown": c["unknown"]}
+        head = [schemas.GoogleChangeDetailOut(name="Garanti", value=_fmt_diff(c["old_garants"], c["new_garants"]))]
+        if c["old_helpers"] or c["new_helpers"]:
+            head.append(schemas.GoogleChangeDetailOut(
+                name="Pomocníci", value=_fmt_diff(c["old_helpers"], c["new_helpers"])))
+        return schemas.GoogleGarantChangeOut(
+            key=c["key"], label=f"Změna garantů a pomocníků: {c['activity'].title}", details=head + details,
+            old_garants=c["old_garants"], new_garants=c["new_garants"],
+            old_helpers=c["old_helpers"], new_helpers=c["new_helpers"], unknown=c["unknown"])
+
     if kind == "category_change":
-        return {"key": c["key"], "kind": kind, "activity_title": c["activity"].title,
-                "label": f"Změna kategorie: {c['activity'].title}",
-                "new_label": c["new_label"], "old_label": c["old_label"]}
+        return schemas.GoogleCategoryChangeOut(
+            key=c["key"], label=f"Změna kategorie: {c['activity'].title}",
+            details=[schemas.GoogleChangeDetailOut(
+                name="Kategorie", value=f"{c['old_label']} → {c['new_label']}")],
+            old_label=c["old_label"], new_label=c["new_label"])
 
     slot = c["slot"]
-    out = {"key": c["key"], "kind": kind, "activity_title": slot.activity.title,
-           "old_start": slot.start_at.isoformat(), "old_end": slot.end_at.isoformat()}
     if kind == "time_change":
-        out["label"] = f"Změna času: {slot.activity.title}"
-        out["new_start"] = c["new_start"].isoformat()
-        out["new_end"] = c["new_end"].isoformat()
-    elif kind == "attendants_change":
-        out["label"] = f"Změna účastníků: {slot.activity.title}"
-        out["new_initials"] = c["new_initials"]
-        out["old_initials"] = c["old_initials"]
-        out["unknown"] = c["unknown"]
-    else:  # deleted_in_google
-        out["label"] = f"Smazáno v Google: {slot.activity.title}"
-    return out
+        return schemas.GoogleTimeChangeOut(
+            key=c["key"], label=f"Změna času: {slot.activity.title}",
+            details=[schemas.GoogleChangeDetailOut(
+                name="Datum",
+                value=f"{_fmt_range(slot.start_at, slot.end_at)} → {_fmt_range(c['new_start'], c['new_end'])}")],
+            old_start=slot.start_at, old_end=slot.end_at,
+            new_start=c["new_start"], new_end=c["new_end"])
+    if kind == "attendants_change":
+        head = [schemas.GoogleChangeDetailOut(name="Datum", value=_fmt_range(slot.start_at, slot.end_at)),
+                schemas.GoogleChangeDetailOut(
+                    name="Účastníci", value=_fmt_diff(c["old_initials"], c["new_initials"]))]
+        return schemas.GoogleAttendantsChangeOut(
+            key=c["key"], label=f"Změna účastníků: {slot.activity.title}", details=head + details,
+            old_initials=c["old_initials"], new_initials=c["new_initials"], unknown=c["unknown"])
+    return schemas.GoogleDeletedChangeOut(  # deleted_in_google
+        key=c["key"], label=f"Smazáno v Google: {slot.activity.title}",
+        details=[schemas.GoogleChangeDetailOut(name="Datum", value=_fmt_range(slot.start_at, slot.end_at))],
+        old_start=slot.start_at, old_end=slot.end_at)
 
 
 def preview_pull(camp: Camp) -> dict:
@@ -546,9 +614,10 @@ def preview_pull(camp: Camp) -> dict:
     activities = sorted(camp.activities, key=lambda a: czech_sort_key(a.title))
     return {
         "rev": camp.timeline_rev,  # echoed back on apply to detect a racing timeline edit
-        "changes": [_serialize_change(c) for c in changes],
+        "changes": [_serialize_change(c).model_dump(mode="json") for c in changes],
         "activities": [{"id": a.id, "title": a.title} for a in activities],
-        "categories": [{"id": c.id, "label": c.label, "color": c.color} for c in camp.categories],
+        "categories": [{"id": c.id, "key": c.key, "label": c.label, "color": c.color}
+                       for c in camp.categories],
     }
 
 
@@ -571,11 +640,13 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
     activity_ids = {a.id for a in camp.activities}
     category_ids = {c.id for c in camp.categories}
     applied = {"created_activities": 0, "imported_slots": 0, "updated": 0, "deleted": 0}
+    seen: set[str] = set()  # chosen keys the re-detect still found (the rest → skipped)
 
     for c in _detect(camp):
         decision = chosen.get(c["key"])
         if decision is None:
             continue
+        seen.add(c["key"])
         kind = c["kind"]
 
         if kind == "time_change":
@@ -673,4 +744,5 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
                  applied["imported_slots"], applied["updated"], applied["deleted"])
     camp.google_last_pull_at = datetime.now()  # naive local — display metadata only
     db.session.commit()
-    return {"applied": applied}
+    # skipped: chosen changes that vanished between preview and apply.
+    return {"applied": applied, "skipped": sorted(set(chosen) - seen)}

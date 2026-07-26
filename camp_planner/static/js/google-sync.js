@@ -17,16 +17,12 @@
   const URLS = DATA.urls;
   const body = root.querySelector("[data-google-body]");
   const flashArea = root.querySelector("[data-google-flash]");
-  const UNKNOWN_WARNING =
-    "Neexistující orgové budou z události odstraněni při jakékoliv změně v Camp Planneru. " +
-    "Zvažte, zda chcete pokračovat.";
   const FOREIGN_WARNING =
     "Některé události v Google kalendáři už byly sdílené s jinou akcí Camp Planneru (obsahují " +
     "ID slotů, která nepatří této akci). Lze je importovat, ale po importu budou čísla slotů " +
     "v Google kalendáři přepsána (nebudou již spojena s původní akcí).";
   const hm = (iso) => iso.slice(11, 16);            // "…T14:00:00" → "14:00"
   const day = (iso) => iso.slice(0, 10);             // "2026-07-04"
-  const range = (s, e) => `${day(s)} ${hm(s)}–${hm(e)}`;
   let status = DATA.status;
   const POLL_MS = 5000;            // re-check queued-op counts while the settings page is open
   let statusInfoEl = null;         // the pending/failed block inside the connected view (re-rendered in place)
@@ -163,55 +159,26 @@
     return el("div", { class: "cp-google" },
       el("div", { class: "cp-google-info" },
         el("p", null, "Připojeno ke kalendáři: ", el("code", null, status.calendar_id)),
+        status.last_pull_at
+          ? el("p", { class: "cp-muted" },
+              `Naposledy načteno z Google: ${day(status.last_pull_at)} ${hm(status.last_pull_at)}`)
+          : null,
         statusInfoEl,
         el("div", { class: "cp-google-row" }, sync, resync, pull, disconnect)),
       review);
   }
 
-  // The "Kdy" (when) cell text for a change.
-  function whenText(change) {
-    if (change.kind === "time_change") {
-      return `${range(change.old_start, change.old_end)} → ${range(change.new_start, change.new_end)}`;
-    }
-    if (change.kind === "new_event") return range(change.new_start, change.new_end);
-    if (change.old_start) return range(change.old_start, change.old_end);  // deleted / attendants
-    return "—";                                                            // garant / category (activity-level)
-  }
-
   // One reviewable inbound change → a block of rows. ROW1: checkbox (rowspan over the whole
   // block) · the change name (colspan 2) · the action (rowspan; "Importovat jako" for new
-  // events). Following rows: one detail per row (label + value). Returns
-  // { nodes, cb, setEnabled, decide } — setEnabled greys the block and disables its controls;
-  // decide() yields the decision object or null when unchecked.
+  // events). Following rows: the server-formatted detail rows (name + value, one per row).
+  // Returns { nodes, cb, setEnabled, decide } — setEnabled greys the block and disables its
+  // controls; decide() yields the decision object or null when unchecked.
   function changeRow(change, activities, categories) {
     const cb = el("input", { type: "checkbox", checked: true });
     const controls = [];                  // form controls disabled when the row is unchecked
     let attachBtn = null, attachAlwaysOff = false;
 
-    const list = (a) => a.join(", ") || "—";
-    const fromTo = (oldv, newv) => `${list(oldv)} → ${list(newv)}`;  // old → new, like time changes
-
-    const details = [];
-    const when = whenText(change);
-    if (when !== "—") details.push(["Datum", when]);
-    if (change.kind === "attendants_change") {
-      details.push(["Účastníci", fromTo(change.old_initials, change.new_initials)]);
-    } else if (change.kind === "garant_change") {
-      details.push(["Garanti", fromTo(change.old_garants, change.new_garants)]);
-      if (change.old_helpers.length || change.new_helpers.length) {
-        details.push(["Pomocníci", fromTo(change.old_helpers, change.new_helpers)]);
-      }
-    } else if (change.kind === "category_change") {
-      details.push(["Kategorie", `${change.old_label} → ${change.new_label}`]);
-    } else if (change.kind === "new_event") {
-      if (change.garant_initials.length) details.push(["Garanti", change.garant_initials.join(", ")]);
-      if (change.helper_initials.length) details.push(["Pomocníci", change.helper_initials.join(", ")]);
-      if (change.attendant_initials.length) details.push(["Účastníci", change.attendant_initials.join(", ")]);
-      if (change.foreign_slot) details.push(["⚠", "Nesedící slot ID", "cp-google-warn"]);
-    }
-    if (change.unknown && change.unknown.length) {
-      details.push(["Pozor", `Neznámí orgové: ${change.unknown.join(", ")}. ${UNKNOWN_WARNING}`, "cp-google-warn"]);
-    }
+    const details = change.details.map((d) => [d.name, d.value, d.warn ? "cp-google-warn" : null]);
 
     // action cell (new events choose how to import; others are just apply/skip via checkbox)
     let action = "";
@@ -362,9 +329,12 @@
       try {
         const json = await api("POST", URLS.pull, { rev: preview.rev, decisions });
         const a = json.applied;
-        toast(`Importováno: ${a.imported_slots}, upraveno: ${a.updated}, smazáno: ${a.deleted}.`);
-        const fresh = await api("GET", URLS.base);  // refresh queued-op count
-        status = fresh.google;
+        let msg = `Importováno: ${a.imported_slots}, upraveno: ${a.updated}, smazáno: ${a.deleted}.`;
+        if (json.skipped.length) {
+          msg += ` Přeskočeno: ${json.skipped.length} (změněno mezitím v Google).`;
+        }
+        toast(msg, !!json.skipped.length);
+        status = json.google;  // the apply response carries the fresh status
         render();  // rebuilds the connected view (and clears the review area)
       } catch (err) {
         apply.disabled = false;

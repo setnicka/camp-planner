@@ -764,6 +764,7 @@ class GoogleStatusOut(BaseModel):
     pending_ops: int
     failed_ops: int = 0          # queued ops that have failed at least once
     last_error: str | None = None  # most recent push error (e.g. a read-only-share 403)
+    last_pull_at: NaiveDatetime | None = None  # when changes were last pulled from Google
 
 
 class GoogleEnvelope(_Ok):
@@ -790,15 +791,90 @@ class GoogleResyncEnvelope(_Ok):
     google: GoogleStatusOut
 
 
+# One reviewable inbound change per kind. `details` are pre-formatted Czech display
+# rows (rendered generically); the kind-specific fields stay machine-readable.
+
+class GoogleChangeDetailOut(BaseModel):
+    """One display row of a change ("Datum" / "Účastníci" / …), pre-formatted in Czech."""
+    name: str
+    value: str
+    warn: bool = False
+
+
+class _GoogleChangeBase(BaseModel):
+    key: str
+    label: str
+    details: list[GoogleChangeDetailOut] = []
+
+
+class GoogleTimeChangeOut(_GoogleChangeBase):
+    kind: Literal["time_change"] = "time_change"
+    old_start: NaiveDatetime
+    old_end: NaiveDatetime
+    new_start: NaiveDatetime
+    new_end: NaiveDatetime
+
+
+class GoogleAttendantsChangeOut(_GoogleChangeBase):
+    kind: Literal["attendants_change"] = "attendants_change"
+    old_initials: list[str]
+    new_initials: list[str]
+    unknown: list[str] = []      # initials in Google that match no camp org
+
+
+class GoogleGarantChangeOut(_GoogleChangeBase):
+    kind: Literal["garant_change"] = "garant_change"
+    old_garants: list[str]
+    new_garants: list[str]
+    old_helpers: list[str]
+    new_helpers: list[str]
+    unknown: list[str] = []
+
+
+class GoogleCategoryChangeOut(_GoogleChangeBase):
+    kind: Literal["category_change"] = "category_change"
+    old_label: str
+    new_label: str
+
+
+class GoogleDeletedChangeOut(_GoogleChangeBase):
+    kind: Literal["deleted_in_google"] = "deleted_in_google"
+    old_start: NaiveDatetime
+    old_end: NaiveDatetime
+
+
+class GoogleNewEventOut(_GoogleChangeBase):
+    kind: Literal["new_event"] = "new_event"
+    summary: str
+    new_start: NaiveDatetime
+    new_end: NaiveDatetime
+    garant_initials: list[str] = []
+    helper_initials: list[str] = []
+    attendant_initials: list[str] = []
+    category_id: int | None = None   # inferred from the event color (import pre-fill)
+    foreign_slot: bool = False       # carried another camp's slot id marker
+    unknown: list[str] = []
+
+
+GoogleChangeOut = Annotated[
+    GoogleTimeChangeOut | GoogleAttendantsChangeOut | GoogleGarantChangeOut
+    | GoogleCategoryChangeOut | GoogleDeletedChangeOut | GoogleNewEventOut,
+    Field(discriminator="kind")]
+
+
+class GoogleActivityRefOut(BaseModel):
+    id: int
+    title: str
+
+
 class GooglePullPreviewEnvelope(_Ok):
-    """The reviewable inbound diff. `changes` items carry a stable `key`, a `kind`
-    (time_change | deleted_in_google | new_event), a Czech `label` and the relevant
-    times; `activities`/`categories` are the options for importing a new event. `rev` is
-    the timeline revision this was computed against — echo it back on apply."""
+    """The reviewable inbound diff; `activities`/`categories` are the options for
+    importing a new event. `rev` is the timeline revision this was computed against —
+    echo it back on apply."""
     rev: int
-    changes: list[dict]
-    activities: list[dict]
-    categories: list[dict]
+    changes: list[GoogleChangeOut]
+    activities: list[GoogleActivityRefOut]
+    categories: list[CategoryOut]
 
 
 class GooglePullDecisionIn(BaseModel):
@@ -827,6 +903,9 @@ class GooglePullAppliedOut(BaseModel):
 
 class GooglePullApplyEnvelope(_Ok):
     applied: GooglePullAppliedOut
+    # chosen keys whose change vanished between preview and apply (re-edited in Google)
+    skipped: list[str] = []
+    google: GoogleStatusOut      # fresh status, so the client needn't re-fetch it
 
 
 class GooglePullConflictOut(ErrorOut):

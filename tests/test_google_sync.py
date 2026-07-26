@@ -665,6 +665,31 @@ def test_apply_time_change_and_import_new(client, seeded, gcal):
     assert gcal.events["ext1"]["extendedProperties"]["private"]["cpSlotId"] == str(imported.id)
 
 
+def test_apply_pull_reports_vanished_changes_as_skipped(client, seeded, gcal):
+    """A chosen change that no longer exists at apply time (the event changed again in
+    Google between preview and apply) is reported in `skipped`, not silently dropped."""
+    camp, slot = _connected_with_event(seeded)
+    gcal.events[slot.google_event_id]["start"]["dateTime"] = "2026-07-04T15:00:00"
+    gcal.events[slot.google_event_id]["end"]["dateTime"] = "2026-07-04T17:00:00"
+
+    body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
+                      headers=editor(seeded["slug"])).get_json()
+    tc_key = next(c["key"] for c in body["changes"] if c["kind"] == "time_change")
+
+    # the event snaps back to the slot's own times → the change vanishes before apply
+    gcal.events[slot.google_event_id]["start"]["dateTime"] = "2026-07-04T14:00:00"
+    gcal.events[slot.google_event_id]["end"]["dateTime"] = "2026-07-04T16:00:00"
+
+    resp = client.post(f"/api/camps/{seeded['slug']}/google/pull",
+                       json={"rev": body["rev"], "decisions": [{"key": tc_key, "action": "apply"}]},
+                       headers=editor(seeded["slug"]))
+    assert resp.status_code == 200
+    out = resp.get_json()
+    assert out["skipped"] == [tc_key]
+    assert out["applied"]["updated"] == 0
+    assert out["google"]["last_pull_at"]  # the apply response carries the fresh status
+
+
 def test_apply_pull_stale_rev_conflicts(client, seeded, gcal):
     from camp_planner.services.timeline import bump_timeline_rev
 

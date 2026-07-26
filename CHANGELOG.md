@@ -12,6 +12,13 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Google sync panel shows when changes were last pulled from Google
+  („Naposledy načteno z Google“).
+- Google import: selected changes that vanished between preview and apply are
+  reported as „přeskočeno“.
+
 ### Security
 
 - Production refuses to start with the built-in default `SECRET_KEY` and marks
@@ -28,7 +35,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Embedded auth: a malformed grant from the host callback is skipped with a
   warning instead of turning every request into a 500.
 - Timeline save: slots outside the camp's day range are rejected (they used to
-  persist invisibly); seconds in spans are normalized to whole minutes.
+  persist invisibly); seconds in spans are normalized to whole minutes. Google
+  import likewise skips out-of-window events instead of importing them clipped.
 
 ### Removed
 
@@ -37,6 +45,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Changed
 
+- Google push failures show a short Czech explanation instead of the raw
+  English API error (which stays in the server log).
 - `materials.acquisition_labels` is now NOT NULL (existing `NULL` rows
   backfilled to `[]`).
 - `DEV_USER` (header-less local dev for proxy auth mode) is now settable via
