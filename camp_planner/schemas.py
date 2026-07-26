@@ -579,7 +579,9 @@ class _TaxonomyIn(BaseModel):
 
 class CategoryIn(_TaxonomyIn):
     id: int | None = None
-    key: str | None = Field(default=None, max_length=40)
+    # A supplied key is emitted verbatim as a CSS class (`cat-<key>`) and data-* attribute
+    # on the timeline, so constrain it to slug-safe chars (empty → slugified from the label).
+    key: str | None = Field(default=None, max_length=40, pattern=r"^[A-Za-z0-9_-]*$")
     label: str = Field(min_length=1, max_length=255)
     color: str | None = Field(default=None, max_length=7)
 

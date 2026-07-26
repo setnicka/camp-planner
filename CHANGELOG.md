@@ -39,6 +39,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   set `BEHIND_PROXY=1` — otherwise `url_for` drops the prefix and CSS/JS/links break
   (previously ProxyFix was always on). The app logs a warning if it sees
   `X-Forwarded-*` headers while `BEHIND_PROXY` is unset.
+- Category keys are restricted to slug-safe characters, closing a stored-XSS
+  vector (the key is emitted as a CSS class and `data-*` attribute on the timeline).
 
 ### Fixed
 
