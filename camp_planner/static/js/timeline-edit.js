@@ -90,12 +90,32 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (saveBtn) saveBtn.disabled = !history.length;
     if (undoBtn) undoBtn.disabled = !history.length;
     if (redoBtn) redoBtn.disabled = !redoStack.length;
-    if (changesBtn) { changesBtn.hidden = !history.length; changesBtn.textContent = pluralChanges(history.length); }
+    if (changesBtn) { const n = foldedChangeLines().length; changesBtn.hidden = !n; changesBtn.textContent = pluralChanges(n); }
     if (changesOpen) renderChangeList();
   }
 
-  // numbered change rows, shared by the popover and the Save/Discard confirm dialog
-  const changeRows = () => history.map((c, i) => el("div", { class: "cp-change-row" }, (i + 1) + ". " + c.label));
+  // Fold every move/resize of one block (change.fold) into a single row at its first
+  // occurrence, showing the net first→last range — even when interleaved with other blocks.
+  // Drives both the rows and the "N změn" counter; undo/redo still steps through each.
+  function foldedChangeLines() {
+    const rows = [];            // display rows in first-occurrence order
+    const byKey = new Map();    // fold.key -> its row (later moves of that block merge in)
+    for (const c of history) {
+      if (!c.fold) { rows.push({ label: c.label }); continue; }
+      const seen = byKey.get(c.fold.key);
+      if (seen) seen.last = c.fold;                 // extend the net range to this move
+      else { const row = { first: c.fold, last: c.fold }; byKey.set(c.fold.key, row); rows.push(row); }
+    }
+    return rows.map((r) => {
+      if (r.label != null) return r.label;
+      const verb = r.first.durFrom === r.last.durTo ? "Přesunut" : "Změněna velikost";
+      return `${verb} „${r.first.title}“: ${r.first.from} → ${r.last.to}`;
+    });
+  }
+  // Numbered rows, shared by the popover and the Save/Discard confirm dialog.
+  function changeRows() {
+    return foldedChangeLines().map((txt, i) => el("div", { class: "cp-change-row" }, (i + 1) + ". " + txt));
+  }
 
   // --- unsaved-changes list popover ------------------------------------------
   let changesOpen = false;
@@ -133,6 +153,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     }
     const id = item.id, key = String(id);
     const cur = items.get(id) || {};
+    const seg = cur._seg;
     const title = cur._title || "slot";
     const before = snapshot(id);
     const after = { start: item.start, end: item.end, group: item.group };
@@ -141,9 +162,21 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       callback(item); return;  // dropped back where it started → not a change
     }
     const afterTimes = itemTimes(item);
-    const verb = (before.end - before.start) === (after.end - after.start) ? "Přesunut" : "Změněna velikost";
-    const label = `${verb} „${title}“: ${rangeLabel(before.group, before.start, before.end)}` +
-                  ` → ${rangeLabel(after.group, after.start, after.end)}`;
+    // Re-render the box + tooltip from the new time: both the .ev-time and the title's clock
+    // derive from the segment's abs range, so rebuild it from a copy with the new range.
+    const afterSeg = seg && { ...seg, day: Number(after.group),
+      abs_start_min: absMinOf(after.group, after.start), abs_end_min: absMinOf(after.group, after.end),
+      rel_start_min: relMin(after.start), rel_end_min: relMin(after.end) };
+    const afterRender = afterSeg
+      ? { _seg: afterSeg, content: segmentContent(afterSeg), title: segmentTitle(afterSeg) } : {};
+    const beforeRender = seg ? { _seg: seg, content: cur.content, title: cur.title } : {};
+    const durFrom = (before.end - before.start) / 60000, durTo = (after.end - after.start) / 60000;
+    const verb = durFrom === durTo ? "Přesunut" : "Změněna velikost";
+    const rFrom = rangeLabel(before.group, before.start, before.end);
+    const rTo = rangeLabel(after.group, after.start, after.end);
+    const label = `${verb} „${title}“: ${rFrom} → ${rTo}`;
+    const fold = { key: creates.has(key) ? "create:" + key : "slot:" + item.slotId,
+                   title, from: rFrom, to: rTo, durFrom, durTo };
 
     let change = null;
     if (creates.has(key)) {
@@ -151,22 +184,22 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       const beforeTimes = { start_at: spec.start_at, end_at: spec.end_at };
       Object.assign(spec, afterTimes);
       change = {
-        label,
-        undo: () => { items.update({ id, ...before }); Object.assign(spec, beforeTimes); },
-        redo: () => { items.update({ id, ...after }); Object.assign(spec, afterTimes); },
+        label, fold,
+        undo: () => { items.update({ id, ...before, ...beforeRender }); Object.assign(spec, beforeTimes); },
+        redo: () => { items.update({ id, ...after, ...afterRender }); Object.assign(spec, afterTimes); },
       };
     } else if (item.slotId != null) {
       const slotId = item.slotId;
       const prev = moves.has(slotId) ? moves.get(slotId) : null;
       moves.set(slotId, afterTimes);
       change = {
-        label,
-        undo: () => { items.update({ id, ...before }); if (prev) moves.set(slotId, prev); else moves.delete(slotId); },
-        redo: () => { items.update({ id, ...after }); moves.set(slotId, afterTimes); },
+        label, fold,
+        undo: () => { items.update({ id, ...before, ...beforeRender }); if (prev) moves.set(slotId, prev); else moves.delete(slotId); },
+        redo: () => { items.update({ id, ...after, ...afterRender }); moves.set(slotId, afterTimes); },
       };
     }
-    callback(item);              // apply the visual move first…
-    if (change) record(change);  // …then log it + recompute heights against the new layout
+    callback(item);                              // apply the visual move first…
+    if (change) { items.update({ id, ...afterRender }); record(change); }  // …refresh box+tooltip, then log
   }
 
   // live time-in-box while dragging/resizing: rewrite the .ev-time text directly
@@ -174,11 +207,22 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // live feedback; they re-slice to the final layout on drop.
   const cssId = (id) => (window.CSS && CSS.escape) ? CSS.escape(String(id)) : String(id);
   let movingTimeEl = null;  // cached across a drag's many onMoving frames (same item id)
+  let movingSeg = null;     // the dragged item's segment, for the live tooltip
   function onMoving(item, callback) {
     callback(item);
-    if (!movingTimeEl || movingTimeEl.dataset.id !== String(item.id) || !movingTimeEl.isConnected)
+    const idStr = String(item.id);
+    if (!movingTimeEl || movingTimeEl.dataset.id !== idStr || !movingTimeEl.isConnected) {
       movingTimeEl = container.querySelector('.ev-time[data-id="' + cssId(item.id) + '"]');
+      movingSeg = (items.get(item.id) || {})._seg || null;
+    }
     if (movingTimeEl) movingTimeEl.textContent = rangeLabel(item.group, item.start, item.end);
+    // vis only refills the hover tooltip on a fresh mouse-enter, so a drag leaves it stale —
+    // rewrite the shown popup's HTML with the live time, like the box time above.
+    const tip = container.querySelector(".vis-tooltip") || document.querySelector(".vis-tooltip");
+    if (tip && movingSeg) {
+      tip.innerHTML = segmentTitle({ ...movingSeg,
+        abs_start_min: absMinOf(item.group, item.start), abs_end_min: absMinOf(item.group, item.end) });
+    }
   }
 
   // --- add (double-tap empty space) ------------------------------------------
@@ -277,9 +321,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const newTimes = { start_at: absToNaive(s), end_at: absToNaive(e) };
     const prevMove = moves.has(slotId) ? moves.get(slotId) : null;
     const verb = dStart === dEnd ? "Přesunut" : "Změněna velikost";
-    const label = `${verb} „${title}“: ${slotRangeLabel(seg.abs_start_min, seg.abs_end_min)} → ${slotRangeLabel(s, e)}`;
+    const from = slotRangeLabel(seg.abs_start_min, seg.abs_end_min), to = slotRangeLabel(s, e);
+    const label = `${verb} „${title}“: ${from} → ${to}`;
     return {
       label,
+      fold: { key: "slot:" + slotId, title, from, to,
+              durFrom: seg.abs_end_min - seg.abs_start_min, durTo: e - s },
       redo: () => { items.remove(oldIds); items.add(newItems); moves.set(slotId, newTimes); segCount[slotId] = newIds.length; },
       undo: () => { items.remove(newIds); items.add(oldItems); if (prevMove) moves.set(slotId, prevMove); else moves.delete(slotId); segCount[slotId] = oldIds.length; },
     };

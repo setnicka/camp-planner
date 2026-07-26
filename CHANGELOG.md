@@ -70,9 +70,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   „Načítám…" hint, so the header no longer jumps when it mounts.
 - Saving the timeline refreshes in place instead of reloading the page — faster,
   and it keeps the current zoom.
-- Timeline editor: a block's hover tooltip time updates as you move/resize it;
-  repeated moves/resizes of one block collapse into a single row in the
-  unsaved-changes list (undo/redo still steps through each).
+- Timeline editor: a block's tooltip time updates live as you move/resize it;
+  repeated moves of one block fold into a single row in the unsaved-changes list.
 - Google push failures show a short Czech explanation instead of the raw
   English API error (which stays in the server log).
 - `materials.acquisition_labels` is now NOT NULL (existing `NULL` rows
