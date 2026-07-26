@@ -52,9 +52,18 @@ window.cpDom = (function () {
     if (resp.status === 400 && /csrf/i.test(json.error || "") && !_retried && (await csrfRefresh())) {
       return api(method, url, body, true);
     }
-    if (!resp.ok || !json.ok) throw new Error(json.error || "Operace selhala.");
+    if (!resp.ok || !json.ok) {
+      const err = new Error(json.error || "Operace selhala.");
+      err.status = resp.status;   // lets callers branch on e.g. a 409 conflict
+      throw err;
+    }
     return json;
   }
+
+  // Item-scoped api URL templates carry a `0` sentinel the client swaps for the real id.
+  const withId = (tpl, id) => tpl.replace(/\d+$/, id);
+  // Merge URLs end …/0/merge — swap the sentinel inside.
+  const mergeUrl = (tpl, id) => tpl.replace(/\/0\/merge$/, "/" + id + "/merge");
 
   // Refresh proactively, well before the token's server-side limit, so the reactive retry
   // above (which also covers laptop sleep) stays a rare fallback.
@@ -65,10 +74,14 @@ window.cpDom = (function () {
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
   const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "#9e9e9e") });
 
-  // Mount a dialog inside a backdrop overlay; wires Escape, backdrop-click and teardown
-  // once for every modal. onClose (if given) runs exactly once on any dismissal. Returns
-  // the idempotent close() so callers can also dismiss programmatically (e.g. on success).
-  function openModal(dialog, onClose) {
+  // Mount a dialog inside a backdrop overlay: Escape / backdrop-click dismiss it, Tab is
+  // trapped inside, focus returns to the opener, onClose runs once on any dismissal.
+  // `confirmClose` (optional) guards only Escape/backdrop — return false to keep the
+  // dialog open; the returned close() is always unconditional.
+  function openModal(dialog, onClose, { confirmClose } = {}) {
+    const opener = document.activeElement;
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
     const overlay = el("div", { class: "cp-modal-overlay" }, dialog);
     let closed = false;
     const close = () => {
@@ -76,13 +89,159 @@ window.cpDom = (function () {
       closed = true;
       overlay.remove();
       document.removeEventListener("keydown", onKey);
+      if (opener && document.contains(opener)) opener.focus();
       if (onClose) onClose();
     };
-    const onKey = (e) => { if (e.key === "Escape") close(); };
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    const dismiss = () => { if (!confirmClose || confirmClose()) close(); };
+    const focusables = () => [...overlay.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )].filter((n) => !n.disabled && n.offsetParent !== null);
+    const onKey = (e) => {
+      if (e.key === "Escape") { dismiss(); return; }
+      if (e.key !== "Tab") return;
+      const f = focusables();          // keep Tab cycling inside the dialog
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
     document.addEventListener("keydown", onKey);
     document.body.append(overlay);
     return close;
+  }
+
+  // Run a modal's submit: disable the button while `fn` is in flight (double-submit
+  // guard), toast a failure, re-enable afterwards.
+  async function submit(btn, fn) {
+    btn.disabled = true;
+    try { await fn(); }
+    catch (e) { toast(e.message, true); }
+    finally { btn.disabled = false; }
+  }
+
+  // Standard form dialog: title + pane + Zrušit/OK footer. Owns the submit cycle and asks
+  // before an Escape / backdrop-click discards edited input; onSubmit(close) closes itself.
+  function formModal({ title, pane, okLabel = "Uložit", onSubmit, onClose }) {
+    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
+    const ok = el("button", { type: "button", class: "cp-primary" }, okLabel);
+    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
+      el("div", { class: "cp-modal-head" }, title),
+      pane,
+      el("div", { class: "cp-modal-foot" }, cancel, ok));
+    let dirty = false;
+    pane.addEventListener("input", () => { dirty = true; });
+    // chip toggles are buttons, not inputs — a click on one is an edit too
+    pane.addEventListener("click", (e) => { if (e.target.closest(".cp-cat-chip")) dirty = true; });
+    const close = openModal(dialog, onClose, {
+      confirmClose: () => !dirty || window.confirm("Zavřít bez uložení?"),
+    });
+    cancel.addEventListener("click", () => close());
+    ok.addEventListener("click", () => submit(ok, () => onSubmit(close)));
+  }
+
+  // Fuzzy search-and-pick modal over a list. labelOf(item) feeds the row label and the
+  // filter; metaOf (optional) adds a right-side hint. onPick(item, close) decides itself
+  // when to close (merge only closes after its confirm + api call succeeds). extraEntry(q)
+  // (optional) may return { label, pick } appended as a synthetic "+ Vytvořit …" row.
+  function searchPicker({ title, hint, placeholder = "Hledat…", items, labelOf, metaOf,
+                          onPick, extraEntry, empty = "Nic nenalezeno." }) {
+    const search = el("input", { type: "text", class: "cp-modal-search", placeholder });
+    const list = el("div", { class: "cp-modal-list" });
+    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
+    const dialog = el("div", { class: "cp-modal" },
+      el("div", { class: "cp-modal-head" }, title),
+      el("div", { class: "cp-pane" }, hint ? el("p", { class: "cp-muted" }, hint) : null, search, list),
+      el("div", { class: "cp-modal-foot" }, cancel));
+    const close = openModal(dialog);
+    cancel.addEventListener("click", () => close());
+    const setRows = keyList(search);
+    function rerender() {
+      const q = search.value.trim();
+      const matches = q && window.cpFuzzy ? window.cpFuzzy.filter(q, items, labelOf) : items;
+      const entries = matches.map((it) => {
+        const meta = metaOf && metaOf(it);
+        return {
+          el: el("button", { type: "button", class: "cp-modal-item" },
+            el("span", null, labelOf(it)), meta ? el("span", { class: "cp-modal-recent" }, meta) : null),
+          pick: () => onPick(it, close),
+        };
+      });
+      const extra = extraEntry && extraEntry(q);
+      if (extra) entries.push({
+        el: el("button", { type: "button", class: "cp-modal-item" }, extra.label),
+        pick: () => extra.pick(close),
+      });
+      list.replaceChildren(...entries.map((e) => e.el));
+      if (!entries.length) list.append(el("div", { class: "cp-muted" }, empty));
+      setRows(entries);
+    }
+    search.addEventListener("input", rerender);
+    rerender();
+    search.focus();
+  }
+
+  // Merge-into flow on top of searchPicker: pick the target, confirm, POST {into: id},
+  // then reload (the server re-sums, so local reconciliation isn't attempted).
+  function mergePicker({ title, hint, items, labelOf, metaOf, url, confirmText, successText }) {
+    let merging = false;   // guard against a second pick while the merge + reload is in flight
+    searchPicker({
+      title, hint, items, labelOf, metaOf, placeholder: "Sloučit do…",
+      onPick: (t, close) => {
+        if (merging || !window.confirm(confirmText(t))) return;
+        merging = true;
+        api("POST", url, { into: t.id })
+          .then(() => { close(); toastNext(successText(t)); location.reload(); })
+          .catch((e) => { merging = false; toast(e.message, true); });
+      },
+    });
+  }
+
+  // Column-header org filter: a "Vše ▾ / Orgové (n) ▾" button opening a checkbox panel.
+  // Toggles mutate the caller-owned `selected` Set in place, then onChange() fires.
+  // `extra` (optional) prepends a page-specific checkbox { label, checked, set(v),
+  // countInLabel }. Outside clicks and Escape close the open panel. Returns { th,
+  // setLabel } — setLabel(n) lets freezeColumns size the column to the widest label.
+  let openPopover = null;
+  document.addEventListener("click", () => {
+    if (openPopover) { openPopover.hidden = true; openPopover = null; }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && openPopover) { openPopover.hidden = true; openPopover = null; }
+  });
+  function orgFilterHead({ orgs, selected, extra, onChange }) {
+    const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
+    let extraCb = null;
+    const count = () => selected.size + (extra?.countInLabel && extraCb?.checked ? 1 : 0);
+    const setLabel = (n = count()) => { btn.textContent = n ? "Orgové (" + n + ") ▾" : "Vše ▾"; };
+    const panel = el("div", { class: "cp-th-pop", hidden: true });
+    panel.addEventListener("click", (e) => e.stopPropagation());   // keep clicks inside from closing it
+    if (extra) {
+      extraCb = el("input", { type: "checkbox" });
+      extraCb.checked = !!extra.checked;
+      extraCb.addEventListener("change", () => { extra.set(extraCb.checked); setLabel(); onChange(); });
+      panel.append(el("label", { class: "cp-th-pop-row cp-th-pop-opt" }, extraCb, " " + extra.label));
+    }
+    if (!orgs.length) panel.append(el("div", { class: "cp-muted" }, "Žádní orgové."));
+    orgs.forEach((o) => {
+      const cb = el("input", { type: "checkbox" });
+      cb.checked = selected.has(o.id);
+      cb.addEventListener("change", () => {
+        if (cb.checked) selected.add(o.id); else selected.delete(o.id);
+        setLabel(); onChange();
+      });
+      panel.append(el("label", { class: "cp-th-pop-row" }, cb, " ", o.initials, " – ", o.name));
+    });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const show = panel.hidden;
+      if (openPopover && openPopover !== panel) openPopover.hidden = true;
+      panel.hidden = !show;
+      openPopover = show ? panel : null;
+    });
+    setLabel();
+    const th = el("th", null, el("span", { class: "cp-th-label" }, "Orgové"), el("div", { class: "cp-th-dd" }, btn, panel));
+    return { th, setLabel };
   }
 
   // Selectable chip set (`.cp-cat-chips`). Each entry is [value, ...chipChildren]; clicking
@@ -127,7 +286,9 @@ window.cpDom = (function () {
     return function setRows(entries) {
       rows = entries;
       entries.forEach((r, i) => {
-        r.el.addEventListener("click", r.pick);
+        // mousedown (not click) + preventDefault: a blur-triggered re-render can detach
+        // the row before a click would land; mousedown fires first and keeps the focus.
+        r.el.addEventListener("mousedown", (e) => { e.preventDefault(); r.pick(); });
         r.el.addEventListener("mousemove", () => setActive(i));
       });
       active = -1;
@@ -218,6 +379,7 @@ window.cpDom = (function () {
     table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
   }
 
-  return { el, csrf, csrfRefresh, api, swatch, openModal, chipGroup, keyList, toast, toastNext, flash,
+  return { el, csrf, csrfRefresh, api, withId, mergeUrl, swatch, openModal, submit, formModal,
+           searchPicker, mergePicker, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
            plural, tabHash, freezeColumns };
 })();

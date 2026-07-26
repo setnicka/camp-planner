@@ -12,7 +12,7 @@
 "use strict";
 
 window.cpTodoList = function (opts) {
-  const { el, api, openModal, chipGroup, toast, plural, freezeColumns } = window.cpDom;
+  const { el, api, withId, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns } = window.cpDom;
   const mount = opts.mount;
   const TODOS = opts.todos;                 // mutated in place (push/splice/assign)
   const ORGS = opts.orgs || [];             // [{id, initials, name}] — filter + edit picker
@@ -28,7 +28,6 @@ window.cpTodoList = function (opts) {
   const hashPrefix = opts.hashPrefix || "";
   const onChange = opts.onChange || function () {};
 
-  const withId = (tpl, id) => tpl.replace(/\d+$/, id);   // swap the trailing 0 sentinel
   const orgName = new Map(ORGS.map((o) => [o.id, o.name]));
 
   // filter + sort state (cleared by resetFilters → buildShell, which rebuilds the controls)
@@ -40,7 +39,6 @@ window.cpTodoList = function (opts) {
   let tbody, countLabel;
   const sortArrows = new Map();   // sortKey -> direction indicator span, updated in place
   const arrowFor = (key) => (key === sortKey ? (sortDir === 1 ? " ▾" : " ▴") : "");
-  let openPopover = null;         // the currently-open org dropdown panel (closed on outside click)
   let orgSetLabel = null;   // org-filter button's label setter (for sizing the freeze to the widest label)
   // columns: task + orgs + due (3), plus activity and/or actions. The note is NOT a column —
   // it renders on its own full-width second row beneath the task.
@@ -242,38 +240,13 @@ window.cpTodoList = function (opts) {
   }
 
   function orgsHead() {
-    const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
-    const count = () => filter.orgIds.size + (filter.noOrg ? 1 : 0);
-    // setLabel(n) renders the button for a given count; default = the live count. Passing an
-    // explicit n lets the freeze size the column to the widest label without duplicating the format.
-    const setLabel = (n = count()) => { btn.textContent = n ? "Orgové (" + n + ") ▾" : "Vše ▾"; };
-    setLabel();
-    orgSetLabel = setLabel;   // exposed so freeze can size to the widest label
-    const panel = el("div", { class: "cp-th-pop", hidden: true });
-    panel.addEventListener("click", (e) => e.stopPropagation());   // keep clicks inside from closing the dropdown
     // "bez orgů" — match unassigned todos (OR-combined with any orgs ticked below)
-    const noCb = el("input", { type: "checkbox" });
-    noCb.checked = filter.noOrg;
-    noCb.addEventListener("change", () => { filter.noOrg = noCb.checked; setLabel(); onFilterChange(); });
-    panel.append(el("label", { class: "cp-th-pop-row cp-th-pop-opt" }, noCb, " bez orgů"));
-    if (!ORGS.length) panel.append(el("div", { class: "cp-muted" }, "Žádní orgové."));
-    ORGS.forEach((o) => {
-      const cb = el("input", { type: "checkbox" });
-      cb.checked = filter.orgIds.has(o.id);
-      cb.addEventListener("change", () => {
-        if (cb.checked) filter.orgIds.add(o.id); else filter.orgIds.delete(o.id);
-        setLabel(); onFilterChange();
-      });
-      panel.append(el("label", { class: "cp-th-pop-row" }, cb, " ", o.initials, " – ", o.name));
+    const head = orgFilterHead({
+      orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange,
+      extra: { label: "bez orgů", checked: filter.noOrg, set: (v) => { filter.noOrg = v; }, countInLabel: true },
     });
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const show = panel.hidden;
-      if (openPopover && openPopover !== panel) openPopover.hidden = true;
-      panel.hidden = !show;
-      openPopover = show ? panel : null;
-    });
-    return el("th", null, el("span", { class: "cp-th-label" }, "Orgové"), el("div", { class: "cp-th-dd" }, btn, panel));
+    orgSetLabel = head.setLabel;   // exposed so freeze can size to the widest label
+    return head.th;
   }
 
   function resetFilters() {
@@ -295,28 +268,22 @@ window.cpTodoList = function (opts) {
     const group = chipGroup(ORGS.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
       { multi: true, selected: (seed.orgs || []).map((o) => o.org_id) });
     if (!ORGS.length) group.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, t ? "Uložit" : "Přidat");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, t ? "Upravit úkol" : "Nový úkol"),
-      el("div", { class: "cp-pane" },
+    formModal({
+      title: t ? "Upravit úkol" : "Nový úkol",
+      okLabel: t ? "Uložit" : "Přidat",
+      pane: el("div", { class: "cp-pane" },
         el("label", { class: "cp-field-label" }, "Název"), title,
         el("label", { class: "cp-field-label" }, "Poznámka"), note,
         el("label", { class: "cp-field-label" }, "Termín"), due,
         el("label", { class: "cp-field-label" }, "Orgové"), group.node),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      const v = title.value.trim();
-      if (!v) { title.focus(); return; }
-      const body = { title: v, note: note.value || null, due_date: due.value || null, org_ids: group.get() };
-      ok.disabled = true;
-      try {
+      onSubmit: async (close) => {
+        const v = title.value.trim();
+        if (!v) { title.focus(); return; }
+        const body = { title: v, note: note.value || null, due_date: due.value || null, org_ids: group.get() };
         if (t) { const j = await api("PATCH", withId(U.item, t.id), body); Object.assign(t, j.todo); }
         else { const j = await api("POST", U.create, body); TODOS.push(j.todo); }
         close(); refresh(); toast("Uloženo");
-      } catch (e) { ok.disabled = false; toast(e.message, true); }
+      },
     });
     title.focus();
   }
@@ -324,7 +291,6 @@ window.cpTodoList = function (opts) {
   // --- shell -----------------------------------------------------------------
   function buildShell() {
     sortArrows.clear();
-    openPopover = null;
     const headRow = el("tr", null, statusHead());
     if (showActivity) headRow.append(activityHead());
     headRow.append(orgsHead(), el("th", null, sortLabel("Termín", "due")));
@@ -368,8 +334,6 @@ window.cpTodoList = function (opts) {
     renderTableBody();
   }
 
-  // close an open org dropdown when clicking anywhere outside it
-  document.addEventListener("click", () => { if (openPopover) { openPopover.hidden = true; openPopover = null; } });
   // External links / back button (overview page only): re-read the hash and rebuild.
   if (useHash) window.addEventListener("hashchange", () => { applyHashToState(); buildShell(); });
 

@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, swatch, openModal, chipGroup, keyList, toast, tabHash } = window.cpDom;
+  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
   const DATA = JSON.parse(dataEl.textContent);
@@ -28,16 +28,7 @@
   const panes = {};                         // { description, todos, materials, history } — built once, shown/hidden by tab
 
   // --- small helpers ---------------------------------------------------------
-  const withId = (tpl, id) => tpl.replace(/\d+$/, id);  // swap the trailing 0 sentinel for a real id
   const clampPct = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
-
-  // Run a modal's submit: disable its button while it works; on failure re-enable and
-  // toast the error. `fn` owns the success path (api call, state update, close(), toast).
-  async function submit(btn, fn) {
-    btn.disabled = true;
-    try { await fn(); }
-    catch (e) { btn.disabled = false; toast(e.message, true); }
-  }
 
   // --- slots (header chips → timeline, this activity pre-filtered) ------------
   let slotsExpanded = false;   // when >3 slots, collapse to the first 3 until toggled open
@@ -573,28 +564,6 @@
     return el("div", { class: "cp-need-row" }, cb, main);
   }
 
-  // need-detail fields (shared by add + edit); returns { pane, read() }. `defaultUnit` is
-  // the material's catalog unit: shown as the unit placeholder, only overridden if it differs.
-  function needFields(seed, defaultUnit) {
-    const amount = el("input", { type: "number", step: "any", class: "cp-num", placeholder: "množství" });
-    if (seed.amount != null) amount.value = seed.amount;
-    const unit = el("input", { type: "text", class: "cp-need-unit", placeholder: defaultUnit || "jednotka" });
-    unit.value = seed.unit || "";
-    const note = el("input", { type: "text" });
-    note.value = seed.note || "";
-    const pane = el("div", { class: "cp-pane" },
-      el("label", { class: "cp-field-label" }, "Množství a jednotka"),
-      el("div", { class: "cp-need-amount-row" }, amount, unit),
-      el("div", { class: "cp-field-hint" }, "Jednotku zadej jen pokud se liší od výchozí."),
-      el("label", { class: "cp-field-label" }, "Poznámka"), note);
-    const read = () => ({
-      amount: amount.value === "" ? null : Number(amount.value),
-      unit: unit.value || null,
-      note: note.value || null,
-    });
-    return { pane, read };
-  }
-
   function openNeedEdit(n) {
     // shared dialog (cpMaterialNeedEdit) — same edit window as the camp-wide materials overview
     window.cpMaterialNeedEdit({
@@ -610,85 +579,58 @@
     const unit = el("input", { type: "text" });
     const note = el("textarea", { class: "cp-act-textarea", rows: 3 });
     const url = el("input", { type: "url", placeholder: "https://…" });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Vytvořit");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Nový materiál"),
-      el("div", { class: "cp-pane" },
+    formModal({
+      title: "Nový materiál",
+      okLabel: "Vytvořit",
+      pane: el("div", { class: "cp-pane" },
         el("label", { class: "cp-field-label" }, "Název"), name,
         el("label", { class: "cp-field-label" }, "Výchozí jednotka"), unit,
         el("label", { class: "cp-field-label" }, "Poznámka"), note,
         el("label", { class: "cp-field-label" }, "Odkaz"), url),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      const nm = name.value.trim();
-      if (!nm) { name.focus(); return; }
-      submit(ok, async () => {
+      onSubmit: async (close) => {
+        const nm = name.value.trim();
+        if (!nm) { name.focus(); return; }
         const j = await api("POST", U.materialCreate,
           { name: nm, unit: unit.value || null, note: note.value || null, url: url.value || null });
         if (catalogCache) catalogCache.unshift(j.material);
         close();
         onCreated(j.material);
-      });
+      },
     });
     name.focus();
   }
 
-  // step 2 of adding: amount/unit/note for the chosen catalog material, then POST
+  // step 2 of adding: amount/unit/note for the chosen catalog material (the shared
+  // material-need dialog in create mode), then POST
   function openNeedAdd(material) {
-    const f = needFields({}, material.unit);
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Přidat");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Přidat „" + material.name + "“"), f.pane,
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      submit(ok, async () => { const j = await api("POST", U.needCreate, { material_id: material.id, ...f.read() }); A.material_needs.push(j.need); close(); refreshMaterials(); toast("Uloženo"); });
+    window.cpMaterialNeedEdit({
+      title: "Přidat „" + material.name + "“",
+      defaultUnit: material.unit,
+      url: U.needCreate, method: "POST", extraBody: { material_id: material.id },
+      okLabel: "Přidat",
+      onSaved: (need) => { A.material_needs.push(need); refreshMaterials(); },
     });
   }
 
   // step 1 of adding: pick an existing catalog material (fuzzy) or create a new one
   let catalogCache = null;
   function openMaterialPicker() {
-    const search = el("input", { type: "text", class: "cp-modal-search", placeholder: "Hledat materiál…" });
-    const list = el("div", { class: "cp-modal-list" });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const dialog = el("div", { class: "cp-modal" },
-      el("div", { class: "cp-modal-head" }, "Přidat materiál"),
-      el("div", { class: "cp-pane" }, search, list),
-      el("div", { class: "cp-modal-foot" }, cancel));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-
-    // keyboard-navigable list (cpDom.keyList): the "+ Vytvořit" row is just another entry.
-    const setRows = keyList(search);
-    function renderResults() {
-      const all = catalogCache || [];
-      const q = search.value.trim();
-      const matches = q && window.cpFuzzy ? window.cpFuzzy.filter(q, all, (m) => m.name) : all;
-      const entries = matches.map((m) => ({
-        el: el("button", { type: "button", class: "cp-modal-item" },
-          el("span", null, m.name), m.unit ? el("span", { class: "cp-modal-recent" }, m.unit) : null),
-        pick: () => { close(); openNeedAdd(m); },
-      }));
-      if (q && !all.some((m) => m.name.toLowerCase() === q.toLowerCase())) {
-        entries.push({
-          el: el("button", { type: "button", class: "cp-modal-item" }, el("b", null, "+ Vytvořit „" + q + "“")),
-          pick: () => { close(); openMaterialCreate(q, openNeedAdd); },
-        });
-      }
-      list.replaceChildren(...entries.map((e) => e.el));
-      if (!entries.length) list.append(el("div", { class: "cp-muted" }, "Katalog je prázdný — napiš název a vytvoř."));
-      setRows(entries);
-    }
-    search.addEventListener("input", renderResults);
+    const open = () => searchPicker({
+      title: "Přidat materiál",
+      placeholder: "Hledat materiál…",
+      items: catalogCache || [],
+      labelOf: (m) => m.name,
+      metaOf: (m) => m.unit,
+      onPick: (m, close) => { close(); openNeedAdd(m); },
+      // the "+ Vytvořit" row is just another entry, offered unless the query exactly exists
+      extraEntry: (q) => q && !(catalogCache || []).some((m) => m.name.toLowerCase() === q.toLowerCase())
+        ? { label: el("b", null, "+ Vytvořit „" + q + "“"),
+            pick: (close) => { close(); openMaterialCreate(q, openNeedAdd); } }
+        : null,
+      empty: "Katalog je prázdný — napiš název a vytvoř.",
+    });
     const load = catalogCache ? Promise.resolve() : api("GET", U.materialList).then((j) => { catalogCache = j.materials || []; });
-    load.then(renderResults).catch(() => { catalogCache = catalogCache || []; renderResults(); });
-    search.focus();
+    load.then(open).catch((e) => { toast(e.message, true); catalogCache = catalogCache || []; open(); });
   }
 
   // --- change history ("Historie změn") --------------------------------------

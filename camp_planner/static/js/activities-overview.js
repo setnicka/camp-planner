@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, swatch, openModal, keyList, toast, toastNext, plural, freezeColumns } = window.cpDom;
+  const { el, api, withId, mergeUrl, swatch, mergePicker, orgFilterHead, toast, plural, freezeColumns } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -23,8 +23,6 @@
   const PINNED = DATA.pinned_tags;          // [{id, name, kind}] — table columns + filter/sort
   const CAMP = DATA.camp;                   // {start_date, length_days, window_start_min} — chrono day math
 
-  const withId = (tpl, id) => tpl.replace(/\d+$/, id);                       // swap the trailing 0 sentinel
-  const mergeUrl = (id) => U.activityMerge.replace(/\/0\/merge$/, "/" + id + "/merge");  // .../<id>/merge
   const clampPct = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
   const slotCount = (r) => r.slots.length;                                    // any placed slot (any role)
   const mainSlots = (r) => r.slots.filter((s) => s.role === "main");          // time-ordered (server-sorted)
@@ -69,7 +67,6 @@
   let tbody, countLabel;
   const sortArrows = new Map();   // sortKey -> the direction indicator span, updated in place on sort change
   const arrowFor = (key) => (!chrono && key === sortKey ? (sortDir === 1 ? " ▾" : " ▴") : "");
-  let openPopover = null;         // the currently-open org dropdown panel (closed on outside click)
 
   // --- cell renderers --------------------------------------------------------
   function slotText(r) {
@@ -341,33 +338,11 @@
   }
 
   function orgsHead() {
-    const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
-    const setLabel = () => { btn.textContent = filter.orgIds.size ? "Orgové (" + filter.orgIds.size + ") ▾" : "Vše ▾"; };
-    setLabel();
-    const panel = el("div", { class: "cp-th-pop", hidden: true });
-    panel.addEventListener("click", (e) => e.stopPropagation());   // keep clicks inside from closing the dropdown
-    // "jen garanti" — restrict the org match below to garant assignments (ignore helpers)
-    const gCb = el("input", { type: "checkbox" });
-    gCb.checked = filter.garantsOnly;
-    gCb.addEventListener("change", () => { filter.garantsOnly = gCb.checked; onFilterChange(); });
-    panel.append(el("label", { class: "cp-th-pop-row cp-th-pop-opt" }, gCb, " jen garant"));
-    ORGS.forEach((o) => {
-      const cb = el("input", { type: "checkbox" });
-      cb.checked = filter.orgIds.has(o.id);
-      cb.addEventListener("change", () => {
-        if (cb.checked) filter.orgIds.add(o.id); else filter.orgIds.delete(o.id);
-        setLabel(); onFilterChange();
-      });
-      panel.append(el("label", { class: "cp-th-pop-row" }, cb, " ", o.initials, " – ", o.name));
-    });
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const show = panel.hidden;
-      if (openPopover && openPopover !== panel) openPopover.hidden = true;
-      panel.hidden = !show;
-      openPopover = show ? panel : null;
-    });
-    return el("th", null, el("span", { class: "cp-th-label" }, "Orgové"), el("div", { class: "cp-th-dd" }, btn, panel));
+    // "jen garant" — restrict the org match to garant assignments (ignore helpers)
+    return orgFilterHead({
+      orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange,
+      extra: { label: "jen garant", checked: filter.garantsOnly, set: (v) => { filter.garantsOnly = v; } },
+    }).th;
   }
 
   // a pinned-tag header: sortable when check/progress, with a presence/state filter select
@@ -432,46 +407,15 @@
   function openMerge(r) {
     const others = ROWS.filter((x) => x.id !== r.id);
     if (!others.length) { toast("Není do čeho slučovat — v akci je jen tahle aktivita.", true); return; }
-    const search = el("input", { type: "text", class: "cp-modal-search", placeholder: "Sloučit do…" });
-    const list = el("div", { class: "cp-modal-list" });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const dialog = el("div", { class: "cp-modal" },
-      el("div", { class: "cp-modal-head" }, "Sloučit „" + r.title + "“ do…"),
-      el("div", { class: "cp-pane" },
-        el("p", { class: "cp-muted" },
-          "Úkoly, sloty a materiál se přesunou do vybrané aktivity (množství stejného materiálu se sečtou). " +
-          "Štítky a orgové z „" + r.title + "“ se zahodí a aktivita se smaže."),
-        search, list),
-      el("div", { class: "cp-modal-foot" }, cancel));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", () => close());
-
-    const setRows = keyList(search);
-    let merging = false;   // guard against a second pick while the merge + reload is in flight
-    function pick(t) {
-      if (merging) return;
-      if (!confirm("Sloučit „" + r.title + "“ do „" + t.title + "“?")) return;
-      merging = true;
-      api("POST", mergeUrl(r.id), { into: t.id })
-        .then(() => { close(); toastNext("Sloučeno do „" + t.title + "“"); location.reload(); })
-        .catch((e) => { merging = false; toast(e.message, true); });
-    }
-    function renderResults() {
-      const q = search.value.trim();
-      const matches = q && window.cpFuzzy ? window.cpFuzzy.filter(q, others, (x) => x.title) : others;
-      const entries = matches.map((t) => ({
-        el: el("button", { type: "button", class: "cp-modal-item" },
-          el("span", null, t.title),
-          t.category ? el("span", { class: "cp-modal-recent" }, t.category.label) : null),
-        pick: () => pick(t),
-      }));
-      list.replaceChildren(...entries.map((e) => e.el));
-      if (!entries.length) list.append(el("div", { class: "cp-muted" }, "Nic nenalezeno."));
-      setRows(entries);
-    }
-    search.addEventListener("input", renderResults);
-    renderResults();
-    search.focus();
+    mergePicker({
+      title: "Sloučit „" + r.title + "“ do…",
+      hint: "Úkoly, sloty a materiál se přesunou do vybrané aktivity (množství stejného materiálu " +
+        "se sečtou). Štítky a orgové z „" + r.title + "“ se zahodí a aktivita se smaže.",
+      items: others, labelOf: (t) => t.title, metaOf: (t) => t.category && t.category.label,
+      url: mergeUrl(U.activityMerge, r.id),
+      confirmText: (t) => "Sloučit „" + r.title + "“ do „" + t.title + "“?",
+      successText: (t) => "Sloučeno do „" + t.title + "“",
+    });
   }
 
   // --- shell -----------------------------------------------------------------
@@ -481,7 +425,6 @@
       return;
     }
     sortArrows.clear();
-    openPopover = null;
     const headRow = el("tr", null,
       sortHead("Název", "title"), categoryHead(), orgsHead(),
       unfinishedHead("Úkoly", "unfinishedTodos"), unfinishedHead("Materiál", "unfinishedMaterials"));
@@ -515,9 +458,6 @@
     freezeColumns(table, headRow);
     renderTableBody();
   }
-
-  // close an open org dropdown when clicking anywhere outside it
-  document.addEventListener("click", () => { if (openPopover) { openPopover.hidden = true; openPopover = null; } });
 
   // External links / back button: re-read the hash and rebuild (our own writeHash uses
   // replaceState, which doesn't fire hashchange, so this can't loop).

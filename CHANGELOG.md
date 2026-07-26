@@ -18,6 +18,11 @@ Versioning convention: a release that ships a new DB migration should bump the
   („Naposledy načteno z Google“).
 - Google import: selected changes that vanished between preview and apply are
   reported as „přeskočeno“.
+- Dialogs ask before an Escape / backdrop click discards typed input, and trap
+  keyboard focus (Tab cycles, focus returns to the opener).
+- The settings taxonomy editor warns before leaving the page with unsaved rows.
+- Timeline edit mode: „✎ Upravit slot“ edits the slot name and attendees in one
+  dialog.
 
 ### Security
 
@@ -32,6 +37,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Fixed
 
 - PATCH endpoints: explicit `null` for a required field is a 400, not a 500.
+- Saving taxonomy lists, the timeline batch and creating activities from the
+  timeline picker now survive an expired CSRF token; a failed activity-picker
+  load shows the error instead of an empty list.
 - Embedded auth: a malformed grant from the host callback is skipped with a
   warning instead of turning every request into a 500.
 - Timeline save: slots outside the camp's day range are rejected (they used to

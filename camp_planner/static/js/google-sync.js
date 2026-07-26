@@ -12,7 +12,7 @@
   const dataEl = document.getElementById("cp-google-data");
   if (!root || !dataEl) return;
 
-  const { el, api, toast, flash, swatch, keyList, openModal, plural } = window.cpDom;
+  const { el, api, toast, flash, swatch, searchPicker, openModal, plural } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const URLS = DATA.urls;
   const body = root.querySelector("[data-google-body]");
@@ -223,30 +223,11 @@
       const actBtn = el("button", { type: "button", class: "cp-google-pick" });
       const renderActBtn = () => actBtn.replaceChildren(el("span", null, chosen ? chosen.title : "— vyberte —"));
       actBtn.addEventListener("click", () => {
-        let close;
-        const search = el("input", { type: "text", class: "cp-modal-search", placeholder: "Hledat aktivitu…" });
-        const listEl = el("div", { class: "cp-modal-list" });
-        const setRows = keyList(search);
-        const renderList = (q) => {
-          const query = q.trim();
-          const matches = query && window.cpFuzzy
-            ? window.cpFuzzy.filter(query, activities, (a) => a.title)
-            : activities;
-          const entries = matches.map((a) => ({
-            el: el("button", { type: "button", class: "cp-modal-item" }, a.title),
-            pick: () => { chosen = a; renderActBtn(); close(); },
-          }));
-          listEl.replaceChildren(...(entries.length ? entries.map((e) => e.el)
-            : [el("div", { class: "cp-muted" }, "Nic nenalezeno.")]));
-          setRows(entries);
-        };
-        search.addEventListener("input", () => renderList(search.value));
-        close = openModal(el("div", { class: "cp-modal cp-google-pick-modal" },
-          el("div", { class: "cp-modal-head" }, "Vyberte aktivitu"),
-          el("div", { class: "cp-google-pick-search" }, search),
-          listEl));
-        renderList("");
-        search.focus();
+        searchPicker({
+          title: "Vyberte aktivitu", placeholder: "Hledat aktivitu…",
+          items: activities, labelOf: (a) => a.title,
+          onPick: (a, close) => { close(); chosen = a; renderActBtn(); },
+        });
       });
       renderActBtn();
       controls.push(actBtn);

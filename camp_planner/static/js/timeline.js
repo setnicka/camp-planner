@@ -521,7 +521,7 @@
       EDIT: JSON.parse(editEl.textContent),
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
-      fmtClock, mToDate, escapeHtml, applyHeights, segmentContent, segmentTitle, segmentBase,
+      fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase,
     });
   }
 })();

@@ -7,8 +7,8 @@
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, escapeHtml, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
-  const { el, api, csrf, csrfRefresh, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
+  const { el, api, withId, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -385,7 +385,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- floating action bar (available in view mode too: assign orgs / open detail) --
   const orgsBtn = el("button", { type: "button", class: "cp-tl-orgs" }, "Přiřadit orgy");
   const detailBtn = el("button", { type: "button", class: "cp-tl-detail" }, "ℹ️ Detail");
-  const nameBtn = el("button", { type: "button", class: "cp-tl-name" }, "✎ Název");
+  const nameBtn = el("button", { type: "button", class: "cp-tl-name" }, "✎ Upravit slot");
   const retypeBtn = el("button", { type: "button", class: "cp-tl-retype" }, "↺ Typ slotu");
   const delBtn = el("button", { type: "button", class: "cp-tl-del" }, "🗑 Smazat blok");
   const actionBar = el("div", { class: "cp-tl-actions", hidden: true }, orgsBtn, detailBtn, nameBtn, retypeBtn, delBtn);
@@ -398,7 +398,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   nameBtn.addEventListener("click", () => {
     const [id] = timeline.getSelection();
     const it = id != null && items.get(id);
-    if (it && it.slotId != null) openSlotName(it);
+    if (it && it.slotId != null) openSlotEdit(it);
   });
   orgsBtn.addEventListener("click", () => {
     const [id] = timeline.getSelection();
@@ -409,7 +409,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const [id] = timeline.getSelection();
     const it = id != null && items.get(id);
     const aid = it && it._seg && it._seg.activity_id;
-    if (aid != null) location.href = EDIT.activityDetail.replace(/\d+$/, aid);  // swap the 0 sentinel
+    if (aid != null) location.href = withId(EDIT.activityDetail, aid);
   });
   document.body.append(actionBar);
 
@@ -464,7 +464,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     window.cpSlotOrgsEdit({
       orgs: payload.orgs,
       selected: (item._seg && item._seg.attending) || [],
-      url: EDIT.slot.replace(/\d+$/, slotId),
+      url: withId(EDIT.slot, slotId),
       onSaved: (_orgs, ids) => {
         rerenderSegments(slotId, (seg) => { seg.attending = ids; });
         applyHeights();   // attendees changed → refresh the display filter's dim (e.g. an "attending:" filter)
@@ -472,39 +472,28 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     });
   }
 
-  // --- slot name override (custom timeline label / Google event title) --------
+  // --- slot edit in edit mode (name override + attendees, shared dialog) ------
   // Standalone PATCH (like the attendees one — not part of the batch, doesn't touch
-  // timeline_rev). Empty input clears the override → the slot shows the activity title.
-  function openSlotName(item) {
+  // timeline_rev). An empty name clears the override → the slot shows the activity title.
+  function openSlotEdit(item) {
     const slotId = item.slotId;
     const seg = item._seg || {};
-    const input = el("input", { type: "text", class: "cp-modal-name", maxlength: 255,
-      placeholder: seg.title || "", value: seg.override_name || "" });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Uložit");
-    const dialog = el("div", { class: "cp-modal" },
-      el("div", { class: "cp-modal-head" }, "Název slotu"),
-      el("div", { class: "cp-pane" },
-        el("label", { class: "cp-field-label" }, "Speciální název slotu (prázdný název defaultuje na název aktivity)"), input),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      ok.disabled = true;
-      try {
-        const json = await api("PATCH", EDIT.slot.replace(/\d+$/, slotId), { override_name: input.value });
-        close();
-        rerenderSegments(slotId, (seg) => { seg.override_name = json.override_name; });
-        toast("Uloženo");
-      } catch (e) { ok.disabled = false; toast(e.message, true); }
+    window.cpSlotOrgsEdit({
+      orgs: payload.orgs,
+      selected: seg.attending || [],
+      url: withId(EDIT.slot, slotId),
+      withName: true, name: seg.override_name || "", namePlaceholder: seg.title || "",
+      onSaved: (_orgs, ids, overrideName) => {
+        rerenderSegments(slotId, (s) => { s.attending = ids; s.override_name = overrideName; });
+        applyHeights();   // attendees changed → refresh the display filter's dim
+      },
     });
-    input.focus();
   }
 
   // --- save (one PATCH; on success reload the authoritative state) -----------
   // force=true makes the server skip the optimistic-lock check and overwrite
   // whatever is there (used from the conflict dialog's "Přepsat").
-  async function save(force, _retried) {
+  async function save(force) {
     if (!hasPending()) return;
     saveBtn.disabled = true;
     const body = {
@@ -516,26 +505,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       deletes: [...deletes],
     };
     try {
-      const resp = await fetch(EDIT.save, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
-        body: JSON.stringify(body),
-      });
-      const json = await resp.json().catch(() => ({}));
-      if (resp.status === 409) { openConflict(); return; }
-      // Expired token: refresh + retry once so a batch of edits isn't lost.
-      if (resp.status === 400 && /csrf/i.test(json.error || "") && !_retried && (await csrfRefresh())) {
-        return save(force, true);
-      }
-      if (!resp.ok || !json.ok) {
-        toast(json.error || "Uložení selhalo.", true);
-        saveBtn.disabled = false;
-        return;
-      }
-      toastNext("Časový plán uložen");   // survives the reload below
+      await api("PATCH", EDIT.save, body);   // CSRF refresh-and-retry handled inside
+      toastNext("Časový plán uložen");       // survives the reload below
       reload(); // simplest correct refresh: server re-slices + fresh rev
-    } catch (_e) {
-      toast("Chyba spojení při ukládání.", true);
+    } catch (e) {
+      if (e.status === 409) { openConflict(); return; }
+      toast(e.message, true);
       saveBtn.disabled = false;
     }
   }
@@ -581,8 +556,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- activity picker modal -------------------------------------------------
   async function fetchActivities() {
     if (activitiesCache) return activitiesCache;
-    const resp = await fetch(EDIT.activities, { headers: { "X-CSRFToken": csrf() } });
-    const json = await resp.json().catch(() => ({}));
+    const json = await api("GET", EDIT.activities);
     activitiesCache = (json.activities || []).map((a) => ({ id: a.id, title: a.title, category_id: a.category_id }));
     return activitiesCache;
   }
@@ -655,18 +629,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       if (categoryId == null) { toast("Vyberte kategorii.", true); return; }
       createBtn.disabled = true;
       try {
-        const resp = await fetch(EDIT.createActivity, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
-          body: JSON.stringify({ title, category_id: categoryId }),
-        });
-        const json = await resp.json().catch(() => ({}));
-        if (!resp.ok || !json.ok) { toast(json.error || "Vytvoření selhalo.", true); createBtn.disabled = false; return; }
+        const json = await api("POST", EDIT.createActivity, { title, category_id: categoryId });
         const a = { id: json.activity.id, title: json.activity.title, category_id: json.activity.category_id };
         if (activitiesCache) activitiesCache.unshift(a);
         finish(a);
         toast("Aktivita vytvořena");
-      } catch (_e) { toast("Chyba spojení.", true); createBtn.disabled = false; }
+      } catch (e) { toast(e.message, true); createBtn.disabled = false; }
     }
     createBtn.addEventListener("click", createActivity);
     nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") createActivity(); });
@@ -694,7 +662,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     dialog.querySelector(".cp-cancel").addEventListener("click", () => finish(null));
     const close = openModal(dialog, () => { if (picked === undefined) onCancel(); });
 
-    fetchActivities().then(() => renderList("")).catch(() => renderList(""));
+    fetchActivities().then(() => renderList("")).catch((e) => { toast(e.message, true); renderList(""); });
     search.focus();
   }
 

@@ -10,9 +10,15 @@
 (function () {
   const dataEl = document.getElementById("cp-tax-data");
   if (!dataEl) return;
-  const { el, csrf, swatch } = window.cpDom;
+  const { el, api, swatch } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const KIND_LABEL = Object.fromEntries(DATA.tag_kinds); // value -> czech label
+
+  // Edit mode batches rows until "Uložit" — warn before a reload/navigation discards them.
+  let editingPanes = 0;
+  window.addEventListener("beforeunload", (e) => {
+    if (editingPanes) { e.preventDefault(); e.returnValue = ""; }
+  });
 
   const TYPES = {
     categories: {
@@ -68,6 +74,7 @@
     }
 
     function renderView() {
+      if (editing) editingPanes--;
       editing = false;
       if (toggle) toggle.classList.remove("on");
       const tb = el("tbody");
@@ -131,27 +138,18 @@
     async function save(btn) {
       btn.disabled = true;
       try {
-        const resp = await fetch(DATA.urls[type], {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": csrf() },
-          body: JSON.stringify({ items: collect() }),
-        });
-        const json = await resp.json().catch(() => ({}));
-        if (!resp.ok || !json.ok) {
-          flash(json.error || "Uložení selhalo.", true);
-          btn.disabled = false;
-          return;
-        }
+        const json = await api("PUT", DATA.urls[type], { items: collect() });
         DATA[type] = json.items;
         renderView();
-        flash(json.message || "Uloženo.");
-      } catch (_err) {
-        flash("Chyba spojení.", true);
+        flash("Uloženo.");
+      } catch (err) {
+        flash(err.message, true);
         btn.disabled = false;
       }
     }
 
     function renderEdit() {
+      if (!editing) editingPanes++;
       editing = true;
       if (toggle) toggle.classList.add("on");
       const tb = el("tbody");

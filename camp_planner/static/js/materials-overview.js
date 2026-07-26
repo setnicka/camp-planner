@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, openModal, chipGroup, keyList, toast, toastNext } = window.cpDom;
+  const { el, api, withId, mergeUrl, formModal, mergePicker, orgFilterHead, chipGroup, toast } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -28,13 +28,9 @@
   const rowEls = new Map();                 // material id -> { tr, sub, cell } for per-row refresh
   let tbody;                                // stable table body
   let countLabel;                           // "Zobrazeno X z Y" toolbar label
-  let openPopover = null;                    // open org-filter dropdown panel (closed on outside click)
   let labelInput;                           // the "Pořízení" header label search <input>
 
   // --- small helpers ---------------------------------------------------------
-  const withId = (tpl, id) => tpl.replace(/\d+$/, id);                       // swap the trailing 0 sentinel
-  const mergeUrl = (id) => U.materialMerge.replace(/\/0\/merge$/, "/" + id + "/merge");  // .../<id>/merge
-
   // Split an acquisition label into a scoped "prefix: value" pair (on the first colon, both
   // sides non-empty) or null when it's a plain label. Whitespace-trimmed.
   function scoped(label) {
@@ -57,14 +53,6 @@
   // Canonical search form of a label/query: norm + drop ALL whitespace, so the box matches
   // anywhere in the whole label ignoring spaces ("alza" and "kup:alza" both match "kup: alza").
   const searchForm = (s) => norm(s).replace(/\s+/g, "");
-
-  // Run a modal's submit: disable its button while it works; on failure re-enable and
-  // toast the error. `fn` owns the success path (api call, state update, close(), toast).
-  async function submit(btn, fn) {
-    btn.disabled = true;
-    try { await fn(); }
-    catch (e) { btn.disabled = false; toast(e.message, true); }
-  }
 
   const fmtNum = (n) => Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000);
 
@@ -101,7 +89,6 @@
       mount.replaceChildren(el("p", { class: "cp-muted" }, "Zatím žádný materiál — přidej ho z detailu aktivity."));
       return;
     }
-    openPopover = null;   // header is rebuilt → drop any stale popover reference
     const headRow = el("tr", null,
       el("th", null, "Materiál"), el("th", null, "Jednotka"), el("th", null, "Množství"),
       acqHead(), orgsHead(),
@@ -135,37 +122,13 @@
 
   const onFilterChange = () => { writeHash(); renderTable(); };
 
-  // Orgs filter — the same dropdown control the TODO overview uses (checkbox list, any selected
-  // = OR; "bez orgů" matches materials with no responsible org).
+  // Orgs filter — the shared header dropdown (checkbox list, any selected = OR;
+  // "bez orgů" matches materials with no responsible org).
   function orgsHead() {
-    const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
-    const count = () => filter.orgIds.size + (filter.noOrg ? 1 : 0);
-    const setLabel = () => { const n = count(); btn.textContent = n ? "Orgové (" + n + ") ▾" : "Vše ▾"; };
-    setLabel();
-    const panel = el("div", { class: "cp-th-pop", hidden: true });
-    panel.addEventListener("click", (e) => e.stopPropagation());
-    const noCb = el("input", { type: "checkbox" });
-    noCb.checked = filter.noOrg;
-    noCb.addEventListener("change", () => { filter.noOrg = noCb.checked; setLabel(); onFilterChange(); });
-    panel.append(el("label", { class: "cp-th-pop-row cp-th-pop-opt" }, noCb, " bez orgů"));
-    if (!ORGS.length) panel.append(el("div", { class: "cp-muted" }, "Žádní orgové."));
-    ORGS.forEach((o) => {
-      const cb = el("input", { type: "checkbox" });
-      cb.checked = filter.orgIds.has(o.id);
-      cb.addEventListener("change", () => {
-        if (cb.checked) filter.orgIds.add(o.id); else filter.orgIds.delete(o.id);
-        setLabel(); onFilterChange();
-      });
-      panel.append(el("label", { class: "cp-th-pop-row" }, cb, " ", o.initials, " – ", o.name));
-    });
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const show = panel.hidden;
-      if (openPopover && openPopover !== panel) openPopover.hidden = true;
-      panel.hidden = !show;
-      openPopover = show ? panel : null;
-    });
-    return el("th", null, el("span", { class: "cp-th-label" }, "Orgové"), el("div", { class: "cp-th-dd" }, btn, panel));
+    return orgFilterHead({
+      orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange,
+      extra: { label: "bez orgů", checked: filter.noOrg, set: (v) => { filter.noOrg = v; }, countInLabel: true },
+    }).th;
   }
 
   function resetFilters() {
@@ -348,13 +311,6 @@
   }
 
   // --- edits -----------------------------------------------------------------
-  function modalFoot(onOk, okLabel) {
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, okLabel || "Uložit");
-    ok.addEventListener("click", () => onOk(ok));
-    return { foot: el("div", { class: "cp-modal-foot" }, cancel, ok), cancel, ok };
-  }
-
   // Distinct catalog labels for autocomplete, czech-sorted.
   function catalogLabels() {
     const set = new Set();
@@ -442,21 +398,9 @@
       { multi: true, selected: (m.orgs || []).map((o) => o.org_id) });
     if (!ORGS.length) orgGroup.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
 
-    const { foot, cancel } = modalFoot((ok) => {
-      const nm = name.value.trim();
-      if (!nm) { name.focus(); return; }
-      submit(ok, async () => {
-        const j = await api("PATCH", withId(U.materialItem, m.id),
-          { name: nm, unit: unit.value || null, note: note.value || null, url: url.value || null,
-            acquisition_labels: acq.get(), sum_strategy: strat.value, org_ids: orgGroup.get() });
-        Object.assign(m, j.material);   // envelope carries no `usages` → m.usages preserved
-        close(); renderTable(); toast("Uloženo");   // renderTable re-sorts (name may have changed); expand state survives
-
-      });
-    });
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Upravit materiál"),
-      el("div", { class: "cp-pane" },
+    formModal({
+      title: "Upravit materiál",
+      pane: el("div", { class: "cp-pane" },
         el("label", { class: "cp-field-label" }, "Název"), name,
         el("label", { class: "cp-field-label" }, "Výchozí jednotka"), unit,
         el("label", { class: "cp-field-label" }, "Sčítání množství napříč aktivitami"), strat,
@@ -467,9 +411,16 @@
         el("label", { class: "cp-field-label" }, "Odpovědní orgové"), orgGroup.node,
         el("label", { class: "cp-field-label" }, "Poznámka"), note,
         el("label", { class: "cp-field-label" }, "Odkaz"), url),
-      foot);
-    const close = openModal(dialog);
-    cancel.addEventListener("click", () => close());
+      onSubmit: async (close) => {
+        const nm = name.value.trim();
+        if (!nm) { name.focus(); return; }
+        const j = await api("PATCH", withId(U.materialItem, m.id),
+          { name: nm, unit: unit.value || null, note: note.value || null, url: url.value || null,
+            acquisition_labels: acq.get(), sum_strategy: strat.value, org_ids: orgGroup.get() });
+        Object.assign(m, j.material);   // envelope carries no `usages` → m.usages preserved
+        close(); renderTable(); toast("Uloženo");   // renderTable re-sorts (name may have changed)
+      },
+    });
     name.focus();
   }
 
@@ -502,44 +453,14 @@
   function openMaterialMerge(m) {
     const others = MATS.filter((x) => x.id !== m.id);
     if (!others.length) { toast("Není do čeho slučovat — v katalogu je jen tento materiál.", true); return; }
-    const search = el("input", { type: "text", class: "cp-modal-search", placeholder: "Sloučit do…" });
-    const list = el("div", { class: "cp-modal-list" });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const dialog = el("div", { class: "cp-modal" },
-      el("div", { class: "cp-modal-head" }, "Sloučit „" + m.name + "“ do…"),
-      el("div", { class: "cp-pane" },
-        el("p", { class: "cp-muted" }, "Použití se přesunou do vybraného materiálu a tento se smaže."),
-        search, list),
-      el("div", { class: "cp-modal-foot" }, cancel));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", () => close());
-
-    // keyboard-navigable list (cpDom.keyList); picking confirms then merges
-    const setRows = keyList(search);
-    let merging = false;   // guard against a second pick while the merge + reload is in flight
-    function pick(t) {
-      if (merging) return;
-      if (!confirm("Sloučit „" + m.name + "“ do „" + t.name + "“? (všechny výskyty „" + m.name + "“ budou změněny na „" + t.name + "“)")) return;
-      merging = true;
-      api("POST", mergeUrl(m.id), { into: t.id })
-        .then(() => { close(); toastNext("Sloučeno do „" + t.name + "“"); location.reload(); })
-        .catch((e) => { merging = false; toast(e.message, true); });
-    }
-    function renderResults() {
-      const q = search.value.trim();
-      const matches = q && window.cpFuzzy ? window.cpFuzzy.filter(q, others, (x) => x.name) : others;
-      const entries = matches.map((t) => ({
-        el: el("button", { type: "button", class: "cp-modal-item" },
-          el("span", null, t.name), t.unit ? el("span", { class: "cp-modal-recent" }, t.unit) : null),
-        pick: () => pick(t),
-      }));
-      list.replaceChildren(...entries.map((e) => e.el));
-      if (!entries.length) list.append(el("div", { class: "cp-muted" }, "Nic nenalezeno."));
-      setRows(entries);
-    }
-    search.addEventListener("input", renderResults);
-    renderResults();
-    search.focus();
+    mergePicker({
+      title: "Sloučit „" + m.name + "“ do…",
+      hint: "Použití se přesunou do vybraného materiálu a tento se smaže.",
+      items: others, labelOf: (t) => t.name, metaOf: (t) => t.unit,
+      url: mergeUrl(U.materialMerge, m.id),
+      confirmText: (t) => "Sloučit „" + m.name + "“ do „" + t.name + "“? (všechny výskyty „" + m.name + "“ budou změněny na „" + t.name + "“)",
+      successText: (t) => "Sloučeno do „" + t.name + "“",
+    });
   }
 
   // arriving from an activity's material list (#material-<id>): open that row, scroll to it,
@@ -548,9 +469,6 @@
   const hashId = hashMatch ? Number(hashMatch[1]) : null;
   if (hashId != null) expanded.add(hashId);
   else readHash();   // otherwise the hash carries the filters (#label=…&org=…)
-
-  // close the open org-filter dropdown when clicking anywhere outside it
-  document.addEventListener("click", () => { if (openPopover) { openPopover.hidden = true; openPopover = null; } });
 
   buildShell();
 
