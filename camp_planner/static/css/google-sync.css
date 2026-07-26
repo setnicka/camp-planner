@@ -1,6 +1,6 @@
 /* Google Calendar connection panel — page-scoped to the camp settings page.
  * Loaded only on camp_detail.html when the feature is configured. Shared atoms
- * (.cp-section, .cp-mini, .cp-danger, .cp-flash-area) come from components/content.css. */
+ * (.cp-section, .cp-mini, .cp-danger, .cp-flash, .cp-seg) come from components/content.css. */
 
 /* Queued-op count on the "Google Calendar" tab button (updated live by polling). */
 .cp-google-badge {
@@ -82,12 +82,6 @@
 .cp-google-review-title { margin: 0 0 0.5rem; font-size: 1rem; }
 
 .cp-google-loading { display: flex; align-items: center; gap: 0.5rem; color: #555; padding: 0.4rem 0; }
-.cp-spinner {
-  width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid #ccc; border-top-color: var(--cp-accent);
-  animation: cp-spin 0.7s linear infinite;
-}
-@keyframes cp-spin { to { transform: rotate(360deg); } }
 
 .cp-google-table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
 .cp-google-table th, .cp-google-table td {
@@ -109,7 +103,7 @@
 .cp-kind-deleted_in_google td.cp-google-check { border-left-color: #c5221f; } /* red: delete */
 
 .cp-google-label { font-weight: 600; }
-.cp-google-dname { color: #777; white-space: nowrap; padding-left: 1.3rem; }
+.cp-google-dname { color: #6b6b6b; white-space: nowrap; padding-left: 1.3rem; }
 .cp-google-dvalue { color: #333; }
 .cp-google-warn { color: #8a6d00; }
 
@@ -118,17 +112,6 @@
 
 /* an unchecked (skipped) change is greyed and its controls disabled */
 .cp-google-off { opacity: 0.45; }
-
-/* segmented toggle: Nová aktivita / Přidat k existující */
-.cp-google-toggle { display: inline-flex; border: 1px solid var(--cp-border); border-radius: 6px; overflow: hidden; }
-.cp-google-seg {
-  font: inherit; font-size: 0.85em; padding: 0.2rem 0.6rem;
-  border: 0; background: #fff; color: #444; cursor: pointer;
-}
-.cp-google-seg + .cp-google-seg { border-left: 1px solid var(--cp-border); }
-.cp-google-seg:hover:not(.on):not(:disabled) { background: #f3f3f3; }
-.cp-google-seg.on { background: var(--cp-accent); color: #fff; }
-.cp-google-seg:disabled { opacity: .45; cursor: not-allowed; }
 
 .cp-google-field { display: flex; align-items: center; gap: 0.35rem; font-size: 0.88em; color: #555; }
 .cp-google-field[hidden] { display: none; }

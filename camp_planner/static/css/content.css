@@ -138,3 +138,12 @@ tr.cp-dragging { opacity: 0.5; }
 }
 .cp-flash.cp-flash-show { opacity: 1; transform: none; }
 .cp-flash-error { background: #fdecea; border-color: #c5221f; }
+
+/* Validation-error list above a form (shared with embedded mode, so it lives here). */
+.cp-flashes {
+  margin: 0;
+  padding: 0.6rem 1rem;
+  list-style: none;
+  background: #fff8e1;
+  border-bottom: 1px solid var(--cp-border);
+}

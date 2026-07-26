@@ -75,7 +75,7 @@
 .cp-hist-link:hover { text-decoration: underline; }
 /* parent-activity context line on per-activity detail rows in the whole-camp feed */
 .cp-hist-actref { font-size: 0.88rem; margin-top: 0.15rem; }
-.cp-hist-time { color: #888; font-size: 0.82rem; }
+.cp-hist-time { color: #6b6b6b; font-size: 0.82rem; }
 .cp-hist-changes { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.12rem; }
 .cp-hist-change { font-size: 0.88rem; color: #333; }
 .cp-hist-field { font-weight: 500; color: #666; }
@@ -103,7 +103,7 @@
   font: inherit; padding: 0.5rem; cursor: pointer; border: 0; background: none; border-radius: 6px;
 }
 .cp-modal-item:hover, .cp-modal-item.cp-active { background: #dbe7fb; }
-.cp-modal-recent { margin-left: auto; font-size: 11px; color: #888; }
+.cp-modal-recent { margin-left: auto; font-size: 11px; color: #6b6b6b; }
 .cp-modal-hint { font-size: 12px; color: #b0531f; }
 
 /* --- selectable chips (cpDom.chipGroup) ---------------------------------- */
@@ -132,11 +132,32 @@
 
 /* --- modal form fields (labels + inputs in a .cp-pane) — shared by the inline-edit pages --- */
 .cp-field-label { font-size: 12px; font-weight: 600; color: #555; margin-top: 0.3rem; }
-.cp-field-hint { font-size: 11px; color: #888; }
+.cp-field-hint { font-size: 11px; color: #6b6b6b; }
 .cp-act-textarea { resize: vertical; }   /* shares the input rule above; only adds vertical resize */
 .cp-need-amount-row { display: flex; gap: 0.4rem; align-items: center; }
 .cp-num { width: 6rem; }
 .cp-need-unit { font: inherit; padding: 0.3rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 8rem; }
+
+/* --- segmented control (pill toggle) — sort modes, history modes, import choice --- */
+.cp-seg { display: inline-flex; border: 1px solid var(--cp-border); border-radius: 6px; overflow: hidden; }
+.cp-seg-btn { font: inherit; font-size: 12px; padding: 0.25rem 0.7rem; border: 0; background: #fff; color: #333; cursor: pointer; }
+.cp-seg-btn + .cp-seg-btn { border-left: 1px solid var(--cp-border); }
+.cp-seg-btn:hover:not(.on):not(:disabled) { background: #f3f3f3; }
+.cp-seg-btn.on { background: var(--cp-accent); color: #fff; font-weight: 600; }
+.cp-seg-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* --- loading spinner (history feed, google review, …) --- */
+.cp-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid #ccc; border-top-color: var(--cp-accent);
+  animation: cp-spin 0.7s linear infinite;
+}
+@keyframes cp-spin { to { transform: rotate(360deg); } }
+
+/* --- "+ Přidat …" ghost button under a list --- */
+.cp-add { font: inherit; font-size: 0.9rem; padding: 0.25rem 0.7rem; margin-top: 0.4rem;
+  border: 1px dashed var(--cp-border); border-radius: 6px; background: #fff; color: var(--cp-accent); cursor: pointer; }
+.cp-add:hover { background: #f3f7ff; }
 
 /* --- compact in-row action buttons (✎ / ✕ / ⤳) — shared by the inline-edit + overview pages --- */
 .cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
@@ -179,7 +200,7 @@
 .cp-th-pop-opt { font-weight: 600; border-bottom: 1px solid var(--cp-border); margin-bottom: 0.2rem; padding-bottom: 0.25rem; }
 
 /* --- todo list — shared by the activity TODO tab and the camp-wide TODO overview --- */
-.cp-todo-title.done { text-decoration: line-through; color: #888; }
+.cp-todo-title.done { text-decoration: line-through; color: #6b6b6b; }
 .cp-todo-task-lbl { display: flex; align-items: flex-start; gap: 0.45rem; cursor: pointer; }
 .cp-todo-due, .cp-todo-note { font-size: 12px; }
 .cp-todo-orgs { white-space: nowrap; }

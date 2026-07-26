@@ -436,7 +436,7 @@
 
     // Segmented sort-mode control: column-sorting vs chronological (day-grouped) mode.
     const segBtn = (label, mode) => {
-      const b = el("button", { type: "button", class: "cp-seg-btn" + (chrono === mode ? " cp-seg-active" : "") }, label);
+      const b = el("button", { type: "button", class: "cp-seg-btn" + (chrono === mode ? " on" : "") }, label);
       b.addEventListener("click", () => setChrono(mode));
       return b;
     };

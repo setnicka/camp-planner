@@ -42,14 +42,6 @@ body {
   opacity: 0.6;
 }
 
-.cp-flashes {
-  margin: 0;
-  padding: 0.6rem 1rem;
-  list-style: none;
-  background: #fff8e1;
-  border-bottom: 1px solid var(--cp-border);
-}
-
 /* Pages are centered within a default reading width. A page whose content needs more
    room (the timeline, the activity overview table) sets `main_class = cp-wide` to use
    the full viewport instead. */

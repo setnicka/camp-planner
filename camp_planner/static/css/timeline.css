@@ -48,7 +48,7 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
    from the viewer's) trails in small grey */
 .cp-tl-clock { display: inline-flex; align-items: baseline; gap: 0.25rem; font-size: 13px; color: #333; margin-left: 0.4rem; }
 .cp-tl-clock-time { font-variant-numeric: tabular-nums; }
-.cp-tl-clock-tz { font-size: 11px; color: #999; }
+.cp-tl-clock-tz { font-size: 11px; color: #6b6b6b; }
 .cp-tl-frow .cp-tl-select { margin-left: 0.2rem; }   /* small gap after the "Hra:" label */
 .cp-tl-chip {
   font: inherit; font-size: 12px; font-weight: 600; min-width: 1.6rem; padding: 0.1rem 0.45rem; cursor: pointer;
@@ -84,9 +84,9 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 #cp-timeline .vis-panel.vis-background.vis-vertical { z-index: 0; }
 
 /* one row per day */
-#cp-timeline .vis-time-axis .vis-text { font-size: 11px; color: #888; }
+#cp-timeline .vis-time-axis .vis-text { font-size: 11px; color: #6b6b6b; }
 #cp-timeline .vis-labelset .vis-label { font-weight: 600; }
-#cp-timeline .vis-label .day-dom { font-weight: 400; color: #888; font-size: 11px; }
+#cp-timeline .vis-label .day-dom { font-weight: 400; color: #6b6b6b; font-size: 11px; }
 /* zebra row tint marks day boundaries even under boxes */
 #cp-timeline .vis-foreground .vis-group:nth-child(even) { background: rgba(20, 30, 50, .05); }
 #cp-timeline .vis-labelset .vis-label:nth-child(even) { background: #eceff4; }

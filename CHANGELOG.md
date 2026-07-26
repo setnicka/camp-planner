@@ -42,6 +42,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   load shows the error instead of an empty list.
 - Embedded auth: a malformed grant from the host callback is skipped with a
   warning instead of turning every request into a 500.
+- Styling: „+ Přidat…“ buttons and validation errors in embedded mode were
+  unstyled; low-contrast helper text and badges darkened (WCAG AA).
 - Timeline save: slots outside the camp's day range are rejected (they used to
   persist invisibly); seconds in spans are normalized to whole minutes. Google
   import likewise skips out-of-window events instead of importing them clipped.

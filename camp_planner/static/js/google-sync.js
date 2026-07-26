@@ -186,12 +186,12 @@
     if (change.kind === "new_event") {
       let mode = "new";  // "new" → create activity (+category) | "attach" → existing activity
 
-      const newBtn = el("button", { type: "button", class: "cp-google-seg on" }, "Nová aktivita");
-      attachBtn = el("button", { type: "button", class: "cp-google-seg" }, "Přidat k existující");
+      const newBtn = el("button", { type: "button", class: "cp-seg-btn on" }, "Nová aktivita");
+      attachBtn = el("button", { type: "button", class: "cp-seg-btn" }, "Přidat k existující");
       attachAlwaysOff = !activities.length;  // nothing to attach to yet
       attachBtn.disabled = attachAlwaysOff;
       controls.push(newBtn, attachBtn);
-      const toggle = el("div", { class: "cp-google-toggle" }, newBtn, attachBtn);
+      const toggle = el("div", { class: "cp-seg" }, newBtn, attachBtn);
 
       // category — compact button showing the current pick; click opens a small chooser modal
       let catId = change.category_id != null ? change.category_id : "";  // "" = bez kategorie

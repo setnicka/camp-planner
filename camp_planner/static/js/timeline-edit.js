@@ -8,7 +8,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase } = ctx;
-  const { el, api, withId, swatch, openModal, chipGroup, keyList, toast, toastNext, plural } = window.cpDom;
+  const { el, api, withId, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -24,7 +24,6 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // One entry per user action (drag / resize / create / delete); each can undo()/redo().
   const history = [];
   const redoStack = [];
-  let activitiesCache = null; // [{id, title, category_id}, …], lazy-loaded for the picker
 
   // Slots sliced across the window boundary render as several items; locking those
   // from drag avoids desyncing the pieces (delete still works, keyed by slot_id).
@@ -193,7 +192,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       className: "cp-placeholder",
     });
     timeline.setSelection([]);
-    openActivityModal({
+    window.cpActivityPicker({   // shared two-tab picker (activity-picker.js)
+      activitiesUrl: EDIT.activities, createUrl: EDIT.createActivity,
+      campSlug: camp.slug, categories: payload.categories, roleLabels: ROLE_LABEL,
       onConfirm: (activity, role) => bindNewSlot(id, group, s, e, activity, role),
       onCancel: () => items.remove(id),
     });
@@ -294,7 +295,6 @@ window.cpTimelineEdit = function setupEditing(ctx) {
                    _seg: seg, _title: activity.title, ...segData(seg, true) };
     items.update(data);          // convert the placeholder into the real (pending) slot
     creates.set(id, spec);
-    rememberRecent(activity.id);
     const when = `${fmtClock(sAbs)}–${fmtClock(eAbs)}`;
     record({
       label: `Vytvořen slot „${roleHeading(role, activity.title)}“: ${when}`,
@@ -551,119 +551,6 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     cancel.addEventListener("click", close);
     ok.addEventListener("click", () => { close(); onConfirm(); });
     ok.focus();
-  }
-
-  // --- activity picker modal -------------------------------------------------
-  async function fetchActivities() {
-    if (activitiesCache) return activitiesCache;
-    const json = await api("GET", EDIT.activities);
-    activitiesCache = (json.activities || []).map((a) => ({ id: a.id, title: a.title, category_id: a.category_id }));
-    return activitiesCache;
-  }
-  const RECENT_KEY = "cp-recent-activities:" + camp.slug;
-  function recentIds() {
-    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch (_e) { return []; }
-  }
-  function rememberRecent(id) {
-    const next = [id, ...recentIds().filter((x) => x !== id)].slice(0, 3);
-    try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch (_e) { /* ignore */ }
-  }
-
-  function openActivityModal({ onConfirm, onCancel }) {
-    // picked stays undefined until an activity is chosen; any dismissal (Escape /
-    // backdrop / Zrušit) closes with picked still undefined → onCancel.
-    let picked;
-    // slot type (role) — applies to both tabs (existing pick or freshly created); main default.
-    const roles = chipGroup(Object.entries(ROLE_LABEL), { selected: "main" });
-    const finish = (activity) => { if (activity) { picked = activity; close(); onConfirm(activity, roles.get()); } else close(); };
-    const roleRow = el("div", { class: "cp-modal-role" }, el("span", { class: "cp-modal-role-label" }, "Typ slotu:"), roles.node);
-
-    const search = el("input", { type: "text", class: "cp-modal-search", placeholder: "Hledat aktivitu…" });
-    const list = el("div", { class: "cp-modal-list" });
-    const nameInput = el("input", { type: "text", class: "cp-modal-name", placeholder: "Název nové aktivity" });
-    // a new activity must have a category: colored chips (native <option> colors are
-    // ignored by most browsers), first one selected by default.
-    const noCats = payload.categories.length === 0;
-    const cats = chipGroup(
-      payload.categories.map((c) => [c.id, swatch(c.color), c.label]),
-      { selected: noCats ? null : payload.categories[0].id });
-    const catChips = cats.node;
-    const createBtn = el("button", { type: "button", class: "cp-primary", disabled: noCats }, "Vytvořit a přidat");
-
-    // keyboard-navigable existing-activity list (cpDom.keyList): arrows move, Enter picks
-    const setRows = keyList(search);
-    function renderList(query) {
-      const all = activitiesCache || [];
-      const q = query.trim();
-      const recentSet = new Set(q ? [] : recentIds());
-      let acts;
-      if (q) {
-        acts = window.cpFuzzy
-          ? window.cpFuzzy.filter(q, all, (a) => a.title)               // diacritics-folded fuzzy
-          : all.filter((a) => a.title.toLowerCase().includes(q.toLowerCase()));
-      } else {
-        const byId = Object.fromEntries(all.map((a) => [a.id, a]));     // only the recents path needs it
-        const recent = [...recentSet].map((id) => byId[id]).filter(Boolean);
-        acts = [...recent, ...all.filter((a) => !recentSet.has(a.id))];
-      }
-      if (!acts.length) { list.replaceChildren(el("div", { class: "cp-muted" }, "Nic nenalezeno.")); setRows([]); return; }
-      const entries = acts.map((a) => {
-        const cat = catById[a.category_id];
-        return {
-          el: el("button", { type: "button", class: "cp-modal-item" },
-            swatch(cat?.color),
-            el("span", null, a.title),
-            recentSet.has(a.id) ? el("span", { class: "cp-modal-recent" }, "naposledy") : null),
-          pick: () => finish(a),
-        };
-      });
-      list.replaceChildren(...entries.map((e) => e.el));
-      setRows(entries);
-    }
-    search.addEventListener("input", () => renderList(search.value));
-
-    async function createActivity() {
-      const title = nameInput.value.trim();
-      if (!title) { nameInput.focus(); return; }
-      const categoryId = cats.get();
-      if (categoryId == null) { toast("Vyberte kategorii.", true); return; }
-      createBtn.disabled = true;
-      try {
-        const json = await api("POST", EDIT.createActivity, { title, category_id: categoryId });
-        const a = { id: json.activity.id, title: json.activity.title, category_id: json.activity.category_id };
-        if (activitiesCache) activitiesCache.unshift(a);
-        finish(a);
-        toast("Aktivita vytvořena");
-      } catch (e) { toast(e.message, true); createBtn.disabled = false; }
-    }
-    createBtn.addEventListener("click", createActivity);
-    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") createActivity(); });
-
-    // tabs
-    const tabExisting = el("button", { type: "button", class: "cp-tab on" }, "Existující");
-    const tabNew = el("button", { type: "button", class: "cp-tab" }, "Nová");
-    const paneExisting = el("div", { class: "cp-pane" }, search, list);
-    const paneNew = el("div", { class: "cp-pane", hidden: true }, nameInput, catChips, createBtn,
-      noCats ? el("div", { class: "cp-modal-hint" }, "Nejprve vytvořte kategorii v nastavení akce.") : null);
-    const selectTab = (newTab) => {
-      tabExisting.classList.toggle("on", !newTab); tabNew.classList.toggle("on", newTab);
-      paneExisting.hidden = newTab; paneNew.hidden = !newTab;
-      (newTab ? nameInput : search).focus();
-    };
-    tabExisting.addEventListener("click", () => selectTab(false));
-    tabNew.addEventListener("click", () => selectTab(true));
-
-    const dialog = el("div", { class: "cp-modal" },
-      el("div", { class: "cp-modal-tabs" }, tabExisting, tabNew),
-      roleRow,
-      paneExisting, paneNew,
-      el("div", { class: "cp-modal-foot" },
-        el("button", { type: "button", class: "cp-cancel" }, "Zrušit")));
-    dialog.querySelector(".cp-cancel").addEventListener("click", () => finish(null));
-    const close = openModal(dialog, () => { if (picked === undefined) onCancel(); });
-
-    fetchActivities().then(() => renderList("")).catch((e) => { toast(e.message, true); renderList(""); });
-    search.focus();
   }
 
   // --- edit-mode toggle ------------------------------------------------------

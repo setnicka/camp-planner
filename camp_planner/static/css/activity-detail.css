@@ -1,5 +1,6 @@
 /* Activity detail page. Shared primitives (modal, chips) come from components.css;
- * generic .cp-section/.cp-muted/.cp-edit-toggle/.cp-add/.cp-danger from content.css. */
+ * generic .cp-section/.cp-muted/.cp-edit-toggle/.cp-danger from content.css and
+ * .cp-add/.cp-mini from components.css. */
 
 .cp-act-title { margin: 0 0 0.75rem; }
 .cp-act-title .cp-edit-toggle { font-size: 0.6em; vertical-align: middle; }
@@ -21,7 +22,7 @@
 /* orgs line: small muted role labels, normal-size initials */
 .cp-org-line { display: inline-flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
 .cp-org-part { white-space: nowrap; }
-.cp-org-role { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin-right: 0.3rem; }
+.cp-org-role { font-size: 11px; font-weight: 600; color: #6b6b6b; text-transform: uppercase; margin-right: 0.3rem; }
 
 /* --- condensed tag chips (name on the left, value in the right half) ------ */
 .cp-tagchips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -32,7 +33,7 @@
 .cp-tagchip-name { display: flex; align-items: center; padding: 0.1rem 0.55rem; background: #f3f4f6; color: #333; }
 .cp-tagchip.pinned .cp-tagchip-name { font-weight: 700; }   /* pinned = important tag */
 .cp-tagchip-val { display: flex; align-items: center; padding: 0.1rem 0.5rem; font-weight: 700; color: #fff; }
-.cp-tagchip-val.yes { background: #2e9e4d; }
+.cp-tagchip-val.yes { background: #257a3e; }
 .cp-tagchip-val.no { background: #d64541; }
 .cp-tagchip-text {
   display: flex; align-items: center; padding: 0.1rem 0.55rem; min-width: 3rem; max-width: 14rem;
