@@ -579,11 +579,11 @@ class _TaxonomyIn(BaseModel):
 
 class CategoryIn(_TaxonomyIn):
     id: int | None = None
-    # A supplied key is emitted verbatim as a CSS class (`cat-<key>`) and data-* attribute
-    # on the timeline, so constrain it to slug-safe chars (empty → slugified from the label).
+    # key + color are emitted verbatim into a <style> block and data-* on the timeline,
+    # so keep them injection-safe: a slug and a #RRGGBB hex (empty → server default).
     key: str | None = Field(default=None, max_length=40, pattern=r"^[A-Za-z0-9_-]*$")
     label: str = Field(min_length=1, max_length=255)
-    color: str | None = Field(default=None, max_length=7)
+    color: str | None = Field(default=None, pattern=r"^(#[0-9A-Fa-f]{6})?$")
 
 
 class OrgIn(_TaxonomyIn):

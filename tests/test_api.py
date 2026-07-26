@@ -729,6 +729,14 @@ def test_taxonomy_categories_save(client, seeded):
     assert resp.status_code == 400 and "opakuje" in _json(resp)["error"]
 
 
+def test_taxonomy_category_key_and_color_reject_injection(client, seeded):
+    # key + color land unescaped in a <style> block / data-* on the timeline, so a
+    # non-slug key or non-hex color must be rejected at the schema (422), not stored.
+    url = f"/api/camps/{seeded['slug']}/categories"
+    for bad in ({"key": "x</style>", "label": "A"}, {"label": "A", "color": "red}a{"}):
+        assert client.put(url, json={"items": [bad]}, headers=ADMIN).status_code == 422
+
+
 # --- reads (camps list / one camp / taxonomy) -------------------------------
 
 def test_camp_list(client, seeded):
