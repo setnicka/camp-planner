@@ -16,7 +16,7 @@ from sqlalchemy import and_, or_
 
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, AuditLog, EntityType
-from camp_planner.services import serialize
+from camp_planner.services import errors, serialize
 
 if TYPE_CHECKING:
     from camp_planner.auth.identity import Identity
@@ -71,12 +71,18 @@ def apply_patch(target, payload, fields) -> dict[str, list]:
     For each name in `fields`: if it was actually sent (in payload.model_fields_set)
     and its value differs from the row's, set it and record `{field: [old, new]}`.
     Returns the (possibly empty) diff so the caller can skip a no-op audit/commit.
+
+    Patch schemas type required fields as `X | None` to mean "absent = unchanged", so
+    an *explicitly sent* null passes pydantic; writing it to a NOT NULL column would
+    500 on commit — reject it here instead (one guard covers every patch schema).
     """
     changes: dict[str, list] = {}
     for field in fields:
         if field not in payload.model_fields_set:
             continue
         old, new = getattr(target, field), getattr(payload, field)
+        if new is None and not target.__table__.columns[field].nullable:
+            raise errors.Invalid(f"Pole '{field}' nesmí být null.")
         if old != new:
             changes[field] = [old, new]
             setattr(target, field, new)

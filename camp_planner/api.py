@@ -223,11 +223,10 @@ def camp_create():
     return _run(run)
 
 
-@bp.put("/camps/<slug>")
+@bp.patch("/camps/<slug>")
 @spec.validate(json=CampUpdate, resp=Response(HTTP_200=CampEnvelope, **_AUTH), tags=["camps"])
 def camp_update(slug: str):
-    """Replace a camp's scalar settings. name/slug are applied only for admins
-    (can_edit_camp_meta), never trusting the body."""
+    """Partial update of a camp's scalar settings; name/slug are admin-only (server-side)."""
     camp = _camp(slug)
     _guard(camp, edit=True)
     allow_meta = can_edit_camp_meta(camp)
@@ -389,7 +388,9 @@ def timeline_get(slug: str):
 @spec.validate(json=TimelineSaveIn, resp=Response(HTTP_200=TimelineSaveEnvelope, HTTP_409=ConflictOut, **_AUTH_400),
                tags=["timeline"])
 def timeline_save(slug: str):
-    camp = _camp(slug)
+    # loaders.TIMELINE: save_timeline walks every activity's slots (and a stale-rev
+    # conflict re-serializes the whole timeline) — lazy loading would be N+1 per save.
+    camp = _camp(slug, *loaders.TIMELINE)
     _guard(camp, edit=True)
     return _run(lambda: slots.save_timeline(camp, request.context.json))
 

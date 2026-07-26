@@ -192,12 +192,16 @@ class SlotEnvelope(_Ok):
 # --- timeline ----------------------------------------------------------------
 
 class _TimeSpan(BaseModel):
-    """A naive-local [start_at, end_at) span; rejects end <= start."""
+    """A naive-local [start_at, end_at) span; rejects end <= start.
+
+    Seconds are dropped: timeline math is whole minutes (timeline.py _abs_min)."""
     start_at: NaiveDatetime
     end_at: NaiveDatetime
 
     @model_validator(mode="after")
     def _order(self):
+        self.start_at = self.start_at.replace(second=0, microsecond=0)
+        self.end_at = self.end_at.replace(second=0, microsecond=0)
         if self.end_at <= self.start_at:
             raise ValueError("Konec musí být po začátku.")
         return self
@@ -230,7 +234,10 @@ class TimelineSaveIn(BaseModel):
         "retypes": [{"slot_id": 9, "role": "cleanup"}],
         "deletes": [18],
     }]})
-    rev: int | None = Field(default=None, description="Revize, kterou klient načetl (optimistický zámek).")
+    rev: int = Field(description="Revize, kterou klient načetl (optimistický zámek).")
+    force: bool = Field(
+        default=False,
+        description="Vědomé přepsání: přeskočí kontrolu revize (tlačítko „Přepsat“ v konfliktním dialogu).")
     moves: list[MoveIn] = []
     creates: list[TimelineCreate] = []
     retypes: list[RetypeIn] = []
@@ -690,13 +697,14 @@ class CampCreate(_TzValidated):
 
 
 class CampUpdate(_TzValidated):
-    """Full settings replace; name/slug are applied only for admins (server-side)."""
+    """Partial settings update (only fields sent are applied). name/slug are admin-only;
+    null clears latitude/longitude and is ignored for the other fields."""
     name: str | None = Field(default=None, min_length=1, max_length=255)
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$", max_length=80)
-    start_date: date
-    length_days: int = Field(ge=1)
-    window_start_min: int = Field(default=240, ge=0, le=1439)
-    snap_minutes: _SNAP = 15
+    start_date: date | None = None
+    length_days: int | None = Field(default=None, ge=1)
+    window_start_min: int | None = Field(default=None, ge=0, le=1439)
+    snap_minutes: _SNAP | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
 

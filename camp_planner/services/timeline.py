@@ -47,6 +47,14 @@ def _abs_min(dt: datetime, start_date: date) -> int:
     return (dt.date() - start_date).days * DAY_MIN + dt.hour * 60 + dt.minute
 
 
+def span_in_window(camp: Camp, start_at: datetime, end_at: datetime) -> bool:
+    """True when [start_at, end_at) lies fully inside the camp's day windows
+    (day 0's window start → the last day's window end)."""
+    lo = camp.window_start_min
+    hi = lo + camp.length_days * DAY_MIN
+    return lo <= _abs_min(start_at, camp.start_date) and _abs_min(end_at, camp.start_date) <= hi
+
+
 def slice_segments(
     s_abs: int, e_abs: int, window_start: int, length_days: int
 ) -> list[dict]:

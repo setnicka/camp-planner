@@ -40,7 +40,9 @@ def _count_queries(fn) -> int:
 
 def _make_slot(client, slug, activity_id, *, start="2026-07-04T14:00", end="2026-07-04T16:00", role="main"):
     """Create a slot via the timeline batch (the only placement path) and return its id."""
+    rev = _get(client, f"/api/camps/{slug}/timeline")["camp"]["rev"]
     resp = client.patch(f"/api/camps/{slug}/timeline", json={
+        "rev": rev,
         "creates": [{"activity_id": activity_id, "role": role, "start_at": start, "end_at": end}]},
         headers=ADMIN)
     return _json(resp)["created"][0]["id"]
@@ -114,6 +116,7 @@ def test_timeline_retype_changes_role_and_audits(client, seeded):
 def test_timeline_create_rejects_foreign_activity(client, seeded):
     slug = seeded["slug"]
     resp = client.patch(f"/api/camps/{slug}/timeline", json={
+        "rev": 0,
         "creates": [{"activity_id": 99999, "start_at": "2026-07-04T13:00", "end_at": "2026-07-04T14:00"}],
     }, headers=ADMIN)
     assert resp.status_code == 400
@@ -122,10 +125,94 @@ def test_timeline_create_rejects_foreign_activity(client, seeded):
 def test_timeline_create_rejects_end_before_start(client, seeded):
     # end<=start is a schema model_validator on TimelineCreate -> 422
     resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={
+        "rev": 0,
         "creates": [{"activity_id": seeded["activity_id"],
                      "start_at": "2026-07-04T16:00", "end_at": "2026-07-04T14:00"}],
     }, headers=ADMIN)
     assert resp.status_code == 422
+
+
+def test_timeline_save_requires_rev(client, seeded):
+    # rev is the optimistic lock — omitting it must be a validation error, not a
+    # silent lock bypass
+    resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={"moves": []}, headers=ADMIN)
+    assert resp.status_code == 422
+
+
+def test_timeline_save_force_overrides_stale_rev(client, seeded):
+    # the conflict dialog's deliberate "Přepsat": force=True skips the rev check
+    resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={
+        "rev": 999, "force": True,
+        "creates": [{"activity_id": seeded["activity_id"],
+                     "start_at": "2026-07-04T14:00", "end_at": "2026-07-04T15:00"}],
+    }, headers=ADMIN)
+    assert resp.status_code == 200
+
+
+def test_timeline_save_rejects_slot_outside_camp_days(client, seeded):
+    """A slot outside the camp window would persist but never render (slice_segments
+    clamps it away) — an invisible slot no UI could reach. Camp: 2026-07-04 + 3 days,
+    window 04:00 → valid range 07-04T04:00 .. 07-07T04:00."""
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    url = f"/api/camps/{slug}/timeline"
+
+    def save(start, end, slot_id=None):
+        rev = _get(client, url)["camp"]["rev"]
+        change = ({"moves": [{"slot_id": slot_id, "start_at": start, "end_at": end}]} if slot_id
+                  else {"creates": [{"activity_id": aid, "start_at": start, "end_at": end}]})
+        return client.patch(url, json={"rev": rev, **change}, headers=ADMIN)
+
+    # create after the last day / before day 0's window start → 400
+    resp = save("2026-07-08T10:00", "2026-07-08T12:00")
+    assert resp.status_code == 400 and "mimo dny akce" in _json(resp)["error"]
+    assert save("2026-07-04T02:00", "2026-07-04T03:30").status_code == 400
+
+    # moving an existing slot outside is rejected the same way
+    sid = _make_slot(client, slug, aid)
+    assert save("2026-07-07T10:00", "2026-07-07T11:00", slot_id=sid).status_code == 400
+
+    # boundaries are inclusive: a night program running to the last window end is fine
+    assert save("2026-07-06T22:00", "2026-07-07T04:00").status_code == 200
+
+
+def test_timeline_span_seconds_are_dropped(client, seeded):
+    # sub-minute times would render truncated and never round-trip — normalized away
+    rev = _get(client, f"/api/camps/{seeded['slug']}/timeline")["camp"]["rev"]
+    resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={
+        "rev": rev,
+        "creates": [{"activity_id": seeded["activity_id"],
+                     "start_at": "2026-07-04T14:00:30", "end_at": "2026-07-04T16:00:45"}],
+    }, headers=ADMIN)
+    created = _json(resp)["created"][0]
+    assert created["start_at"] == "2026-07-04T14:00:00"
+    assert created["end_at"] == "2026-07-04T16:00:00"
+
+
+def test_timeline_save_query_count_is_flat(client, seeded):
+    # the save path is eager-loaded (loaders.TIMELINE) — queries per save must not
+    # grow with the number of activities/slots (N+1 regression guard)
+    slug = seeded["slug"]
+    url = f"/api/camps/{slug}/timeline"
+
+    def add_wired_activity(title):
+        aid = _json(client.post(f"/api/camps/{slug}/activities",
+                                json={"title": title}, headers=ADMIN))["activity"]["id"]
+        _make_slot(client, slug, aid, start="2026-07-05T10:00", end="2026-07-05T11:00")
+
+    def move(sid, hour):
+        rev = _get(client, url)["camp"]["rev"]
+        resp = client.patch(url, json={"rev": rev, "moves": [
+            {"slot_id": sid, "start_at": f"2026-07-04T{hour}:00", "end_at": f"2026-07-04T{hour}:30"}]},
+            headers=ADMIN)
+        assert resp.status_code == 200
+
+    s1 = _make_slot(client, slug, seeded["activity_id"])
+    add_wired_activity("B")
+    two = _count_queries(lambda: move(s1, "12"))
+    for i in range(3):
+        add_wired_activity(f"C{i}")
+    five = _count_queries(lambda: move(s1, "13"))
+    assert two == five
 
 
 # --- activities --------------------------------------------------------------
@@ -135,6 +222,30 @@ def test_activity_create_requires_title(client, seeded):
     resp = client.post(f"/api/camps/{seeded['slug']}/activities", json={}, headers=ADMIN)
     assert resp.status_code == 422
     assert any("title" in e["loc"] for e in _json(resp))
+
+
+def test_patch_explicit_null_on_required_field_is_400(client, seeded):
+    """Patch schemas type required fields as `X | None` ("absent = unchanged"), so an
+    explicitly sent null passes validation — apply_patch must reject it (400), not let
+    it hit the NOT NULL column (500)."""
+    slug, aid = seeded["slug"], seeded["activity_id"]
+
+    resp = client.patch(f"/api/activities/{aid}", json={"title": None}, headers=ADMIN)
+    assert resp.status_code == 400 and "title" in _json(resp)["error"]
+    assert client.patch(f"/api/activities/{aid}", json={"type": None}, headers=ADMIN).status_code == 400
+
+    tid = _json(client.post(f"/api/activities/{aid}/todos",
+                            json={"title": "Úkol"}, headers=ADMIN))["todo"]["id"]
+    assert client.patch(f"/api/todos/{tid}", json={"title": None}, headers=ADMIN).status_code == 400
+
+    mid = _json(client.post(f"/api/camps/{slug}/materials",
+                            json={"name": "Papír"}, headers=ADMIN))["material"]["id"]
+    resp = client.patch(f"/api/camps/{slug}/materials/{mid}", json={"name": None}, headers=ADMIN)
+    assert resp.status_code == 400
+
+    # a null that hits a nullable column still means "clear" and stays allowed
+    resp = client.patch(f"/api/activities/{aid}", json={"description_md": None}, headers=ADMIN)
+    assert resp.status_code == 200
 
 
 def test_activity_list(client, seeded):
@@ -568,17 +679,35 @@ def test_camp_create_forbidden_for_editor(client, seeded):
 
 
 def test_camp_update_settings(client, seeded):
-    resp = client.put(f"/api/camps/{seeded['slug']}",
-                      json={**_NEW_CAMP, "name": "Tábor", "slug": "t", "length_days": 9}, headers=ADMIN)
+    resp = client.patch(f"/api/camps/{seeded['slug']}",
+                        json={**_NEW_CAMP, "name": "Tábor", "slug": "t", "length_days": 9}, headers=ADMIN)
     assert resp.status_code == 200
     assert _json(resp)["camp"]["length_days"] == 9
 
 
+def test_camp_update_is_partial(client, seeded):
+    """PATCH semantics: only the sent fields change; null is ignored for non-nullable
+    settings and clears the nullable coordinates."""
+    slug = seeded["slug"]
+    resp = client.patch(f"/api/camps/{slug}", json={"length_days": 9}, headers=ADMIN)
+    assert resp.status_code == 200
+    camp = _json(resp)["camp"]
+    assert camp["length_days"] == 9
+    assert camp["name"] == "Tábor" and camp["window_start_min"] == 240  # untouched
+
+    resp = client.patch(f"/api/camps/{slug}",
+                        json={"window_start_min": None, "latitude": 50.1, "longitude": 14.4},
+                        headers=ADMIN)
+    assert _json(resp)["camp"]["window_start_min"] == 240  # explicit null → unchanged
+    resp = client.patch(f"/api/camps/{slug}", json={"latitude": None}, headers=ADMIN)
+    assert _json(resp)["camp"]["latitude"] is None  # nullable column → null clears
+
+
 def test_editor_cannot_change_name(client, seeded):
     slug = seeded["slug"]
-    resp = client.put(f"/api/camps/{slug}",
-                      json={**_NEW_CAMP, "name": "Přejmenováno", "length_days": 4},
-                      headers=editor(slug))
+    resp = client.patch(f"/api/camps/{slug}",
+                        json={**_NEW_CAMP, "name": "Přejmenováno", "length_days": 4},
+                        headers=editor(slug))
     assert resp.status_code == 200
     assert _json(resp)["camp"]["name"] == "Tábor"  # meta change ignored for editors
 

@@ -16,7 +16,7 @@ from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import czech_sort_key
 from camp_planner.models.slot import Slot, SlotAssignment
 from camp_planner.services import audit, errors, google_sync, serialize
-from camp_planner.services.timeline import build_timeline, bump_timeline_rev
+from camp_planner.services.timeline import build_timeline, bump_timeline_rev, span_in_window
 
 if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
@@ -60,9 +60,10 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
 
 def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
     """Apply one editing batch atomically (creates + moves + deletes) under the rev
-    optimistic lock. A stale rev raises Conflict carrying the fresh timeline to reconcile
+    optimistic lock (force=True skips the check — the conflict dialog's deliberate
+    overwrite). A stale rev raises Conflict carrying the fresh timeline to reconcile
     against. Returns the new rev and the created slots (in `creates` order, for id mapping)."""
-    if payload.rev is not None and payload.rev != camp.timeline_rev:
+    if not payload.force and payload.rev != camp.timeline_rev:
         raise errors.Conflict(
             "Časový plán mezitím někdo změnil. Načtěte ho prosím znovu.",
             rev=camp.timeline_rev, timeline=build_timeline(camp),
@@ -77,10 +78,16 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
             raise errors.Invalid("Změny: blok nepatří této akci.")
         return slot
 
+    def _check_window(start_at, end_at) -> None:
+        # Outside the day windows a slot persists but slice_segments clamps it away — unreachable.
+        if not span_in_window(camp, start_at, end_at):
+            raise errors.Invalid("Změny: blok leží mimo dny akce.")
+
     created: list[Slot] = []
     for spec in payload.creates:
         if spec.activity_id not in activity_ids:
             raise errors.Invalid("Změny: aktivita nepatří této akci.")
+        _check_window(spec.start_at, spec.end_at)
         slot = Slot(activity_id=spec.activity_id, role=spec.role,
                     start_at=spec.start_at, end_at=spec.end_at)
         db.session.add(slot)
@@ -89,6 +96,7 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
     moved: list[tuple] = []  # (slot, old_start, old_end) — old times captured before the change
     for move in payload.moves:
         slot = _slot(move.slot_id)
+        _check_window(move.start_at, move.end_at)
         moved.append((slot, slot.start_at, slot.end_at))
         slot.start_at, slot.end_at = move.start_at, move.end_at
 

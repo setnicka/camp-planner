@@ -502,13 +502,14 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   }
 
   // --- save (one PATCH; on success reload the authoritative state) -----------
-  // force=true sends rev:null, which makes the server skip the optimistic-lock check
-  // and overwrite whatever is there (used from the conflict dialog's "Přepsat").
+  // force=true makes the server skip the optimistic-lock check and overwrite
+  // whatever is there (used from the conflict dialog's "Přepsat").
   async function save(force, _retried) {
     if (!hasPending()) return;
     saveBtn.disabled = true;
     const body = {
-      rev: force ? null : camp.rev,
+      rev: camp.rev,
+      force: !!force,
       moves: [...moves.entries()].map(([slot_id, t]) => ({ slot_id, ...t })),
       creates: [...creates.values()],
       retypes: [...retypes.entries()].map(([slot_id, role]) => ({ slot_id, role })),

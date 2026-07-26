@@ -12,6 +12,18 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Fixed
+
+- PATCH endpoints: explicit `null` for a required field is a 400, not a 500.
+- Timeline save: slots outside the camp's day range are rejected (they used to
+  persist invisibly); seconds in spans are normalized to whole minutes.
+
+### Changed
+
+- Timeline save: `rev` is required; the conflict-dialog overwrite is an explicit
+  `force: true`.
+- Camp settings: `PUT` → `PATCH /api/camps/<slug>`, all fields optional.
+
 ## [0.2.2] - 2026-07-13
 
 ### Fixed

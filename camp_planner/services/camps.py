@@ -303,6 +303,8 @@ def save_camp_settings(camp: Camp, data: dict, *, allow_meta: bool) -> None:
             continue
         old = getattr(camp, field)
         new = data[field]
+        if new is None and field not in ("latitude", "longitude"):
+            continue  # explicit null is only meaningful for the nullable coordinates
         if old == new:
             continue
         changes[field] = [old, new]
