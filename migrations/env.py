@@ -97,14 +97,29 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=get_metadata(),
-            **conf_args
-        )
+        # SQLite batch migrations rebuild a table by dropping and recreating it; with FK
+        # enforcement on (extensions.py enables it per connection) that DROP is rejected
+        # while other tables reference the table. Disable it for the migration. The pragma
+        # only takes effect outside a transaction, so run it on the raw DBAPI connection
+        # before Alembic opens one.
+        is_sqlite = connection.dialect.name == "sqlite"
+        if is_sqlite:
+            connection.connection.dbapi_connection.execute("PRAGMA foreign_keys=OFF")
 
-        with context.begin_transaction():
-            context.run_migrations()
+        try:
+            context.configure(
+                connection=connection,
+                target_metadata=get_metadata(),
+                **conf_args
+            )
+
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            # FK enforcement is off on this connection; discard it (even if the migration
+            # raised) so an in-process upgrade can't return a FK-off connection to the pool.
+            if is_sqlite:
+                connection.invalidate()
 
 
 if context.is_offline_mode():

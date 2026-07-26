@@ -42,6 +42,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Fixed
 
+- `flask db upgrade` on a populated SQLite database no longer fails on foreign-key
+  enforcement — batch table rebuilds run with the pragma disabled.
 - PATCH endpoints: explicit `null` for a required field is a 400, not a 500.
 - Saving taxonomy lists, the timeline batch and creating activities from the
   timeline picker now survive an expired CSRF token; a failed activity-picker
