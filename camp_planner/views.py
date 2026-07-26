@@ -3,7 +3,6 @@ camp settings subpage with its taxonomy management."""
 
 from __future__ import annotations
 
-from datetime import timedelta
 from zoneinfo import available_timezones
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
@@ -334,7 +333,7 @@ def _render_detail(camp: Camp):
     return render_template(
         "camp_detail.html",
         camp=camp,
-        end_date=camp.start_date + timedelta(days=max(0, camp.length_days - 1)),
+        end_date=camp.end_date,
         tz_label=_TZ_LABELS.get(camp.timezone, camp.timezone),
         tax_data=tax_data,
         google_data=google_data,

@@ -188,7 +188,7 @@ def _owned_events(calendar_id: str) -> dict[str, str]:
     created (they carry the cpSlotId marker). Lets connect adopt them instead of inserting
     duplicates."""
     owned: dict[str, str] = {}
-    events, _token = google_client.list_events(calendar_id, None)
+    events = google_client.list_events(calendar_id)
     for ev in events:
         if ev.get("status") == "cancelled":
             continue
@@ -223,7 +223,6 @@ def set_google_calendar(camp: Camp, calendar_id: str) -> dict:
     owned = _owned_events(calendar_id)
     was = camp.google_calendar_id
     camp.google_calendar_id = calendar_id
-    camp.google_sync_token = None  # a different calendar → start its inbound cursor fresh
     for slot in _all_slots(camp):
         slot.google_event_id = owned.get(str(slot.id))  # adopt our existing event, else None → insert
         google_sync.enqueue_upsert(camp, slot)
@@ -242,7 +241,6 @@ def disconnect_google(camp: Camp) -> dict:
         return {"google": google_status(camp)}
     old = camp.google_calendar_id
     camp.google_calendar_id = None
-    camp.google_sync_token = None
     camp.google_last_pull_at = None
     for slot in _all_slots(camp):
         slot.google_event_id = None

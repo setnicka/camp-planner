@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-import re
 import time
 from datetime import datetime
-from pathlib import Path
 
 import click
 from flask import Flask, current_app
@@ -14,31 +12,6 @@ from sqlalchemy import make_url
 
 from camp_planner.auth.identity import CampRole
 from camp_planner.extensions import db
-
-
-_OBJECT_RE = re.compile(r"\{[^{}]*\}")
-_FIELD_RE = re.compile(r"(\w+)\s*:\s*'((?:[^'\\]|\\.)*)'")
-# initials tokens: letters (incl. Czech) of length 1–4, ignoring punctuation/parens
-_ORG_TOKEN_RE = re.compile(r"[A-Za-zÁ-ž]{1,4}")
-
-
-def _parse_events(data_js: Path) -> list[dict]:
-    """Extract the EVENTS array entries from the mockup data.js."""
-    text = data_js.read_text(encoding="utf-8")
-    start = text.index("const EVENTS")
-    end = text.index("];", start)
-    block = text[start:end]
-    events = []
-    for obj in _OBJECT_RE.findall(block):
-        fields = {k: v for k, v in _FIELD_RE.findall(obj)}
-        if "start" in fields and "end" in fields:
-            events.append(fields)
-    return events
-
-
-def _parse_org_tokens(orgs: str) -> list[str]:
-    """Initials tokens, deduplicated, in first-seen order."""
-    return list(dict.fromkeys(_ORG_TOKEN_RE.findall(orgs or "")))
 
 
 def _parse_grant(token: str) -> tuple[CampRole, int | None]:

@@ -417,11 +417,6 @@ class MaterialOut(BaseModel):
     sum_strategy: SumStrategy                 # how per-activity needs aggregate (sum vs max)
     orgs: list[MaterialOrgOut] = []          # responsible orgs (czech-sorted by initials)
 
-    @field_validator("acquisition_labels", mode="before")
-    @classmethod
-    def _labels_default(cls, v):
-        return v or []   # the column is nullable: a NULL row reads as no labels
-
 
 class MaterialNeedOut(BaseModel):
     """An activity's material need, with the catalog material nested under `material`."""

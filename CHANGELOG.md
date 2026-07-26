@@ -30,8 +30,17 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline save: slots outside the camp's day range are rejected (they used to
   persist invisibly); seconds in spans are normalized to whole minutes.
 
+### Removed
+
+- Dead columns and code (**adds a DB migration**): `camps.google_sync_token`,
+  leftover `seed-demo` CLI helpers, and the unused `Tag.activities` proxy.
+
 ### Changed
 
+- `materials.acquisition_labels` is now NOT NULL (existing `NULL` rows
+  backfilled to `[]`).
+- `DEV_USER` (header-less local dev for proxy auth mode) is now settable via
+  the env var, e.g. `DEV_USER="dev admin"`.
 - Timeline save: `rev` is required; the conflict-dialog overwrite is an explicit
   `force: true`.
 - Camp settings: `PUT` → `PATCH /api/camps/<slug>`, all fields optional.

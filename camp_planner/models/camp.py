@@ -6,17 +6,15 @@ import enum
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from camp_planner.config import fk, table_name
 from camp_planner.extensions import Base
-from camp_planner.models.activity import ActivityTag  # runtime: used by the association_proxy creator
 from camp_planner.models.common import TimestampMixin, portable_enum
 
 if TYPE_CHECKING:
-    from camp_planner.models.activity import Activity
+    from camp_planner.models.activity import Activity, ActivityTag
     from camp_planner.models.google import GoogleSyncOp
     from camp_planner.models.material import Material
     from camp_planner.models.org import Org
@@ -55,10 +53,8 @@ class Camp(TimestampMixin, Base):
     timeline_rev: Mapped[int] = mapped_column(default=0, server_default="0")
 
     # Google Calendar sync (optional; see services/google_sync.py + docs/GOOGLE_CALENDAR_SETUP.md).
-    # Connected when google_calendar_id is set. google_sync_token is Google's incremental
-    # events.list cursor for the inbound review; google_last_pull_at stamps the last pull.
+    # Connected when google_calendar_id is set; google_last_pull_at stamps the last inbound pull.
     google_calendar_id: Mapped[str | None] = mapped_column(String(255))
-    google_sync_token: Mapped[str | None] = mapped_column(Text)
     google_last_pull_at: Mapped[datetime | None]
 
     # Relationships:
@@ -135,9 +131,4 @@ class Tag(Base):
     # ActivityTag (the valued link) lives in activity.py, next to the activities.
     activity_links: Mapped[list[ActivityTag]] = relationship(
         back_populates="tag", cascade="all, delete-orphan"
-    )
-    # Plain Activity list — from a tag we just want which activities carry it;
-    # the per-activity value matters from the activity side, not here.
-    activities: AssociationProxy[list[Activity]] = association_proxy(
-        "activity_links", "activity", creator=lambda activity: ActivityTag(activity=activity)
     )

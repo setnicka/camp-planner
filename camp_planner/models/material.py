@@ -55,7 +55,7 @@ class Material(Base):
 
     # Free "how/where to obtain" tokens, e.g. ["kup: mefisto", "půjčit: jirka"]; "prefix: value"
     # renders as a scoped tag. Nullable (unset rows); serialize coerces NULL → [].
-    acquisition_labels: Mapped[list[str] | None] = mapped_column(JSON, default=list)
+    acquisition_labels: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # How per-activity needs roll up into the camp-wide total — see SumStrategy.
     sum_strategy: Mapped[SumStrategy] = mapped_column(

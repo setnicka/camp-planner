@@ -296,31 +296,18 @@ def batch_push(ops: list[PushOp]) -> dict[str, PushResult]:
     return results
 
 
-def list_events(calendar_id: str, sync_token: str | None) -> tuple[list[dict], str | None]:
-    """List events for the inbound review. With a sync_token, return only changes since it
-    (incremental); without, a full single-events listing. Returns (events, next_sync_token).
-    A 410 (expired token) is signalled by raising errors.Invalid so the caller can full-sync."""
-    from googleapiclient.errors import HttpError  # noqa: PLC0415
-
+def list_events(calendar_id: str) -> list[dict]:
+    """Full single-events listing of the calendar (paged), for the inbound review."""
     svc = client().events()
-    params: dict = {"calendarId": calendar_id, "showDeleted": True}
-    if sync_token:
-        params["syncToken"] = sync_token
-    else:
-        params["singleEvents"] = True
+    params: dict = {"calendarId": calendar_id, "showDeleted": True, "singleEvents": True}
 
     events: list[dict] = []
     page_token = None
-    try:
-        while True:
-            if page_token:
-                params["pageToken"] = page_token
-            resp = svc.list(**params).execute()
-            events.extend(resp.get("items", []))
-            page_token = resp.get("nextPageToken")
-            if not page_token:
-                return events, resp.get("nextSyncToken")
-    except HttpError as exc:
-        if exc.resp.status == 410:  # sync token expired → caller should retry full
-            raise errors.Invalid("__SYNC_TOKEN_EXPIRED__") from exc
-        raise
+    while True:
+        if page_token:
+            params["pageToken"] = page_token
+        resp = svc.list(**params).execute()
+        events.extend(resp.get("items", []))
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            return events

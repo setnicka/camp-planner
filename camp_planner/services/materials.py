@@ -80,7 +80,7 @@ def _set_orgs(material: Material, org_ids: list[int]) -> list | None:
 def _set_labels(material: Material, labels: list[str]) -> list | None:
     """Replace the material's acquisition labels (already cleaned/deduped by the schema).
     Returns the audit diff [before, after] when it changed, else None."""
-    before = material.acquisition_labels or []
+    before = material.acquisition_labels
     if before == labels:
         return None
     material.acquisition_labels = labels

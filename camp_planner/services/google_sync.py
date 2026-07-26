@@ -378,7 +378,7 @@ def _detect(camp: Camp) -> list[dict]:
     the activity's category (colorId, activity-level → deduped), plus deletions. A live
     event we don't own is a new_event import candidate, restricted to the camp's timeframe
     and to durations under 48h (longer = a whole-camp span event, ignored)."""
-    events, _token = google_client.list_events(camp.google_calendar_id, None)  # full list
+    events = google_client.list_events(camp.google_calendar_id)
     tz = camp.timezone
     live = {e["id"]: e for e in events if e.get("status") != "cancelled"}
     mapped: set[str] = set()

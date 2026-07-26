@@ -126,7 +126,7 @@ def _material_orgs(m: Material) -> list[MaterialOrgOut]:
 
 def _material(m: Material) -> MaterialOut:
     return MaterialOut(id=m.id, name=m.name, unit=m.unit, note=m.note, url=m.url,
-                       acquisition_labels=m.acquisition_labels or [], sum_strategy=m.sum_strategy,
+                       acquisition_labels=m.acquisition_labels, sum_strategy=m.sum_strategy,
                        orgs=_material_orgs(m))
 
 

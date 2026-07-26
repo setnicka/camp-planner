@@ -87,8 +87,8 @@ class FakeGoogle:
                 results[op.key] = google_client.PushResult(False, None, str(exc))
         return results
 
-    def list_events(self, calendar_id, sync_token):
-        return list(self.events.values()), None
+    def list_events(self, calendar_id):
+        return list(self.events.values())
 
     def add_external(self, eid, summary, start, end):
         """A user-created event (no cpSlotId marker), as if added directly in Google."""

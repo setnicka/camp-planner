@@ -180,4 +180,5 @@ Notes:
   `url_for` and cookies stay correct. Only `-Prefix` is strictly required for
   routing; `-Proto`/`-Host` matter behind HTTPS. Never set `BEHIND_PROXY` on a
   directly exposed process — the headers are client-controlled there.
-- Local dev without nginx: set `DEV_USER` in config, e.g. `{"user_id": "dev", "roles": "admin"}`.
+- Local dev without nginx: set the `DEV_USER` env var — `"<user_id> [role ...]"` with
+  the `X-Remote-Roles` grammar, e.g. `DEV_USER="dev admin"` or `DEV_USER="dev editor:*"`.
