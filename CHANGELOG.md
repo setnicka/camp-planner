@@ -66,6 +66,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Changed
 
+- Timeline: the engine is preloaded and the area reserves height with a
+  „Načítám…" hint, so the header no longer jumps when it mounts.
 - Google push failures show a short Czech explanation instead of the raw
   English API error (which stays in the server log).
 - `materials.acquisition_labels` is now NOT NULL (existing `NULL` rows

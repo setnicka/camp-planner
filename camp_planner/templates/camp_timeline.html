@@ -5,6 +5,10 @@
 {% block header_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
 
 {% block head %}
+  {# Start the ~550 KB timeline engine downloading during header render, instead of only
+     when the parser reaches the <script> at the end of <body>. #}
+  <link rel="preload" as="script"
+        href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}">
   <link rel="stylesheet"
         href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
