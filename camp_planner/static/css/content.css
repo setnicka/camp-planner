@@ -5,11 +5,26 @@
  * (nav, body reset, flashes) lives in standalone.css. */
 
 /* ===========================================================================
- * PALETTE — the single source of every colour in Camp Planner; no colour
- * literal (hex / rgb / hsl) outside this block, everything else uses
- * var(--cp-*).
+ * PALETTE — the single source of every colour; no literal outside this block
+ * (enforced by tests/test_css_palette.py).
+ *
+ * Three paths: light (default), dark via prefers-color-scheme where a shell
+ * opted in with data-cp-theme="auto", and dark via data-cp-theme="dark". The
+ * attribute works on any ancestor; the :has() arms lift the tokens to :root
+ * because cpDom mounts modals/toasts on document.body, outside the wrapper.
+ * "auto" is opt-in, not the default: following the OS is only sound where we
+ * own the page background — embedded we don't. See docs/DEPLOYMENT.md §2.
+ *
+ * The dark values appear twice (CSS cannot OR a media query with a selector;
+ * resolving in JS would flash white before theme.js ran) — a test keeps the
+ * copies identical.
+ *
+ * Text pairs clear 4.5:1 and boundaries 3:1 in both themes, except
+ * --cp-border/--cp-border-strong as input boundaries: reaching 3:1 visibly
+ * restyles every input, table rule and card — left as a separate decision.
  * =========================================================================== */
-:root {
+:root,
+[data-cp-theme="light"] {
   /* — surfaces: page, cards, and a 3-step fill scale (base / hover / pressed) — */
   --cp-bg: #ffffff;
   --cp-surface: #ffffff;
@@ -95,6 +110,126 @@
   --cp-page-pad: 1rem;      /* horizontal padding of the standalone <main> */
 }
 
+/* Dark, path 1: prefers-color-scheme, where a shell opted in with "auto" (see header). */
+@media (prefers-color-scheme: dark) {
+  [data-cp-theme="auto"],
+  :root:has([data-cp-theme="auto"]) {
+    --cp-bg: #0a0a0a;
+    --cp-surface: #17181b;
+    --cp-surface-2: #212429;
+    --cp-surface-3: #2b2f36;
+    --cp-text: #e0e0e0;
+    --cp-text-strong: #f5f5f5;
+    --cp-muted: #a0a6ae;
+    --cp-text-dim: #7c8595;
+    --cp-text-inverse: #ffffff;
+    --cp-border: #616a78;
+    --cp-border-subtle: #2b2f35;
+    --cp-border-strong: #7c8595;
+    --cp-accent: #2f6fbf;
+    --cp-accent-text: #5c93d3;
+    --cp-accent-wash: #16202c;
+    --cp-accent-subtle: #1b2a3d;
+    --cp-accent-glow: rgba(92, 147, 211, .35);
+    --cp-danger: #c9302c;
+    --cp-danger-soft: #b8433d;
+    --cp-danger-subtle: #2a1413;
+    --cp-danger-mark: #3d1a18;
+    --cp-danger-text: #f08a84;
+    --cp-success: #2e7d3f;
+    --cp-success-subtle: #10231a;
+    --cp-success-mark: #17381f;
+    --cp-success-text: #6ecf8a;
+    --cp-warning: #d98b0a;
+    --cp-warning-on: #2b2100;
+    --cp-warning-subtle: #2a2005;
+    --cp-warning-mark: #3d2f08;
+    --cp-warning-text: #e0a92e;
+    --cp-neutral: #5b626c;
+    --cp-violet: #7c5ccf;
+    --cp-shadow-1: rgba(0, 0, 0, .5);
+    --cp-shadow-2: rgba(0, 0, 0, .7);
+    --cp-scrim: rgba(0, 0, 0, .65);
+    --cp-nowline: #ff6b5e;
+    --cp-zebra: rgba(255, 255, 255, .04);
+    --cp-row-hover: rgba(255, 205, 0, .12);
+    --cp-row-hover-edge: #c9b26a;
+    --cp-daynight-rgb: 52 58 120;
+    --cp-seam: rgba(255, 255, 255, .85);
+    --cp-nowline-halo: rgba(255, 255, 255, .57);
+    --cp-selected-ring: rgba(255, 255, 255, .85);
+    --cp-track: #616a78;
+    --cp-knob: #dfe3e8;
+    --cp-tag-pre-l: 32%;
+    --cp-tag-val-l: 24%;
+    --cp-tag-fg-l: 78%;
+  }
+}
+
+/* Dark, path 2: a deployment pins it, on <html> or on any wrapper element. */
+[data-cp-theme="dark"],
+:root:has([data-cp-theme="dark"]) {
+    --cp-bg: #0a0a0a;
+    --cp-surface: #17181b;
+    --cp-surface-2: #212429;
+    --cp-surface-3: #2b2f36;
+    --cp-text: #e0e0e0;
+    --cp-text-strong: #f5f5f5;
+    --cp-muted: #a0a6ae;
+    --cp-text-dim: #7c8595;
+    --cp-text-inverse: #ffffff;
+    --cp-border: #616a78;
+    --cp-border-subtle: #2b2f35;
+    --cp-border-strong: #7c8595;
+    --cp-accent: #2f6fbf;
+    --cp-accent-text: #5c93d3;
+    --cp-accent-wash: #16202c;
+    --cp-accent-subtle: #1b2a3d;
+    --cp-accent-glow: rgba(92, 147, 211, .35);
+    --cp-danger: #c9302c;
+    --cp-danger-soft: #b8433d;
+    --cp-danger-subtle: #2a1413;
+    --cp-danger-mark: #3d1a18;
+    --cp-danger-text: #f08a84;
+    --cp-success: #2e7d3f;
+    --cp-success-subtle: #10231a;
+    --cp-success-mark: #17381f;
+    --cp-success-text: #6ecf8a;
+    --cp-warning: #d98b0a;
+    --cp-warning-on: #2b2100;
+    --cp-warning-subtle: #2a2005;
+    --cp-warning-mark: #3d2f08;
+    --cp-warning-text: #e0a92e;
+    --cp-neutral: #5b626c;
+    --cp-violet: #7c5ccf;
+    --cp-shadow-1: rgba(0, 0, 0, .5);
+    --cp-shadow-2: rgba(0, 0, 0, .7);
+    --cp-scrim: rgba(0, 0, 0, .65);
+    --cp-nowline: #ff6b5e;
+    --cp-zebra: rgba(255, 255, 255, .04);
+    --cp-row-hover: rgba(255, 205, 0, .12);
+    --cp-row-hover-edge: #c9b26a;
+    --cp-daynight-rgb: 52 58 120;
+    --cp-seam: rgba(255, 255, 255, .85);
+    --cp-nowline-halo: rgba(255, 255, 255, .57);
+    --cp-selected-ring: rgba(255, 255, 255, .85);
+    --cp-track: #616a78;
+    --cp-knob: #dfe3e8;
+    --cp-tag-pre-l: 32%;
+    --cp-tag-val-l: 24%;
+    --cp-tag-fg-l: 78%;
+}
+
+/* color-scheme (form controls, scrollbars) follows the palette, but only on an element
+   carrying data-cp-theme: embedded, :root is the *host's* document. Not on the :has()
+   arms — those only lift tokens. */
+[data-cp-theme="light"],
+[data-cp-theme="auto"] { color-scheme: light; }
+[data-cp-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  [data-cp-theme="auto"] { color-scheme: dark; }
+}
+
 /* === end palette ========================================================== */
 
 .cp-muted { color: var(--cp-muted); }
@@ -107,6 +242,15 @@
    inside the .cp-camp-nav band, which carries the same grey "Camp Planner" brand. */
 .cp-brand { color: var(--cp-muted); font-size: 0.8rem; text-decoration: none; }
 .cp-brand:hover { color: var(--cp-accent-text); }
+/* Our output when embedded (page.html wraps it). Carries the theme's own bg/text — the
+   subtree must not pair the host's background with our palette's text. Colour only, no
+   layout. isolation: the day/night items are z-index:-1, and a background on a
+   non-stacking-context ancestor paints over them (same trap as .vis-timeline in
+   timeline.css); unlike position/z-index it doesn't also become the containing block for
+   absolute descendants. flow-root keeps the first child's top margin inside the painted
+   box. */
+.cp-embed { background: var(--cp-bg); color: var(--cp-text); isolation: isolate; display: flow-root; }
+
 /* Embedded-only band (bare.html). It sits *outside* .cp-embed, so it paints itself for the
    same reason; the spacing below it is padding rather than margin so that it, too, is painted. */
 .cp-camp-nav {
@@ -248,3 +392,47 @@ tr.cp-dragging { opacity: 0.5; }
   color: var(--cp-text);
   border-bottom: 1px solid var(--cp-border);
 }
+
+/* Colour-theme switch — pill track, knob sliding under the selected glyph. Lives here
+   (not on .cp-seg): an embedding host links only this file. Equal-width buttons, so the
+   knob moves by its own width per --cp-theme-pos step (set by theme.js). */
+.cp-theme {
+  position: relative;         /* containing block for the knob */
+  display: inline-flex; align-self: center;
+  padding: 2px;
+  border: 1px solid var(--cp-border); border-radius: 999px;
+  background: var(--cp-surface-2);
+}
+.cp-theme[hidden] { display: none; }   /* beat the display:inline-flex */
+.cp-theme-knob {
+  position: absolute; top: 2px; bottom: 2px; left: 2px;
+  width: calc((100% - 4px) / 3);       /* 100% = padding box, so this is one button */
+  border-radius: 999px; background: var(--cp-accent);
+  /* % is of the knob's own width = one step per position. Default 1 (auto) is what
+     the CSS alone shows if theme.js never runs. */
+  transform: translateX(calc(var(--cp-theme-pos, 1) * 100%));
+}
+/* Only after theme.js sets the real position, so it doesn't slide in on load. */
+.cp-theme.is-ready .cp-theme-knob { transition: transform 0.18s ease; }
+.cp-theme button {
+  position: relative; z-index: 1;      /* over the knob */
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.7rem; height: 1.35rem; padding: 0;
+  border: 0; border-radius: 999px; background: none;
+  color: var(--cp-muted); cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+/* display:block kills the inline baseline gap, so the icon centres on the button */
+.cp-theme button svg { display: block; width: 13px; height: 13px; }
+/* An inactive position hovers as a ghost of the knob it would become; the active one
+   brightens the knob itself. No underline — this is a control, not a link. */
+.cp-theme button:hover:not(.on) { color: var(--cp-text); background: var(--cp-surface-3); }
+.cp-theme button.on { color: var(--cp-text-inverse); }
+.cp-theme:has(button.on:hover) .cp-theme-knob { filter: brightness(1.15); }
+.cp-theme button:focus-visible { outline: 2px solid var(--cp-accent-text); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .cp-theme.is-ready .cp-theme-knob, .cp-theme button { transition: none; }
+}
+/* embedded shell: push it to the right end of the camp-nav band */
+.cp-camp-nav .cp-theme { margin-left: auto; }
+

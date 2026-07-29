@@ -72,7 +72,7 @@ window.cpDom = (function () {
   }
 
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
-  const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "#9e9e9e") });
+  const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "var(--cp-text-dim)") });
 
   // Mount a dialog inside a backdrop overlay: Escape / backdrop-click dismiss it, Tab is
   // trapped inside, focus returns to the opener, onClose runs once on any dismissal.

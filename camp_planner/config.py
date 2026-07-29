@@ -96,6 +96,10 @@ class Config:
     )
     # Base template every page extends; an embedding host can override it.
     BASE_TEMPLATE = os.environ.get("BASE_TEMPLATE", "_layouts/full.html")
+    # Force a colour theme ("light" | "dark" | "auto") and drop the switch; unset → the
+    # visitor picks. Embedded hosts pass register_camp_planner(force_theme=...) instead.
+    # See docs/DEPLOYMENT.md §2.
+    CP_FORCE_THEME = os.environ.get("CP_FORCE_THEME")
     # Google service-account key (a path to the JSON file, or the JSON inline) that
     # enables two-way Google Calendar sync. Unset → the feature is disabled and hidden,
     # and the google-api libs need not be installed. See docs/GOOGLE_CALENDAR_SETUP.md.

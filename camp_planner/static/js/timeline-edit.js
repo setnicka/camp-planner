@@ -587,7 +587,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
      "Přepsat vzdálené změny svými (force).",
      "Zrušit moje změny a načíst vzdálené."].forEach((t) => opts.append(el("li", null, t)));
     const back = el("button", { type: "button", class: "cp-cancel" }, "Zpět k editaci");
-    const force = el("button", { type: "button", class: "cp-primary cp-blue-btn" }, "Přepsat (force)");
+    const force = el("button", { type: "button", class: "cp-primary" }, "Přepsat (force)");
     const discard = el("button", { type: "button", class: "cp-primary cp-warn-btn" }, "Zahodit moje a načíst");
     const dialog = el("div", { class: "cp-modal cp-modal-wide" },
       el("div", { class: "cp-modal-head cp-head-danger" }, "⚠️ Konflikt"),

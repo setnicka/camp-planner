@@ -29,6 +29,49 @@
   {% endfor %}
 {% endmacro %}
 
+{# Colour-theme switch (light / auto / dark). Renders nothing when the deployment pins the
+   theme (force_theme); theme.js wires the clicks and hides the group if a host pins a
+   theme in markup instead (which the server can't see). #}
+{% macro theme_switch(force_theme=none) %}
+  {%- if not force_theme %}
+  {#- Inline SVG, not text glyphs (☀ ◑ ☾): those come from different fallback fonts and
+      sit at different heights. One 24×24 grid, colour via currentColor. #}
+  <div class="cp-theme" data-cp-theme-switch role="group" aria-label="Barevné téma">
+    <span class="cp-theme-knob" aria-hidden="true"></span>
+    <button type="button" data-theme="light" aria-pressed="false"
+            title="Světlý režim" aria-label="Světlý režim">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.4" fill="currentColor"/>
+        <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              d="M12 1.8v2.2M12 20v2.2M1.8 12h2.2M20 12h2.2
+                 M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6"/>
+      </svg>
+    </button>
+    <button type="button" data-theme="auto" aria-pressed="false"
+            title="Automatický režim (podle systému)"
+            aria-label="Automatický režim (podle systému)">
+      {#- a circle with its right half filled, like ◑ #}
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="2.2"/>
+        <path fill="currentColor" d="M12 3.8a8.2 8.2 0 0 1 0 16.4z"/>
+      </svg>
+    </button>
+    <button type="button" data-theme="dark" aria-pressed="false"
+            title="Tmavý režim" aria-label="Tmavý režim">
+      {#- Crescent via <mask> — path subtraction retraces equal-radius arcs to zero area.
+          The bare id is fine: one switch per page. #}
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <mask id="cp-moon-mask">
+          <circle cx="12" cy="12" r="9" fill="white"/>
+          <circle cx="19.5" cy="5.5" r="8.5" fill="black"/>
+        </mask>
+        <circle cx="12" cy="12" r="9" fill="currentColor" mask="url(#cp-moon-mask)"/>
+      </svg>
+    </button>
+  </div>
+  {%- endif %}
+{% endmacro %}
+
 {% macro errors_list(errors) %}
   {% if errors %}
     <ul class="cp-flashes">{% for e in errors %}<li class="cp-flash-error">{{ e }}</li>{% endfor %}</ul>

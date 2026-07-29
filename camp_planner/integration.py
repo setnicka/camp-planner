@@ -50,6 +50,9 @@ def _inject() -> dict[str, Any]:
     return {
         "layout": _state()["base_template"],
         "app_version": __version__,
+        # "light" | "dark" | "auto" forces the theme and drops the switch; None = the
+        # visitor chooses (and standalone then defaults to auto, embedded to light).
+        "force_theme": _state()["force_theme"],
         "identity": g.get("identity", ANONYMOUS),
         # standalone only (we own login/logout); lets templates skip url_for('auth.*').
         "auth_enabled": bool(current_app.config.get("AUTH_LOGIN_ENDPOINT")),
@@ -82,8 +85,23 @@ def _attach(
     base_template: str,
     login_endpoint: str | None = None,
     url_prefix: str | None = None,
+    force_theme: str | None = None,
 ) -> None:
-    app.extensions["camp_planner"] = {"provider": provider, "base_template": base_template}
+    # An explicit argument (embedded) wins over the CP_FORCE_THEME env var (standalone/
+    # proxy). Kept in our own extensions state, not app.config: embedded, that dict belongs
+    # to the host and a key of ours could collide with one of theirs.
+    if force_theme is None:
+        force_theme = app.config.get("CP_FORCE_THEME")
+    if force_theme not in (None, "", "light", "dark", "auto"):
+        raise ValueError(
+            f"force_theme={force_theme!r}: expected 'light', 'dark', 'auto' or None "
+            "(None = show the switch and let the visitor choose)"
+        )
+    app.extensions["camp_planner"] = {
+        "provider": provider,
+        "base_template": base_template,
+        "force_theme": force_theme or None,
+    }
     if login_endpoint:
         app.config["AUTH_LOGIN_ENDPOINT"] = login_endpoint
     for bp in blueprints:
@@ -126,6 +144,7 @@ def register_camp_planner(
     url_prefix: str = "/planner",
     database_uri: str | None = None,
     base_template: str = "_layouts/bare.html",
+    force_theme: str | None = None,
 ) -> None:
     """Mount Camp Planner's blueprints on a host Flask app (embedded mode).
 
@@ -133,6 +152,11 @@ def register_camp_planner(
     SQLAlchemy instance binds to the host app and shares its SQLALCHEMY_DATABASE_URI
     (table prefix avoids clashes); pass database_uri only if the host sets none.
     Pass base_template (e.g. the host's base) to wrap our pages in its chrome.
+
+    force_theme ("light" | "dark" | "auto") pins the theme and drops the switch; "auto"
+    is for a host page that itself follows prefers-color-scheme (we can't read your
+    background, so we only follow the OS when you say so). None = the visitor chooses,
+    starting light. See docs/DEPLOYMENT.md §2.
     """
     if database_uri:
         host_app.config.setdefault("SQLALCHEMY_DATABASE_URI", database_uri)
@@ -144,4 +168,5 @@ def register_camp_planner(
         CallbackProvider(auth_callback),
         base_template=base_template,
         url_prefix=url_prefix,
+        force_theme=force_theme,
     )

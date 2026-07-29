@@ -81,12 +81,16 @@
   // Row hover: highlight the hovered day row plus its left-panel label. The label lives
   // in a separate subtree, so pair it by position via :has() — one rule per day, generated
   // from the actual group count (no hardcoded cap on camp length).
-  const HOVER_HI = "background:rgba(255,205,0,.15);box-shadow:inset 0 2px 0 #444,inset 0 -2px 0 #444";
+  const HOVER_HI = "background:var(--cp-row-hover);box-shadow:inset 0 2px 0 var(--cp-row-hover-edge),inset 0 -2px 0 var(--cp-row-hover-edge)";
   const hoverRules = "#cp-timeline .vis-foreground .vis-group:hover{" + HOVER_HI + "}" +
     payload.groups.map((g, i) =>
       `#cp-timeline:has(.vis-foreground .vis-group:nth-child(${i + 1}):hover) .vis-labelset .vis-label:nth-child(${i + 1}){${HOVER_HI}}`
     ).join("");
-  document.head.insertAdjacentHTML("beforeend", "<style>" + styleRules + hoverRules + "</style>");
+  // Constructed sheet, not a <style> element: an embedding host's CSP may forbid inline
+  // styles, which blocks a <style> we inject but not the CSSOM.
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(styleRules + hoverRules);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 
   // The legend doubles as the category filter: each entry is a button carrying its
   // "category:<key>" token (setupFilter wires the clicks). A "Bez kategorie" entry is
@@ -290,19 +294,33 @@
       return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
     };
   })();
-  function dnColor(altRad) {
+  // Night overlay: colour from a palette token, alpha from the sun. Resolved to a
+  // literal rgba() — vis round-trips an item's style through the CSSOM, and a shorthand
+  // holding var() gets dropped there.
+  function nightRGB() {
+    const v = getComputedStyle(container).getPropertyValue("--cp-daynight-rgb").trim();
+    const n = v.split(/[\s,]+/).filter(Boolean).map(Number);   // Number("") is 0, not NaN
+    if (n.length === 3 && n.every((x) => Number.isFinite(x))) return n.join(",");
+    console.warn(`cp: --cp-daynight-rgb is ${v || "unset"}; expected an "r g b" triplet.`
+      + " Skipping the day/night shading.");
+    return null;
+  }
+  function dnColor(altRad, rgb) {
     const a = (altRad * 180) / Math.PI;
     const t = Math.max(0, Math.min(1, (a + 12) / 15)); // 0 = night, 1 = day
-    return `rgba(24,34,62,${(1 - t).toFixed(2)})`;
+    return `rgba(${rgb},${(1 - t).toFixed(2)})`;
   }
   function dayNightBackgrounds() {
+    const rgb = nightRGB();
+    if (!rgb) return [];
     return payload.groups.map((g, i) => {
       const midnightUTC = Date.UTC(Y, Mo - 1, D + i);
       const offMs = tzOffsetMs(camp.timezone, new Date(midnightUTC + 12 * 3600000)); // offset near local noon
       const samples = [];
       for (let m = 0; m <= DAY_MIN; m += 20) {
         const instant = new Date(midnightUTC + (WINDOW_START + m) * 60000 - offMs);
-        samples.push({ c: dnColor(sunAltitude(instant, camp.latitude, camp.longitude)), p: (m / DAY_MIN) * 100 });
+        samples.push({ c: dnColor(sunAltitude(instant, camp.latitude, camp.longitude), rgb),
+                       p: (m / DAY_MIN) * 100 });
       }
       // keep only stops where the colour changes (flat runs collapse to endpoints)
       const stops = samples
@@ -318,6 +336,14 @@
     });
   }
   if (hasLocation) items.add(dayNightBackgrounds());
+
+  // The colour is baked into each item's style, so re-derive it on a theme change —
+  // the visitor flipping our switch, or the OS while on "auto".
+  function refreshDayNight() {
+    if (hasLocation) items.update(dayNightBackgrounds());
+  }
+  window.addEventListener("cp:themechange", refreshDayNight);
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", refreshDayNight);
 
   // --- current-time line (today's row only, drawn over the items) ------------
   // Days are rows on one shared 24h window axis, so vis's full-height current-time bar would

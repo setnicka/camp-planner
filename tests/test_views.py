@@ -309,3 +309,39 @@ def test_csrf_token_endpoint_hands_out_a_working_token():
     token = c.get("/csrf-token", headers=ADMIN).get_json()["csrf_token"]
     ok = c.post("/api/camps", json=body, headers={**ADMIN, "X-CSRFToken": token})
     assert ok.status_code == 200, ok.get_json()
+
+
+# --- colour theme -----------------------------------------------------------
+
+
+def test_theme_switch_is_rendered_and_follows_the_os(client):
+    """Default deployment: the visitor chooses, so the switch and its script ship. The
+    shell opts into prefers-color-scheme with "auto" — it owns the page background."""
+    html = client.get("/").get_data(as_text=True)
+    assert '<html lang="cs" data-cp-theme="auto">' in html
+    assert "data-cp-theme-switch" in html
+    assert 'data-theme="light"' in html and 'data-theme="auto"' in html and 'data-theme="dark"' in html
+    assert "cp-theme-knob" in html          # the sliding knob of the 3-position toggle
+    assert "js/theme.js" in html
+    # the pre-paint re-apply script, so a reload of a dark page doesn't flash white
+    assert 'localStorage.getItem("cp-theme")' in html
+    # this shell paints <body> itself, so page.html adds no wrapper of its own
+    assert "cp-embed" not in html
+
+
+def test_pinned_theme_replaces_the_switch(monkeypatch):
+    """CP_FORCE_THEME forces the theme: emitted on <html>, and no switch to contradict it. Read at
+    wire time, hence a fresh app rather than poking config on a live one."""
+    from camp_planner.config import TestingConfig
+
+    monkeypatch.setattr(TestingConfig, "CP_FORCE_THEME", "dark", raising=False)
+    pinned = create_app("testing")
+    with pinned.app_context():
+        db.create_all()          # the index lists camps
+        html = pinned.test_client().get("/").get_data(as_text=True)
+        db.session.remove()      # don't leave a session bound for the next test
+    assert '<html lang="cs" data-cp-theme="dark">' in html
+    assert "data-cp-theme-switch" not in html
+    assert "js/theme.js" not in html          # nothing left for it to wire
+    assert 'localStorage.getItem("cp-theme")' not in html
+

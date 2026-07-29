@@ -1,12 +1,20 @@
-{% from "_macros.html" import csrf -%}
+{% from "_macros.html" import csrf, theme_switch -%}
 <!doctype html>
-<html lang="cs">
+{# "auto" (not a missing attribute) is what opts us into prefers-color-scheme: this shell
+   owns the page background, so following the OS is safe here. See content.css. #}
+<html lang="cs" data-cp-theme="{{ force_theme or 'auto' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Camp Planner{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/content.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/standalone.css') }}">
+  {%- if not force_theme %}
+  {# Re-apply the stored theme before first paint, so a dark page doesn't flash
+     white. Inline and synchronous on purpose; no store → the "auto" above stands. #}
+  <script>try{var t=localStorage.getItem("cp-theme");
+    if(t==="light"||t==="dark")document.documentElement.setAttribute("data-cp-theme",t);}catch(e){}</script>
+  {%- endif %}
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -22,6 +30,7 @@
       {% elif auth_enabled %}
         <a href="{{ url_for('auth.login') }}">Přihlásit se</a>
       {% endif %}
+      {{ theme_switch(force_theme) }}
     </div>
   </header>
   <noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
@@ -34,6 +43,9 @@
   {% endwith %}
   <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
   <footer class="cp-footer">Camp Planner v{{ app_version }}</footer>
+  {%- if not force_theme %}
+  <script src="{{ url_for('main.static', filename='js/theme.js') }}" defer></script>
+  {%- endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

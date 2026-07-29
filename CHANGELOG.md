@@ -12,6 +12,13 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Dark mode: a light/auto/dark switch on every page, remembered per browser; embedded
+  defaults to light. Every colour is a `--cp-*` token an embedding host can override.
+- A deployment can force a theme and drop the switch: `CP_FORCE_THEME` or
+  `register_camp_planner(force_theme=…)` — see docs/DEPLOYMENT.md §2.
+
 ### Changed
 
 - One accent colour: blue; the former green lives on as „success“. Low-contrast ambers
