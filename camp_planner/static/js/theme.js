@@ -41,7 +41,7 @@
       } catch (e) { /* storage disabled → not remembered, but the page still switches */ }
     }
 
-    group.style.setProperty("--cp-theme-pos", POS[active]);
+    group.style.setProperty("--cp-pill-pos", POS[active]);
     for (const btn of group.querySelectorAll("button[data-theme]")) {
       const on = btn.dataset.theme === active;
       btn.classList.toggle("on", on);

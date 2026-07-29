@@ -12,7 +12,7 @@
 "use strict";
 
 window.cpTodoList = function (opts) {
-  const { el, api, withId, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns } = window.cpDom;
+  const { el, api, withId, dash, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns } = window.cpDom;
   const mount = opts.mount;
   const TODOS = opts.todos;                 // mutated in place (push/splice/assign)
   const ORGS = opts.orgs || [];             // [{id, initials, name}] — filter + edit picker
@@ -48,7 +48,7 @@ window.cpTodoList = function (opts) {
   // Completed → the plain date; otherwise the whole-day delta from today: remaining days in
   // green, overdue days in red, due-today neutral.
   function dueBadge(t) {
-    if (!t.due_date) return el("span", { class: "cp-muted" }, "—");
+    if (!t.due_date) return dash();
     if (t.is_done) return el("span", { class: "cp-muted cp-todo-due" }, t.due_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -75,7 +75,7 @@ window.cpTodoList = function (opts) {
   }
 
   function orgsCell(t) {
-    if (!t.orgs.length) return el("td", { class: "cp-muted" }, "—");
+    if (!t.orgs.length) return el("td", null, dash());
     const td = el("td", { class: "cp-todo-orgs" });
     t.orgs.forEach((o, i) => {
       if (i) td.append(", ");
@@ -312,7 +312,7 @@ window.cpTodoList = function (opts) {
     }
 
     tbody = el("tbody");
-    const table = el("table", { class: "cp-table cp-todo-table" }, el("thead", null, headRow), tbody);
+    const table = el("table", { class: "cp-table cp-todo-table cp-sticky-head" }, el("thead", null, headRow), tbody);
     const children = [toolbar, table];
     if (U.create && mayEdit) {   // "+ Přidat úkol" sits below the table (activity TODO tab)
       const add = el("button", { type: "button", class: "cp-add cp-todo-add" }, "+ Přidat úkol");

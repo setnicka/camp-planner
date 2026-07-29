@@ -15,7 +15,9 @@ NON_COLOUR = {"--cp-page-width", "--cp-page-pad"}
 
 # Per-component state written at runtime by JS — deliberately absent from the palette
 # block. (Element-keyed values like the materials hue --h don't use the --cp- prefix.)
-RUNTIME_STATE = {"--cp-theme-pos"}   # theme.js: which position the toggle knob sits at
+RUNTIME_STATE = {
+    "--cp-pill-n", "--cp-pill-pos",   # .cp-pill knob: positions + the active one (theme.js, dom.js)
+}
 
 # The three palette blocks, by the exact selector list each carries.
 LIGHT = ':root,\n[data-cp-theme="light"] {'

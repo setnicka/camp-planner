@@ -175,6 +175,17 @@
 .cp-danger.cp-mini:not(:disabled):hover { filter: brightness(1.08); }
 
 /* --- in-header sort + filter controls — shared by the overview tables (activities, todos) --- */
+/* Long tables opt in (.cp-sticky-head on the table) to keeping the header — labels and
+   filters — in view while scrolling. Collapsed table borders don't stick with the th, so
+   the bottom rule rides in a box-shadow. */
+.cp-sticky-head thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--cp-bg);
+  box-shadow: 0 1px 0 var(--cp-border);
+}
+/* Sticky + z-index makes every th its own stacking context, so an open popover can't rise
+   above the later (now opaque) columns — lift its whole th instead. */
+.cp-sticky-head thead th:has(.cp-th-pop:not([hidden])) { z-index: 4; }
 .cp-th-label { display: block; font-weight: 600; }
 /* a sortable column title: looks like the header label but is a clickable button. A <button>
    doesn't inherit text-transform/letter-spacing (and `font:` doesn't carry them), so restore
@@ -188,10 +199,17 @@
 .cp-th-sort:hover { color: var(--cp-accent-text); }
 .cp-th-arrow { color: var(--cp-accent-text); }
 
+/* enum filter under the title (cpDom.filterSlider): a .cp-pill of one-symbol positions,
+   its knob hidden while nothing is filtered. Only the metrics differ from the pill's own. */
+.cp-th-slider { margin-top: 0.25rem; }
+.cp-th-slider .cp-pill-knob { opacity: 0; transition: transform .15s ease, opacity .15s ease; }
+.cp-th-slider:has(button.on) .cp-pill-knob { opacity: 1; }
+.cp-th-slider button { width: 1.35rem; height: 1.2rem; font-size: 12px; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .cp-th-slider .cp-pill-knob { transition: none; } }
+
 /* filter control under the title (select / checkbox / dropdown button) */
 .cp-th-filter { margin-top: 0.25rem; font: inherit; font-size: 12px; font-weight: normal;
   padding: 0.1rem 0.25rem; border: 1px solid var(--cp-border); border-radius: 5px; background: var(--cp-surface); color: var(--cp-text); max-width: 9rem; }
-.cp-th-check { display: block; margin-top: 0.25rem; font-size: 11px; font-weight: normal; color: var(--cp-muted); cursor: pointer; white-space: nowrap; }
 
 /* org filter: a dropdown button revealing a checkbox popover */
 .cp-th-dd { position: relative; }

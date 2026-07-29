@@ -19,12 +19,14 @@
 .cp-ov-table th { vertical-align: bottom; }
 .cp-ov-table td { vertical-align: top; }
 
-.cp-ov-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; margin-bottom: 0.5rem; }
+.cp-ov-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.4rem 1rem; margin-bottom: 0.5rem; }
 .cp-ov-count { font-size: 12px; }
 
 /* sort-mode segmented control (shared .cp-seg): margin-right:auto pushes it left
    while the count + reset stay right-aligned. */
 .cp-ov-toolbar .cp-seg { margin-right: auto; }
+/* hint below the table, styled like the timeline's .cp-tl-help */
+.cp-ov-hint { margin: 0.4rem 0 0; font-size: 12px; color: var(--cp-muted); line-height: 1.35; }
 
 /* --- chronological mode: day dividers + time column --- */
 /* .cp-ov-table prefix raises specificity above .cp-table td (content.css) so the tighter padding wins. */
@@ -55,6 +57,8 @@
   width: 1.5rem; height: 1.5rem; border-radius: 50%; font-size: 0.95rem; font-weight: 700; color: var(--cp-text-inverse); }
 .cp-ov-check.yes { background: var(--cp-success); }
 .cp-ov-check.no { background: var(--cp-danger-soft); }
+/* label tags: presence, not pass/fail — a thick bare checkmark, deliberately not a badge */
+.cp-ov-mark { font-weight: 700; font-size: 1.05rem; }
 /* mini progress bar: green fill behind a centred % */
 .cp-ov-bar { position: relative; display: inline-flex; align-items: center; justify-content: center;
   min-width: 3.5rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: var(--cp-danger-soft); overflow: hidden; }

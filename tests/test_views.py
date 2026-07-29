@@ -321,7 +321,7 @@ def test_theme_switch_is_rendered_and_follows_the_os(client):
     assert '<html lang="cs" data-cp-theme="auto">' in html
     assert "data-cp-theme-switch" in html
     assert 'data-theme="light"' in html and 'data-theme="auto"' in html and 'data-theme="dark"' in html
-    assert "cp-theme-knob" in html          # the sliding knob of the 3-position toggle
+    assert "cp-pill-knob" in html           # the sliding knob of the 3-position toggle
     assert "js/theme.js" in html
     # the pre-paint re-apply script, so a reload of a dark page doesn't flash white
     assert 'localStorage.getItem("cp-theme")' in html

@@ -36,6 +36,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline slot-action buttons dropped the dark outline.
 - Timeline header: camp-timezone clock only when it differs from the browser's, filter
   help below the controls, zoom −/+ joined.
+- Overview tables: sticky headers, dimmer „—“ placeholders, label tags as a thick ✔,
+  and the tag/todos/materials filters as one-symbol sliders.
 
 ## [0.3.0] - 2026-07-26
 

@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, swatch, mergePicker, orgFilterHead, toast, plural, freezeColumns } = window.cpDom;
+  const { el, api, withId, mergeUrl, swatch, dash, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -58,9 +58,36 @@
   const fmtTime = (iso) => { const [h, m] = iso.split("T")[1].split(":"); return Number(h) + ":" + m; };
   const slotRange = (s) => fmtTime(s.start_at) + "–" + fmtTime(s.end_at);
 
+  // --- column-filter states ---------------------------------------------------
+  // One table per filterable column kind, in slider order: [value, symbol, test]. Header
+  // symbols, row filtering and hash validation all read these, so a state exists in exactly
+  // one place. Tooltips are keyed by value (below) rather than positional — Czech declension
+  // makes them per-column ("jen s úkoly" / "jen s materiálem"), so they can't live here.
+  const PROGRESS_STATES = [                                 // tested against a {done, total}
+    ["has", "∃", (c) => c.total > 0],
+    ["unfinished", "◔", (c) => c.done < c.total],
+    ["done", "●", (c) => c.total > 0 && c.done === c.total],
+    ["none", "∅", (c) => c.total === 0],
+  ];
+  // A tag column offers the same four, minus the two only a checkbox tag can answer.
+  const TAG_STATES = new Map(PINNED.map((t) => [t.id, [
+    ["has", "∃", (r) => hasTag(r, t.id)],
+    ...(t.kind === "check" ? [
+      ["checked", "✓", (r) => r.tags[t.id] === "true"],
+      ["unchecked", "✗", (r) => hasTag(r, t.id) && r.tags[t.id] !== "true"],
+    ] : []),
+    ["none", "∅", (r) => !hasTag(r, t.id)],
+  ]]));
+  const TAG_TIPS = { has: "Filtr: jen s tagem", checked: "Filtr: jen se zaškrtnutým tagem",
+                     unchecked: "Filtr: jen s nezaškrtnutým tagem", none: "Filtr: jen bez tagu" };
+  const stateTest = (states, value) => states.find(([v]) => v === value)?.[2];
+  const validState = (states, value) => (stateTest(states, value) ? value : null);
+  // → the [value, symbol, tooltip] triples cpDom.filterSlider renders
+  const sliderStates = (states, tips) => states.map(([v, sym]) => [v, sym, tips[v]]);
+
   // filter + sort state (cleared by resetFilters → buildShell, which rebuilds the controls)
-  const filter = { categoryId: null, unfinishedTodos: false, unfinishedMaterials: false,
-                   orgIds: new Set(), garantsOnly: false, tags: new Map() };   // tags: tagId -> "has"|"checked"|"unchecked"
+  const filter = { categoryId: null, todosState: null, materialsState: null,
+                   orgIds: new Set(), garantsOnly: false, tags: new Map() };
   let sortKey = "title";
   let sortDir = 1;                // 1 = the column's natural order, -1 = reversed (second click)
   let chrono = false;            // chronological mode: rows = one per main slot, grouped by camp day
@@ -70,7 +97,7 @@
 
   // --- cell renderers --------------------------------------------------------
   function slotText(r) {
-    if (!r.slots.length) return "—";
+    if (!r.slots.length) return dash();
     const n = { main: 0, prep: 0, cleanup: 0 };
     r.slots.forEach((s) => { n[s.role]++; });                                 // count by role from the slot list
     let s = n.main + " " + plural(n.main, "slot", "sloty", "slotů");
@@ -82,7 +109,7 @@
   }
 
   function orgCell(r) {
-    if (!r.garants.length && !r.helpers.length) return el("td", { class: "cp-muted" }, "—");
+    if (!r.garants.length && !r.helpers.length) return el("td", null, dash());
     const td = el("td", { class: "cp-ov-orgs" });
     const parts = r.garants.map((i) => el("span", { class: "cp-ov-garant" }, i))
       .concat(r.helpers.map((i) => el("span", { class: "cp-ov-helper" }, i)));
@@ -91,14 +118,14 @@
   }
 
   function progressCell(c) {
-    if (!c.total) return el("td", { class: "cp-muted cp-ov-num" }, "—");
+    if (!c.total) return el("td", { class: "cp-ov-num" }, dash());
     const cls = c.done < c.total ? " cp-ov-unfinished" : " cp-ov-done";
     return el("td", { class: "cp-ov-num" + cls }, c.done + "/" + c.total);
   }
 
   // one pinned-tag cell for an activity: not applied → "—"; else rendered per the tag's kind.
   function tagCell(tag, r) {
-    if (!hasTag(r, tag.id)) return el("td", { class: "cp-ov-tag cp-muted" }, "—");
+    if (!hasTag(r, tag.id)) return el("td", { class: "cp-ov-tag" }, dash());
     const value = r.tags[tag.id];
     if (tag.kind === "check") {
       const on = value === "true";
@@ -111,8 +138,9 @@
           el("span", { class: "cp-ov-bar-fill", style: "width:" + pct + "%" }),
           el("span", { class: "cp-ov-bar-num" }, pct + " %")));
     }
-    if (tag.kind === "text") return el("td", { class: "cp-ov-tag" }, value || "—");
-    return el("td", { class: "cp-ov-tag" }, "✓");   // label: presence only
+    if (tag.kind === "text") return el("td", { class: "cp-ov-tag" }, value || dash());
+    return el("td", { class: "cp-ov-tag" },
+      el("span", { class: "cp-ov-mark" }, "✔"));   // label: presence only
   }
 
   function actionCell(r) {
@@ -132,7 +160,7 @@
   // Cells shared by both row layouts, from category through the actions column.
   function commonCells(r) {
     const cells = [
-      r.category ? el("td", null, swatch(r.category.color), " ", r.category.label) : el("td", { class: "cp-muted" }, "—"),
+      r.category ? el("td", null, swatch(r.category.color), " ", r.category.label) : el("td", null, dash()),
       orgCell(r), progressCell(r.todos), progressCell(r.materials)];
     PINNED.forEach((tag) => cells.push(tagCell(tag, r)));
     if (!chrono) cells.push(el("td", { class: "cp-ov-slots" }, slotText(r)));   // "Čas" replaces it in chrono mode
@@ -153,7 +181,7 @@
     const title = el("td", null, link);
     if (slot && slot.override_name) title.append(" ", el("span", { class: "cp-ov-act" }, "(" + r.title + ")"));
     return el("tr", null,
-      el("td", { class: "cp-ov-time" }, slot ? slotRange(slot) : "—"), title, ...commonCells(r));
+      el("td", { class: "cp-ov-time" }, slot ? slotRange(slot) : dash()), title, ...commonCells(r));
   }
 
   const dividerRow = (label, cls) =>
@@ -176,8 +204,8 @@
   function stateToHash() {
     const p = new URLSearchParams();
     if (filter.categoryId != null) p.set("cat", filter.categoryId);
-    if (filter.unfinishedTodos) p.set("todos", "1");
-    if (filter.unfinishedMaterials) p.set("mat", "1");
+    if (filter.todosState) p.set("todos", filter.todosState);
+    if (filter.materialsState) p.set("mat", filter.materialsState);
     filter.orgIds.forEach((id) => p.append("org", id));
     if (filter.garantsOnly) p.set("garants", "1");
     for (const [id, state] of filter.tags) p.set("tag" + id, state);
@@ -197,14 +225,14 @@
     const p = new URLSearchParams(location.hash.slice(1));
     const catId = Number(p.get("cat"));
     filter.categoryId = CATEGORIES.some((c) => c.id === catId) ? catId : null;
-    filter.unfinishedTodos = p.get("todos") === "1";
-    filter.unfinishedMaterials = p.get("mat") === "1";
+    filter.todosState = validState(PROGRESS_STATES, p.get("todos"));
+    filter.materialsState = validState(PROGRESS_STATES, p.get("mat"));
     filter.orgIds = new Set(p.getAll("org").map(Number).filter((id) => ORGS.some((o) => o.id === id)));
     filter.garantsOnly = p.get("garants") === "1";
     filter.tags = new Map();
     PINNED.forEach((t) => {
-      const v = p.get("tag" + t.id);
-      if (v === "has" || ((v === "checked" || v === "unchecked") && t.kind === "check")) filter.tags.set(t.id, v);
+      const v = validState(TAG_STATES.get(t.id), p.get("tag" + t.id));
+      if (v) filter.tags.set(t.id, v);
     });
     chrono = p.get("chrono") === "1";
     const validSort = sortKeyValid(p.get("sort"));   // kept independent of chrono, so it survives a switch back
@@ -213,18 +241,22 @@
   }
 
   // --- filtering + sorting (client-side over ROWS) ---------------------------
+  // no state = no filter on that column, else the state's own test decides
+  const progressPasses = (state, c) => {
+    const test = stateTest(PROGRESS_STATES, state);
+    return !test || test(c);
+  };
+
   function passes(r) {
     if (filter.categoryId != null && (!r.category || r.category.id !== filter.categoryId)) return false;
-    if (filter.unfinishedTodos && r.todos.total - r.todos.done <= 0) return false;
-    if (filter.unfinishedMaterials && r.materials.total - r.materials.done <= 0) return false;
+    if (!progressPasses(filter.todosState, r.todos)) return false;
+    if (!progressPasses(filter.materialsState, r.materials)) return false;
     if (filter.orgIds.size) {   // "jen garanti" narrows the match to garant assignments
       const ids = filter.garantsOnly ? r.garant_ids : r.org_ids;
       if (!ids.some((id) => filter.orgIds.has(id))) return false;
     }
     for (const [tagId, state] of filter.tags) {
-      if (state === "has" && !hasTag(r, tagId)) return false;
-      if (state === "checked" && r.tags[tagId] !== "true") return false;
-      if (state === "unchecked" && (!hasTag(r, tagId) || r.tags[tagId] === "true")) return false;
+      if (!stateTest(TAG_STATES.get(tagId), state)(r)) return false;
     }
     return true;
   }
@@ -328,13 +360,11 @@
     return el("th", null, el("span", { class: "cp-th-label" }, "Kategorie"), sel);
   }
 
-  // a header with an "jen nehotové" checkbox bound to a boolean filter field
-  function unfinishedHead(label, fieldName) {
-    const cb = el("input", { type: "checkbox" });
-    cb.checked = filter[fieldName];
-    cb.addEventListener("change", () => { filter[fieldName] = cb.checked; onFilterChange(); });
-    return el("th", null, el("span", { class: "cp-th-label" }, label),
-      el("label", { class: "cp-th-check", title: "Jen s nehotovými" }, cb, " jen nehotové"));
+  // a progress-column header (todos / materials): presence + completion filter slider
+  function progressHead(label, fieldName, tips) {
+    const slider = filterSlider(sliderStates(PROGRESS_STATES, tips),
+      () => filter[fieldName], (v) => { filter[fieldName] = v; }, onFilterChange);
+    return el("th", null, el("span", { class: "cp-th-label" }, label), slider);
   }
 
   function orgsHead() {
@@ -345,17 +375,12 @@
     }).th;
   }
 
-  // a pinned-tag header: sortable when check/progress, with a presence/state filter select
+  // a pinned-tag header: sortable when check/progress, with a presence/state filter slider
   function tagHead(tag) {
-    const sel = el("select", { class: "cp-th-filter" });
-    sel.append(el("option", { value: "any" }, "Vše"), el("option", { value: "has" }, "Má štítek"));
-    if (tag.kind === "check")
-      sel.append(el("option", { value: "checked" }, "Zaškrtnuté"), el("option", { value: "unchecked" }, "Nezaškrtnuté"));
-    sel.value = filter.tags.get(tag.id) || "any";
-    sel.addEventListener("change", () => {
-      if (sel.value === "any") filter.tags.delete(tag.id); else filter.tags.set(tag.id, sel.value);
-      onFilterChange();
-    });
+    const slider = filterSlider(sliderStates(TAG_STATES.get(tag.id), TAG_TIPS),
+      () => filter.tags.get(tag.id),
+      (v) => { if (v) filter.tags.set(tag.id, v); else filter.tags.delete(tag.id); },
+      onFilterChange);
 
     let titleNode;
     if (tag.kind === "check" || tag.kind === "progress") {
@@ -367,13 +392,13 @@
     } else {
       titleNode = el("span", { class: "cp-th-label" }, tag.name);
     }
-    return el("th", { class: "cp-ov-tag", title: tag.name }, titleNode, sel);
+    return el("th", { class: "cp-ov-tag", title: tag.name }, titleNode, slider);
   }
 
   // "Zrušit filtry" clears only the filters; the sort mode (a column or chronological) is left
   // as-is — the segmented control is the only way in/out of chronological mode.
   function resetFilters() {
-    filter.categoryId = null; filter.unfinishedTodos = false; filter.unfinishedMaterials = false;
+    filter.categoryId = null; filter.todosState = null; filter.materialsState = null;
     filter.orgIds.clear(); filter.tags.clear(); filter.garantsOnly = false;
     writeHash();
     buildShell();
@@ -427,7 +452,10 @@
     sortArrows.clear();
     const headRow = el("tr", null,
       sortHead("Název", "title"), categoryHead(), orgsHead(),
-      unfinishedHead("Úkoly", "unfinishedTodos"), unfinishedHead("Materiál", "unfinishedMaterials"));
+      progressHead("Úkoly", "todosState", ["Filtr: jen s úkoly", "Filtr: jen s nedokončenými úkoly",
+        "Filtr: jen s hotovými úkoly", "Filtr: jen bez úkolů"]),
+      progressHead("Materiál", "materialsState", ["Filtr: jen s materiálem", "Filtr: jen s nedokončeným materiálem",
+        "Filtr: jen s hotovým materiálem", "Filtr: jen bez materiálu"]));
     PINNED.forEach((t) => headRow.append(tagHead(t)));
     if (!chrono) headRow.append(el("th", null, el("span", { class: "cp-th-label" }, "Sloty")));   // "Čas" replaces it
     if (mayEdit) headRow.append(el("th", { class: "cp-actions" }, ""));
@@ -445,11 +473,13 @@
     const reset = el("button", { type: "button", class: "cp-mini" }, "Zrušit filtry");
     reset.addEventListener("click", resetFilters);
     countLabel = el("span", { class: "cp-muted cp-ov-count" });
+    const hint = el("p", { class: "cp-ov-hint" }, el("small", null,
+      "Další sloupce mohou být přidány jako tagy v nastavení akce (zobrazeny jen připnuté tagy)."));
     const toolbar = el("div", { class: "cp-ov-toolbar" }, seg, countLabel, reset);
 
     tbody = el("tbody");
-    const table = el("table", { class: "cp-table cp-ov-table" }, el("thead", null, headRow), tbody);
-    mount.replaceChildren(toolbar, table);
+    const table = el("table", { class: "cp-table cp-ov-table cp-sticky-head" }, el("thead", null, headRow), tbody);
+    mount.replaceChildren(toolbar, table, hint);
     // Paint the full (unfiltered) set first so the frozen column widths fit the widest content,
     // then apply any active filter. Pinning the widths up front stops later filtered re-renders —
     // which show only the matching rows — from reflowing the columns. In chronological mode the

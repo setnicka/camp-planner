@@ -234,6 +234,7 @@
 /* === end palette ========================================================== */
 
 .cp-muted { color: var(--cp-muted); }
+.cp-dim { color: var(--cp-text-dim); opacity: .45; }   /* empty-value placeholders ("—") in tables */
 .cp-section { margin: 1.75rem 0; }
 .cp-subtitle { font-size: 0.6em; font-weight: normal; color: var(--cp-muted); }
 
@@ -394,46 +395,49 @@ tr.cp-dragging { opacity: 0.5; }
   border-bottom: 1px solid var(--cp-border);
 }
 
-/* Colour-theme switch — pill track, knob sliding under the selected glyph. Lives here
-   (not on .cp-seg): an embedding host links only this file. Equal-width buttons, so the
-   knob moves by its own width per --cp-theme-pos step (set by theme.js). */
-.cp-theme {
+/* Pill switch — a track with a knob sliding under the selected position. Used by the
+   colour-theme switch below and by the overview tables' column filters (.cp-th-slider,
+   components.css). Lives here, not in components.css: an embedding host links only this
+   file. Equal-width buttons, so the knob moves by its own width per --cp-pill-pos step;
+   both it and --cp-pill-n (how many positions) are set from JS. */
+.cp-pill {
   position: relative;         /* containing block for the knob */
-  display: inline-flex; align-self: center;
+  display: inline-flex;
   padding: 2px;
   border: 1px solid var(--cp-border); border-radius: 999px;
   background: var(--cp-surface-2);
 }
-.cp-theme[hidden] { display: none; }   /* beat the display:inline-flex */
-.cp-theme-knob {
+.cp-pill-knob {
   position: absolute; top: 2px; bottom: 2px; left: 2px;
-  width: calc((100% - 4px) / 3);       /* 100% = padding box, so this is one button */
+  width: calc((100% - 4px) / var(--cp-pill-n, 2));   /* 100% = padding box, so this is one button */
   border-radius: 999px; background: var(--cp-accent);
-  /* % is of the knob's own width = one step per position. Default 1 (auto) is what
-     the CSS alone shows if theme.js never runs. */
-  transform: translateX(calc(var(--cp-theme-pos, 1) * 100%));
+  transform: translateX(calc(var(--cp-pill-pos, 0) * 100%));   /* % of the knob's own width */
 }
-/* Only after theme.js sets the real position, so it doesn't slide in on load. */
-.cp-theme.is-ready .cp-theme-knob { transition: transform 0.18s ease; }
-.cp-theme button {
+.cp-pill button {
   position: relative; z-index: 1;      /* over the knob */
   display: inline-flex; align-items: center; justify-content: center;
-  width: 1.7rem; height: 1.35rem; padding: 0;
-  border: 0; border-radius: 999px; background: none;
-  color: var(--cp-muted); cursor: pointer;
+  padding: 0; border: 0; border-radius: 999px; background: none;
+  font: inherit; color: var(--cp-muted); cursor: pointer;
   transition: color 0.18s ease, background-color 0.18s ease;
 }
-/* display:block kills the inline baseline gap, so the icon centres on the button */
-.cp-theme button svg { display: block; width: 13px; height: 13px; }
 /* An inactive position hovers as a ghost of the knob it would become; the active one
    brightens the knob itself. No underline — this is a control, not a link. */
-.cp-theme button:hover:not(.on) { color: var(--cp-text); background: var(--cp-surface-3); }
-.cp-theme button.on { color: var(--cp-text-inverse); }
-.cp-theme:has(button.on:hover) .cp-theme-knob { filter: brightness(1.15); }
-.cp-theme button:focus-visible { outline: 2px solid var(--cp-accent-text); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) {
-  .cp-theme.is-ready .cp-theme-knob, .cp-theme button { transition: none; }
-}
+.cp-pill button:hover:not(.on) { color: var(--cp-text); background: var(--cp-surface-3); }
+.cp-pill button.on { color: var(--cp-text-inverse); }
+.cp-pill:has(button.on:hover) .cp-pill-knob { filter: brightness(1.15); }
+.cp-pill button:focus-visible { outline: 2px solid var(--cp-accent-text); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .cp-pill button { transition: none; } }
+
+/* Colour-theme switch: three positions, defaulting to the middle one (auto) — that's what
+   the CSS alone shows if theme.js never runs. */
+.cp-theme { align-self: center; --cp-pill-n: 3; --cp-pill-pos: 1; }
+.cp-theme[hidden] { display: none; }   /* beat .cp-pill's display:inline-flex */
+.cp-theme button { width: 1.7rem; height: 1.35rem; }
+/* display:block kills the inline baseline gap, so the icon centres on the button */
+.cp-theme button svg { display: block; width: 13px; height: 13px; }
+/* Animate only once theme.js has set the real position, so it doesn't slide in on load. */
+.cp-theme.is-ready .cp-pill-knob { transition: transform 0.18s ease; }
+@media (prefers-reduced-motion: reduce) { .cp-theme.is-ready .cp-pill-knob { transition: none; } }
 /* embedded shell: push it to the right end of the camp-nav band */
 .cp-camp-nav .cp-theme { margin-left: auto; }
 

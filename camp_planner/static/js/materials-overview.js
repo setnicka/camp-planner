@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, formModal, mergePicker, orgFilterHead, chipGroup, toast } = window.cpDom;
+  const { el, api, withId, mergeUrl, dash, formModal, mergePicker, orgFilterHead, chipGroup, toast } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -73,9 +73,9 @@
   }
   const readiness = (m) => ({ ready: m.usages.filter((u) => u.is_ready).length, total: m.usages.length });
   // "Hotovo" cell: a filled badge — green when every usage is ready, red while some remain;
-  // a muted dash when the material isn't used anywhere yet.
+  // a dim dash when the material isn't used anywhere yet.
   function readyBadge(ready, total) {
-    if (!total) return el("span", { class: "cp-muted" }, "—");
+    if (!total) return dash();
     const done = ready === total;
     return el("span", { class: "cp-mat-ready " + (done ? "done" : "todo") },
       (done ? "✓ " : "") + ready + "/" + total);
@@ -105,7 +105,7 @@
     reset.addEventListener("click", resetFilters);
     mount.replaceChildren(
       el("div", { class: "cp-todo-toolbar" }, countLabel, reset),
-      el("table", { class: "cp-table cp-mat-table" }, colgroup, el("thead", null, headRow), tbody));
+      el("table", { class: "cp-table cp-mat-table cp-sticky-head" }, colgroup, el("thead", null, headRow), tbody));
     renderTable();
   }
 
@@ -204,7 +204,7 @@
 
   function acqCell(m) {
     const labels = m.acquisition_labels || [];
-    if (!labels.length) return el("span", { class: "cp-muted" }, "—");
+    if (!labels.length) return dash();
     const wrap = el("span", { class: "cp-acq-cell" });
     labels.forEach((lab) => wrap.append(labelTag(lab)));
     return wrap;
@@ -212,7 +212,7 @@
 
   function orgsCell(m) {
     const orgs = m.orgs || [];
-    if (!orgs.length) return el("span", { class: "cp-muted" }, "—");
+    if (!orgs.length) return dash();
     const wrap = el("span");
     orgs.forEach((o, i) => {
       if (i) wrap.append(", ");
@@ -236,8 +236,8 @@
     const open = expanded.has(m.id);
     const tr = el("tr", { class: "cp-mat-row" },
       el("td", null, el("span", { class: "cp-mat-caret" }, open ? "▾" : "▸"), " ", m.name),
-      el("td", null, m.unit || "—"),
-      el("td", null, unitTotals(m) || "—",
+      el("td", null, m.unit || dash()),
+      el("td", null, unitTotals(m) || dash(),
         m.sum_strategy === "max"
           ? el("span", { class: "cp-muted cp-mat-agg", title: "Maximum napříč aktivitami" }, " (max)")
           : null),

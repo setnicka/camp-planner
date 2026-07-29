@@ -74,6 +74,9 @@ window.cpDom = (function () {
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
   const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "var(--cp-text-dim)") });
 
+  // The empty-table-value placeholder, shared so all three overview tables dim it alike.
+  const dash = () => el("span", { class: "cp-dim" }, "—");
+
   // Body-level portals sit outside the element carrying data-cp-theme; the palette
   // reaches them via :has() but color-scheme does not, leaving native widgets light in a
   // dark dialog — so stamp the theme onto the portal itself (no attribute = light =
@@ -219,6 +222,35 @@ window.cpDom = (function () {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && openPopover) { openPopover.hidden = true; openPopover = null; }
   });
+  // In-header filter slider: a .cp-pill of one-symbol positions (`states` are
+  // [value, symbol, tooltip]) with a knob under the active one. No "all" position —
+  // clicking the active state again clears the filter and the knob fades out. `get`/`set`
+  // bind it to the caller's filter state; set(null) clears.
+  function filterSlider(states, get, set, onChange) {
+    const group = el("span", { class: "cp-pill cp-th-slider", style: "--cp-pill-n:" + states.length });
+    group.append(el("span", { class: "cp-pill-knob" }));
+    const buttons = states.map(([value, sym, tip]) => {
+      const b = el("button", { type: "button", title: tip, "aria-label": tip }, sym);
+      b.addEventListener("click", () => {
+        set(get() === value ? null : value);
+        sync();
+        onChange();
+      });
+      group.append(b);
+      return b;
+    });
+    const sync = () => {
+      const i = states.findIndex(([v]) => v === get());
+      if (i !== -1) group.style.setProperty("--cp-pill-pos", i);   // unfiltered: keep it where it faded out
+      buttons.forEach((b, j) => {
+        b.classList.toggle("on", j === i);
+        b.setAttribute("aria-pressed", j === i ? "true" : "false");
+      });
+    };
+    sync();
+    return group;
+  }
+
   function orgFilterHead({ orgs, selected, extra, onChange }) {
     const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
     let extraCb = null;
@@ -389,7 +421,7 @@ window.cpDom = (function () {
     table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
   }
 
-  return { el, csrf, csrfRefresh, api, withId, mergeUrl, swatch, openModal, submit, formModal,
-           searchPicker, mergePicker, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
+  return { el, csrf, csrfRefresh, api, withId, mergeUrl, swatch, dash, openModal, submit, formModal,
+           searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
            plural, tabHash, freezeColumns };
 })();
