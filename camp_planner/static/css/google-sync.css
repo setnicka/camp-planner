@@ -9,20 +9,20 @@
   margin-left: 0.4em;
   padding: 0 0.35em;
   border-radius: 999px;
-  background: #8a6d00;
-  color: #fff;
+  background: var(--cp-warning);
+  color: var(--cp-warning-on);
   font-size: 0.78em;
   font-weight: 600;
   line-height: 1.5;
   text-align: center;
 }
 .cp-google-badge[hidden] { display: none; }
-.cp-google-badge-fail { background: #c5221f; }  /* a push has been failing */
+.cp-google-badge-fail { background: var(--cp-danger); color: var(--cp-text-inverse); }  /* a push has been failing */
 
 .cp-google p { margin: 0.4rem 0; }
 
 .cp-google code {
-  background: #f3f3f3;
+  background: var(--cp-surface-2);
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
   word-break: break-all;
@@ -31,7 +31,7 @@
 .cp-google-steps {
   margin: 0.4rem 0 0.8rem;
   padding-left: 1.2rem;
-  color: #444;
+  color: var(--cp-muted);
   line-height: 1.5;
 }
 .cp-google-steps li { margin: 0.2rem 0; }
@@ -48,8 +48,10 @@
   flex: 1 1 22rem;
   font: inherit;
   padding: 0.3rem 0.5rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--cp-border);
   border-radius: 5px;
+  background: var(--cp-surface);
+  color: var(--cp-text);
 }
 
 /* the connect button (content.css only styles .cp-primary inside forms/modals) */
@@ -58,7 +60,7 @@
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--cp-accent);
   background: var(--cp-accent);
-  color: #fff;
+  color: var(--cp-text-inverse);
   font-weight: 600;
   border-radius: 5px;
   cursor: pointer;
@@ -66,46 +68,46 @@
 .cp-google .cp-primary:disabled { opacity: .5; cursor: default; }
 .cp-google .cp-primary:hover:not(:disabled) { filter: brightness(1.06); }
 
-.cp-google-pending { color: #8a6d00; }
+.cp-google-pending { color: var(--cp-warning-text); }
 .cp-google-error {
   margin: 0.5rem 0; padding: 0.5rem 0.7rem; border-radius: 6px;
-  background: #fdecea; border: 1px solid #f5c6c2; color: #8a1c14;
+  background: var(--cp-danger-subtle); border: 1px solid var(--cp-danger); color: var(--cp-danger-text);
 }
 .cp-google-error-detail { margin-top: 0.25rem; font-family: monospace; font-size: 0.85em; word-break: break-word; }
 
 /* Foreign-slot warning atop the review list — a caution, not an error: amber, not red. */
-.cp-google-foreign { background: #fff8e1; border-color: #f0d98a; color: #8a6d00; }
+.cp-google-foreign { background: var(--cp-warning-subtle); border-color: var(--cp-warning); color: var(--cp-warning-text); }
 
 /* --- inbound review (inline, below the buttons) --- */
 .cp-google-review { margin-top: 0.8rem; }
 .cp-google-review:empty { margin-top: 0; }
 .cp-google-review-title { margin: 0 0 0.5rem; font-size: 1rem; }
 
-.cp-google-loading { display: flex; align-items: center; gap: 0.5rem; color: #555; padding: 0.4rem 0; }
+.cp-google-loading { display: flex; align-items: center; gap: 0.5rem; color: var(--cp-muted); padding: 0.4rem 0; }
 
 .cp-google-table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
 .cp-google-table th, .cp-google-table td {
   text-align: left; padding: 0.2rem 0.55rem; vertical-align: top;
 }
-.cp-google-table thead th { font-weight: 600; color: #444; border-bottom: 2px solid var(--cp-border); }
+.cp-google-table thead th { font-weight: 600; color: var(--cp-muted); border-bottom: 2px solid var(--cp-border); }
 
 /* Each change is a block of rows; a top border on its first row separates the blocks, and
    the (rowspan) checkbox cell carries a colored left bar spanning the whole change. */
 .cp-google-row1 td { border-top: 1px solid var(--cp-border); padding-top: 0.4rem; }
 .cp-google-table tbody tr:last-child td { padding-bottom: 0.4rem; }
 
-.cp-google-table td.cp-google-check { width: 1.5rem; border-left: 4px solid #9e9e9e; }
-.cp-kind-new_event td.cp-google-check { border-left-color: #0b8043; }         /* green: add */
+.cp-google-table td.cp-google-check { width: 1.5rem; border-left: 4px solid var(--cp-text-dim); }
+.cp-kind-new_event td.cp-google-check { border-left-color: var(--cp-success); }     /* green: add */
 .cp-kind-time_change td.cp-google-check,
 .cp-kind-attendants_change td.cp-google-check,
 .cp-kind-garant_change td.cp-google-check,
-.cp-kind-category_change td.cp-google-check { border-left-color: #1a73e8; }   /* blue: change */
-.cp-kind-deleted_in_google td.cp-google-check { border-left-color: #c5221f; } /* red: delete */
+.cp-kind-category_change td.cp-google-check { border-left-color: var(--cp-accent); }  /* blue: change */
+.cp-kind-deleted_in_google td.cp-google-check { border-left-color: var(--cp-danger); } /* red: delete */
 
 .cp-google-label { font-weight: 600; }
-.cp-google-dname { color: #6b6b6b; white-space: nowrap; padding-left: 1.3rem; }
-.cp-google-dvalue { color: #333; }
-.cp-google-warn { color: #8a6d00; }
+.cp-google-dname { color: var(--cp-muted); white-space: nowrap; padding-left: 1.3rem; }
+.cp-google-dvalue { color: var(--cp-text); }
+.cp-google-warn { color: var(--cp-warning-text); }
 
 .cp-google-action { white-space: nowrap; }
 .cp-google-import { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
@@ -113,17 +115,17 @@
 /* an unchecked (skipped) change is greyed and its controls disabled */
 .cp-google-off { opacity: 0.45; }
 
-.cp-google-field { display: flex; align-items: center; gap: 0.35rem; font-size: 0.88em; color: #555; }
+.cp-google-field { display: flex; align-items: center; gap: 0.35rem; font-size: 0.88em; color: var(--cp-text); }
 .cp-google-field[hidden] { display: none; }
-.cp-google-flabel { color: #555; }
+.cp-google-flabel { color: var(--cp-muted); }
 
 /* compact picker button (shows the current category / activity; opens a chooser modal) */
 .cp-google-pick {
   font: inherit; display: inline-flex; align-items: center; gap: 0.35rem;
   padding: 0.2rem 0.5rem; max-width: 16rem; cursor: pointer;
-  border: 1px solid var(--cp-border); border-radius: 5px; background: #fff;
+  border: 1px solid var(--cp-border); border-radius: 5px; background: var(--cp-surface); color: var(--cp-text);
 }
-.cp-google-pick:hover:not(:disabled) { background: #f3f3f3; }
+.cp-google-pick:hover:not(:disabled) { background: var(--cp-surface-2); }
 .cp-google-pick:disabled { opacity: .5; cursor: not-allowed; }
 .cp-google-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -135,10 +137,10 @@
 .cp-google-review-actions { margin-top: 0.7rem; display: flex; gap: 0.5rem; }
 .cp-google-review-actions .cp-primary {
   font: inherit; padding: 0.3rem 0.8rem; border: 1px solid var(--cp-accent);
-  background: var(--cp-accent); color: #fff; font-weight: 600; border-radius: 5px; cursor: pointer;
+  background: var(--cp-accent); color: var(--cp-text-inverse); font-weight: 600; border-radius: 5px; cursor: pointer;
 }
 .cp-google-review-actions .cp-primary:disabled { opacity: .5; cursor: default; }
 .cp-google-review-actions .cp-cancel {
-  font: inherit; padding: 0.3rem 0.8rem; border: 1px solid #ccc;
-  background: #fff; border-radius: 5px; cursor: pointer;
+  font: inherit; padding: 0.3rem 0.8rem; border: 1px solid var(--cp-border);
+  background: var(--cp-surface); color: var(--cp-text); border-radius: 5px; cursor: pointer;
 }

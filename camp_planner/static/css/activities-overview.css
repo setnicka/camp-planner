@@ -28,8 +28,8 @@
 
 /* --- chronological mode: day dividers + time column --- */
 /* .cp-ov-table prefix raises specificity above .cp-table td (content.css) so the tighter padding wins. */
-.cp-ov-table .cp-ov-day-cell { background: #eef4f0; border-top: 2px solid var(--cp-accent); font-weight: 700; padding: 0.4rem 0.55rem; }
-.cp-ov-day-nomain .cp-ov-day-cell { background: #f4f1ee; border-top-color: var(--cp-muted); color: var(--cp-muted); }
+.cp-ov-table .cp-ov-day-cell { background: var(--cp-success-subtle); border-top: 2px solid var(--cp-accent); font-weight: 700; padding: 0.4rem 0.55rem; }
+.cp-ov-day-nomain .cp-ov-day-cell { background: var(--cp-surface-2); border-top-color: var(--cp-muted); color: var(--cp-muted); }
 .cp-ov-day-empty td { padding: 0.3rem 0.55rem; font-size: 12px; font-style: italic; }
 .cp-ov-time { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 13px; }
 .cp-ov-act { color: var(--cp-muted); font-size: 12px; }   /* activity title in parens after a slot's override name */
@@ -40,26 +40,26 @@
 
 /* --- status columns -------------------------------------------------------- */
 .cp-ov-num { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cp-ov-unfinished { color: #c5221f; font-weight: 600; }   /* not everything done yet */
-.cp-ov-done { color: #2e7d32; }                           /* all done */
+.cp-ov-unfinished { color: var(--cp-danger-text); font-weight: 600; }   /* not everything done yet */
+.cp-ov-done { color: var(--cp-success-text); }                           /* all done */
 .cp-ov-slots { white-space: nowrap; font-size: 13px; }
 
 .cp-ov-orgs { line-height: 1.5; }
 .cp-ov-garant { font-weight: 700; }
-.cp-ov-helper { color: #555; }
+.cp-ov-helper { color: var(--cp-muted); }
 
 /* pinned-tag columns */
 .cp-ov-tag { text-align: center; white-space: nowrap; }
 /* filled badge so the ✓/✗ reads at a glance across the row */
 .cp-ov-check { display: inline-flex; align-items: center; justify-content: center;
-  width: 1.5rem; height: 1.5rem; border-radius: 50%; font-size: 0.95rem; font-weight: 700; color: #fff; }
-.cp-ov-check.yes { background: #257a3e; }
-.cp-ov-check.no { background: #d64541; }
+  width: 1.5rem; height: 1.5rem; border-radius: 50%; font-size: 0.95rem; font-weight: 700; color: var(--cp-text-inverse); }
+.cp-ov-check.yes { background: var(--cp-success); }
+.cp-ov-check.no { background: var(--cp-danger-soft); }
 /* mini progress bar: green fill behind a centred % */
 .cp-ov-bar { position: relative; display: inline-flex; align-items: center; justify-content: center;
-  min-width: 3.5rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: #e6534e; overflow: hidden; }
-.cp-ov-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #2e9e4d; }
+  min-width: 3.5rem; padding: 0.05rem 0.3rem; border-radius: 4px; background: var(--cp-danger-soft); overflow: hidden; }
+.cp-ov-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--cp-success); }
 .cp-ov-bar-num { position: relative; font-size: 11px; font-variant-numeric: tabular-nums;
-  color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
+  color: var(--cp-text-inverse); text-shadow: 0 1px 1px var(--cp-shadow-2); }
 .cp-ov-empty { text-align: center; padding: 1rem; }
 /* .cp-mini / .cp-danger.cp-mini live in components.css (shared with the detail + materials pages) */

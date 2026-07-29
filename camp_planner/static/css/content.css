@@ -4,13 +4,98 @@
  * .cp-* components to avoid touching the host's own elements. The standalone shell
  * (nav, body reset, flashes) lives in standalone.css. */
 
+/* ===========================================================================
+ * PALETTE — the single source of every colour in Camp Planner; no colour
+ * literal (hex / rgb / hsl) outside this block, everything else uses
+ * var(--cp-*).
+ * =========================================================================== */
 :root {
-  --cp-accent: #0b8043;
-  --cp-border: #e0e0e0;
-  --cp-muted: #666;
+  /* — surfaces: page, cards, and a 3-step fill scale (base / hover / pressed) — */
+  --cp-bg: #ffffff;
+  --cp-surface: #ffffff;
+  --cp-surface-2: #f3f4f6;       /* subtle filled panel (tabs, code, toolbars) */
+  --cp-surface-3: #e6e9ef;       /* hover on a --cp-surface-2 element */
+
+  /* — text — */
+  --cp-text: #333333;
+  --cp-text-strong: #1a1a1a;
+  --cp-muted: #666666;
+  --cp-text-dim: #9aa3b2;        /* decoration only (grid lines, ticks, swatch
+                                    fallback) — too faint for text in light mode */
+  --cp-text-inverse: #ffffff;    /* text on a solid accent/danger/success fill */
+
+  /* — borders — */
+  --cp-border: #e0e0e0;          /* meaningful: inputs, cards, buttons */
+  --cp-border-subtle: #f0f0f0;   /* decorative hairlines between rows */
+  --cp-border-strong: #cccccc;
+
+  /* — accent (one blue; the former green #0b8043 now lives on as success) — */
+  --cp-accent: #1565c0;          /* solid fill + active borders */
+  --cp-accent-text: #1565c0;     /* accent as text/icon on a page background */
+  --cp-accent-wash: #f1f5fc;     /* hover tint */
+  --cp-accent-subtle: #e8f0fe;   /* on/active chip tint */
+  --cp-accent-glow: rgba(21, 101, 192, .2);
+
+  /* — danger — */
+  --cp-danger: #c5221f;
+  --cp-danger-soft: #cf3f3a;     /* softer red for marker fills (✗ badges, bars) */
+  --cp-danger-subtle: #fdecea;
+  --cp-danger-mark: #fbddd8;     /* inline <del> highlight in a word diff */
+  --cp-danger-text: #c5221f;
+
+  /* — success (the old brand green) — */
+  --cp-success: #257a3e;
+  --cp-success-subtle: #e7f4ec;
+  --cp-success-mark: #c8ebd3;
+  --cp-success-text: #216b2b;
+
+  /* — warning (amber needs *dark* text on its solid, hence --cp-warning-on) — */
+  --cp-warning: #c8820a;
+  --cp-warning-on: #2b2100;
+  --cp-warning-subtle: #fff8e1;
+  --cp-warning-mark: #fff3bf;    /* row-arrival flash */
+  --cp-warning-text: #8a6d00;
+
+  /* — neutral + violet solids (grey "detail" button, "retype"/merge actions) — */
+  --cp-neutral: #5f6368;
+  --cp-violet: #6f42c1;
+
+  /* — focus, shadows, scrims — */
+  --cp-shadow-1: rgba(0, 0, 0, .15);
+  --cp-shadow-2: rgba(0, 0, 0, .3);
+  --cp-scrim: rgba(0, 0, 0, .4);          /* modal backdrop */
+
+  /* — timeline chrome — */
+  --cp-nowline: #ea4335;
+  --cp-zebra: rgba(20, 30, 50, .05);      /* alternating day-row tint */
+  --cp-row-hover: rgba(255, 205, 0, .15);
+  --cp-row-hover-edge: #444444;
+  /* Night overlay; JS ramps only the alpha (1 = night, 0 = day). Dark mode needs a
+     lighter tone — keep it indigo (R≈G): pushed light enough it turns azure, i.e. water. */
+  --cp-daynight-rgb: 24 34 62;
+  /* Overlays drawn on category-coloured event boxes. Those colours come from the
+     database and ignore the theme, so these stay light in both; only
+     --cp-selected-ring inverts, because it is drawn against the page. */
+  --cp-seam: rgba(255, 255, 255, .85);    /* dashed cut edge of a continued span */
+  --cp-nowline-halo: rgba(255, 255, 255, .57);
+  --cp-selected-ring: rgba(0, 0, 0, .8);
+
+  /* — form controls — */
+  --cp-track: #868fa0;                    /* switch track, off */
+  --cp-knob: #ffffff;
+
+  /* Acquisition tags (materials) derive their hue from the label prefix at runtime
+     (--h); only the lightness flips with the theme. */
+  --cp-tag-pre-l: 40%;
+  --cp-tag-val-l: 92%;
+  --cp-tag-fg-l: 28%;
+
+  /* — layout (not colour) — */
   --cp-page-width: 75rem;   /* default centered page width (~1200px); wide pages (timeline) opt out */
   --cp-page-pad: 1rem;      /* horizontal padding of the standalone <main> */
 }
+
+/* === end palette ========================================================== */
 
 .cp-muted { color: var(--cp-muted); }
 .cp-section { margin: 1.75rem 0; }
@@ -21,15 +106,18 @@
    rendered inline in the standalone header bar (.cp-header, standalone.css) and, when embedded,
    inside the .cp-camp-nav band, which carries the same grey "Camp Planner" brand. */
 .cp-brand { color: var(--cp-muted); font-size: 0.8rem; text-decoration: none; }
-.cp-brand:hover { color: var(--cp-accent); }
+.cp-brand:hover { color: var(--cp-accent-text); }
+/* Embedded-only band (bare.html). It sits *outside* .cp-embed, so it paints itself for the
+   same reason; the spacing below it is padding rather than margin so that it, too, is painted. */
 .cp-camp-nav {
   display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 1rem;
-  margin: 0 0 1rem; border-bottom: 1px solid var(--cp-border); padding-bottom: 0.4rem;
+  background: var(--cp-bg); color: var(--cp-text);
+  margin: 0; border-bottom: 1px solid var(--cp-border); padding: 0 0 0.4rem;
 }
-.cp-camp-name { font-size: 1.3rem; font-weight: 700; color: #222; text-decoration: none; margin-right: 0.3rem; }
+.cp-camp-name { font-size: 1.3rem; font-weight: 700; color: var(--cp-text-strong); text-decoration: none; margin-right: 0.3rem; }
 .cp-camp-link { text-decoration: none; color: var(--cp-muted); font-weight: 500; }
-.cp-camp-link:hover { color: var(--cp-accent); }
-.cp-camp-link.is-active { color: #222; box-shadow: inset 0 -2px var(--cp-accent); }
+.cp-camp-link:hover { color: var(--cp-accent-text); }
+.cp-camp-link.is-active { color: var(--cp-text-strong); box-shadow: inset 0 -2px var(--cp-accent); }
 
 /* Read-only parameter table (camp detail page): condensed, label left. */
 .cp-params { border-collapse: collapse; }
@@ -78,6 +166,7 @@
 .cp-form input, .cp-form select, .cp-table input, .cp-table select {
   border: 1px solid var(--cp-border); border-radius: 4px;
   font: inherit; font-weight: normal; box-sizing: border-box;
+  background: var(--cp-surface); color: var(--cp-text);
 }
 .cp-form input, .cp-form select { padding: 0.4rem 0.5rem; }
 .cp-table input, .cp-table select { padding: 0.3rem 0.4rem; }
@@ -87,13 +176,13 @@
    actions; the variants below only resize and recolour. */
 .cp-form button, .cp-danger, .cp-edit-toggle, .cp-edit-actions button {
   font: inherit; border: 1px solid var(--cp-border); border-radius: 4px;
-  background: #fff; color: #333; cursor: pointer;
+  background: var(--cp-surface); color: var(--cp-text); cursor: pointer;
 }
 .cp-form button, .cp-edit-toggle.on, .cp-edit-actions .cp-primary {
-  background: var(--cp-accent); border-color: var(--cp-accent); color: #fff;
+  background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse);
 }
 .cp-form button { padding: 0.4rem 0.9rem; }
-.cp-danger { padding: 0.2rem 0.55rem; background: #c5221f; border-color: #c5221f; color: #fff; }
+.cp-danger { padding: 0.2rem 0.55rem; background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
 .cp-edit-toggle { padding: 0.05rem 0.45rem; font-size: 0.9rem; vertical-align: middle; }
 .cp-edit-actions button { padding: 0.35rem 0.8rem; }
 .cp-form button:hover:not(:disabled), .cp-danger:hover:not(:disabled),
@@ -118,7 +207,7 @@
   letter-spacing: 0.03em;
   color: var(--cp-muted);
 }
-.cp-table tbody tr:hover { background: #fafafa; }
+.cp-table tbody tr:hover { background: var(--cp-surface-2); }
 .cp-table form { margin: 0; display: inline; }
 .cp-actions { text-align: right; width: 1%; white-space: nowrap; }
 .cp-swatch { display: inline-block; width: 1rem; height: 1rem; border-radius: 3px; vertical-align: middle; margin-right: 0.4rem; }
@@ -132,28 +221,30 @@ tr.cp-dragging { opacity: 0.5; }
    Start hidden; .cp-flash-show fades/slides them in, and removing it fades out. */
 .cp-flash {
   padding: 0.5rem 0.75rem; border-radius: 4px; margin: 0.4rem 0;
-  background: #e7f4ec; border: 1px solid var(--cp-accent);
+  background: var(--cp-success-subtle); border: 1px solid var(--cp-success);
   opacity: 0; transform: translateY(-4px);
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 .cp-flash.cp-flash-show { opacity: 1; transform: none; }
-.cp-flash-error { background: #fdecea; border-color: #c5221f; }
+.cp-flash-error { background: var(--cp-danger-subtle); border-color: var(--cp-danger); }
 
 /* Server flash messages + validation-error lists (shared with embedded mode, so it
    lives here). Neutral amber by default; category classes recolor per message. */
 .cp-flashes { margin: 0; padding: 0; list-style: none; }
 .cp-flashes li {
   padding: 0.6rem 1rem;
-  background: #fff8e1;
+  background: var(--cp-warning-subtle);
+  color: var(--cp-text);
   border-bottom: 1px solid var(--cp-border);
 }
-.cp-flashes .cp-flash-success { background: #e7f4ec; }
-.cp-flashes .cp-flash-error { background: #fdecea; }
+.cp-flashes .cp-flash-success { background: var(--cp-success-subtle); }
+.cp-flashes .cp-flash-error { background: var(--cp-danger-subtle); }
 
 /* <noscript> banner from the layouts — almost every page renders via JS. */
 .cp-noscript {
   margin: 0;
   padding: 0.6rem 1rem;
-  background: #fdecea;
+  background: var(--cp-danger-subtle);
+  color: var(--cp-text);
   border-bottom: 1px solid var(--cp-border);
 }

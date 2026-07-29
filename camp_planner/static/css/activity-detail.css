@@ -11,8 +11,8 @@
   margin-bottom: 1.25rem; max-width: 52rem;
 }
 .cp-act-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
-.cp-act-row + .cp-act-row { border-top: 1px solid #f0f0f0; }
-.cp-act-row-label { flex: none; width: 6rem; font-size: 12px; font-weight: 600; color: #666; }
+.cp-act-row + .cp-act-row { border-top: 1px solid var(--cp-border-subtle); }
+.cp-act-row-label { flex: none; width: 6rem; font-size: 12px; font-weight: 600; color: var(--cp-muted); }
 .cp-act-row-body { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; min-width: 0; }
 .cp-act-row-edit { flex: none; }
 
@@ -22,76 +22,77 @@
 /* orgs line: small muted role labels, normal-size initials */
 .cp-org-line { display: inline-flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
 .cp-org-part { white-space: nowrap; }
-.cp-org-role { font-size: 11px; font-weight: 600; color: #6b6b6b; text-transform: uppercase; margin-right: 0.3rem; }
+.cp-org-role { font-size: 11px; font-weight: 600; color: var(--cp-muted); text-transform: uppercase; margin-right: 0.3rem; }
 
 /* --- condensed tag chips (name on the left, value in the right half) ------ */
 .cp-tagchips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .cp-tagchip {
   display: inline-flex; align-items: stretch; font-size: 12px; line-height: 1.4;
-  border: 1px solid var(--cp-border); border-radius: 999px; overflow: hidden; background: #fff;
+  border: 1px solid var(--cp-border); border-radius: 999px; overflow: hidden; background: var(--cp-surface);
 }
-.cp-tagchip-name { display: flex; align-items: center; padding: 0.1rem 0.55rem; background: #f3f4f6; color: #333; }
+.cp-tagchip-name { display: flex; align-items: center; padding: 0.1rem 0.55rem; background: var(--cp-surface-2); color: var(--cp-text); }
 .cp-tagchip.pinned .cp-tagchip-name { font-weight: 700; }   /* pinned = important tag */
-.cp-tagchip-val { display: flex; align-items: center; padding: 0.1rem 0.5rem; font-weight: 700; color: #fff; }
-.cp-tagchip-val.yes { background: #257a3e; }
-.cp-tagchip-val.no { background: #d64541; }
+.cp-tagchip-val { display: flex; align-items: center; padding: 0.1rem 0.5rem; font-weight: 700; color: var(--cp-text-inverse); }
+.cp-tagchip-val.yes { background: var(--cp-success); }
+.cp-tagchip-val.no { background: var(--cp-danger-soft); }
 .cp-tagchip-text {
   display: flex; align-items: center; padding: 0.1rem 0.55rem; min-width: 3rem; max-width: 14rem;
-  color: #1a3a6b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--cp-accent-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* progress: fill behind a centred % label */
-.cp-tagchip-bar { position: relative; display: flex; align-items: center; min-width: 4.5rem; padding: 0.1rem 0.55rem; background: #d64541; }
-.cp-tagchip-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #2e9e4d; }
-.cp-tagchip-num { position: relative; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
+.cp-tagchip-bar { position: relative; display: flex; align-items: center; min-width: 4.5rem; padding: 0.1rem 0.55rem; background: var(--cp-danger-soft); }
+.cp-tagchip-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--cp-success); }
+.cp-tagchip-num { position: relative; font-variant-numeric: tabular-nums; color: var(--cp-text-inverse); text-shadow: 0 1px 1px var(--cp-shadow-2); }
 
 /* slots: one pill per line. The pill holds a navigable link segment (→ timeline, this activity
    pre-filtered) and, when editable, an inline ✎ segment to assign orgs to the slot. */
 .cp-slot-list { display: flex; flex-direction: column; gap: 0.35rem; align-items: flex-start; }
-.cp-slotchip:hover { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26, 115, 232, .2); }
+.cp-slotchip:hover { border-color: var(--cp-accent); box-shadow: 0 0 0 2px var(--cp-accent-glow); }
 .cp-slot-main { display: inline-flex; align-items: stretch; text-decoration: none; color: inherit; cursor: pointer; }
 .cp-slot-main .cp-tagchip-text { max-width: none; gap: 0.4rem; }   /* don't truncate day + time */
-.cp-slot-day { color: #6b7686; }   /* muted day, left of the time range */
+.cp-slot-day { color: var(--cp-muted); }   /* muted day, left of the time range */
 /* slot name override: a chip segment after the time, set off by a divider */
 .cp-slot-name { display: flex; align-items: center; padding: 0.1rem 0.55rem;
-  border-left: 1px solid var(--cp-border); font-weight: 600; color: #333; }
+  border-left: 1px solid var(--cp-border); font-weight: 600; color: var(--cp-text); }
 /* attendees: a chip segment after the time, set off by a divider */
 .cp-slot-orgs { display: flex; align-items: center; padding: 0.1rem 0.55rem;
-  border-left: 1px solid var(--cp-border); font-style: italic; color: #555; }
+  border-left: 1px solid var(--cp-border); font-style: italic; color: var(--cp-muted); }
 /* inline edit (assign orgs) segment */
-.cp-slot-edit { border: 0; border-left: 1px solid var(--cp-border); background: #f7f8fa;
-  padding: 0 0.5rem; cursor: pointer; color: #444; font: inherit; }
-.cp-slot-edit:hover { background: #e6e9ef; color: #111; }
+.cp-slot-edit { border: 0; border-left: 1px solid var(--cp-border); background: var(--cp-surface-2);
+  padding: 0 0.5rem; cursor: pointer; color: var(--cp-muted); font: inherit; }
+.cp-slot-edit:hover { background: var(--cp-surface-3); color: var(--cp-text-strong); }
 /* "… ukaž všechny" / "skryj" expander under the slot list */
 .cp-slot-toggle { border: 0; background: none; padding: 0.1rem 0; cursor: pointer;
-  color: #1a73e8; font: inherit; font-size: 12px; }
+  color: var(--cp-accent-text); font: inherit; font-size: 12px; }
 .cp-slot-toggle:hover { text-decoration: underline; }
 
 /* tag editor rows (in the modal): enable switch + name + value control */
 .cp-tagedit-list { display: flex; flex-direction: column; gap: 0.15rem; }
-.cp-tagedit-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.35rem 0; border-bottom: 1px solid #f0f0f0; }
+.cp-tagedit-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.35rem 0; border-bottom: 1px solid var(--cp-border-subtle); }
 .cp-tagedit-name { flex: 1; }
 .cp-tagedit-val { flex: none; }
-.cp-tagedit-val input[type="text"] { width: 12rem; font: inherit; padding: 0.25rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px; }
+.cp-tagedit-val input[type="text"] { width: 12rem; font: inherit; padding: 0.25rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px;
+  background: var(--cp-surface); color: var(--cp-text); }
 /* greyed when the tag is disabled (the switch itself stays fully visible) */
 .cp-tagedit-row.disabled .cp-tagedit-name, .cp-tagedit-row.disabled .cp-tagedit-val { opacity: 0.4; }
 
 /* iOS-style toggle switch */
 .cp-switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
 .cp-switch-input { position: absolute; width: 0; height: 0; opacity: 0; }
-.cp-switch-slider { position: absolute; inset: 0; background: #cbd2da; border-radius: 999px; cursor: pointer; transition: background .15s; }
+.cp-switch-slider { position: absolute; inset: 0; background: var(--cp-track); border-radius: 999px; cursor: pointer; transition: background .15s; }
 .cp-switch-slider::before {
   content: ""; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px;
-  background: #fff; border-radius: 50%; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s;
+  background: var(--cp-knob); border-radius: 50%; box-shadow: 0 1px 2px var(--cp-shadow-2); transition: transform .15s;
 }
 .cp-switch-input:checked + .cp-switch-slider { background: var(--cp-accent); }
 .cp-switch-input:checked + .cp-switch-slider::before { transform: translateX(16px); }
-.cp-switch-input:focus-visible + .cp-switch-slider { outline: 2px solid #1a73e8; outline-offset: 2px; }
+.cp-switch-input:focus-visible + .cp-switch-slider { outline: 2px solid var(--cp-accent-text); outline-offset: 2px; }
 
 /* progress slider */
 .cp-slider-wrap { display: inline-flex; align-items: center; gap: 0.4rem; }
 .cp-slider { width: 9rem; }
 .cp-slider-num { font-variant-numeric: tabular-nums; width: 3.4rem; text-align: right; }
-.cp-slider-pct { color: #555; }
+.cp-slider-pct { color: var(--cp-muted); }
 
 /* tab bar/panes are shared primitives — see .cp-tabbar/.cp-tabbtn/.cp-tabpane in components.css */
 
@@ -99,10 +100,10 @@
 .cp-markdown { line-height: 1.55; max-width: 48rem; }
 .cp-markdown > :first-child { margin-top: 0; }
 .cp-markdown h1, .cp-markdown h2, .cp-markdown h3 { margin: 1rem 0 0.4rem; }
-.cp-markdown pre { background: #f5f6f8; padding: 0.6rem 0.8rem; border-radius: 6px; overflow: auto; }
-.cp-markdown code { background: #f0f1f4; padding: 0.05rem 0.3rem; border-radius: 4px; font-size: 0.9em; }
+.cp-markdown pre { background: var(--cp-surface-2); padding: 0.6rem 0.8rem; border-radius: 6px; overflow: auto; }
+.cp-markdown code { background: var(--cp-surface-2); padding: 0.05rem 0.3rem; border-radius: 4px; font-size: 0.9em; }
 .cp-markdown pre code { background: none; padding: 0; }
-.cp-markdown blockquote { margin: 0.5rem 0; padding-left: 0.8rem; border-left: 3px solid var(--cp-border); color: #555; }
+.cp-markdown blockquote { margin: 0.5rem 0; padding-left: 0.8rem; border-left: 3px solid var(--cp-border); color: var(--cp-muted); }
 .cp-markdown ul, .cp-markdown ol { margin: 0.4rem 0; padding-left: 1.6rem; }
 .cp-markdown ul { list-style: disc; }
 .cp-markdown ol { list-style: decimal; }
@@ -114,38 +115,37 @@
 /* read view: float the edit button over the markdown's top-right (no space above) */
 .cp-desc-actions-float { position: absolute; top: 0; right: 0; margin: 0; z-index: 1; }
 /* make the "Upravit popis" button stand out: accent outline that fills on hover */
-.cp-desc-edit { border-color: var(--cp-accent); color: var(--cp-accent); font-weight: 600; }
-.cp-desc-edit:hover { background: var(--cp-accent); color: #fff; }
+.cp-desc-edit { border-color: var(--cp-accent); color: var(--cp-accent-text); font-weight: 600; }
+.cp-desc-edit:hover { background: var(--cp-accent); color: var(--cp-text-inverse); }
 /* Uložit / Zrušit at the right end of the editor toolbar (outside a modal, so styled here) */
 .cp-mde-actions { margin-left: auto; display: flex; gap: 0.4rem; }
 .cp-mde-actions button {
   font: inherit; font-size: 13px; padding: 0.25rem 0.75rem; border-radius: 5px; cursor: pointer;
-  border: 1px solid var(--cp-border); background: #fff; color: #333;
+  border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text);
 }
-.cp-mde-actions .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: #fff; font-weight: 600; }
+.cp-mde-actions .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); font-weight: 600; }
 .cp-mde-actions .cp-primary:disabled { opacity: .5; cursor: default; }
 .cp-mde-actions .cp-primary:hover:not(:disabled), .cp-mde-actions .cp-cancel:hover { filter: brightness(1.06); }
 /* editor toolbar — flat icon buttons, attached flush to the editor (modern-editor look) */
 .cp-mde-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
-  padding: 4px 6px; background: #f7f8fa;
+  padding: 4px 6px; background: var(--cp-surface-2);
   border: 1px solid var(--cp-border); border-bottom: 0; border-radius: 6px 6px 0 0;
 }
 .cp-mde-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; padding: 0; cursor: pointer;
-  border: 0; border-radius: 5px; background: none; color: #444;
+  border: 0; border-radius: 5px; background: none; color: var(--cp-muted);
 }
-.cp-mde-btn:hover:not(:disabled) { background: #e6e9ef; color: #111; }
+.cp-mde-btn:hover:not(:disabled) { background: var(--cp-surface-3); color: var(--cp-text-strong); }
 .cp-mde-btn:disabled { opacity: .35; cursor: default; }
-.cp-mde-btn:active { background: #d8dce4; }
-.cp-mde-btn.active { background: #dbe7fb; color: #1a73e8; }   /* formatting under the caret */
+.cp-mde-btn.active { background: var(--cp-accent-subtle); color: var(--cp-accent-text); }   /* formatting under the caret */
 .cp-mde-sep { width: 1px; height: 18px; margin: 0 5px; background: var(--cp-border); }
 /* CodeMirror host attached below the bar; height set in JS (cm.setSize) to reach window bottom */
 .cp-mde { border: 1px solid var(--cp-border); border-radius: 0 0 6px 6px; overflow: hidden; }
 .cp-mde .CodeMirror { height: auto; font: inherit; }
 /* preview pane: same frame as the editor, scrolls, padded like rendered markdown */
-.cp-mde-preview { padding: 0.6rem 0.8rem; overflow: auto; background: #fff; max-width: none; }
+.cp-mde-preview { padding: 0.6rem 0.8rem; overflow: auto; background: var(--cp-surface); max-width: none; }
 
 /* modal form-field primitives (.cp-field-label/.cp-act-textarea/.cp-need-amount-row/…)
    now live in components.css, shared with the materials overview. */
@@ -153,7 +153,7 @@
 /* materials list (the TODO tab now uses the shared cp-todo-table component, styled in
    components.css). */
 .cp-need-list { display: flex; flex-direction: column; gap: 0.3rem; max-width: 44rem; }
-.cp-need-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid #f0f0f0; }
+.cp-need-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--cp-border-subtle); }
 .cp-need-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .cp-need-line { display: flex; align-items: center; gap: 0.5rem; }
 .cp-need-note { font-size: 12px; }
@@ -164,3 +164,31 @@
 
 /* .cp-mini / .cp-danger.cp-mini in-row action buttons live in components.css (shared) */
 /* change-history feed (.cp-hist-*) is shared — see components.css */
+
+/* --- vendored CodeMirror: theme its chrome from the palette -----------------
+ * Never edit the vendored file; it links before this one, so plain selectors win.
+ * Only the markdown tokens matter. */
+.cp-mde .CodeMirror { background: var(--cp-surface); color: var(--cp-text); }
+.cp-mde .CodeMirror-gutters {
+  background: var(--cp-surface-2); border-right-color: var(--cp-border);
+}
+.cp-mde .CodeMirror-linenumber, .cp-mde .CodeMirror-guttermarker-subtle { color: var(--cp-muted); }
+.cp-mde .CodeMirror-cursor { border-left-color: var(--cp-text); }
+.cp-mde .CodeMirror-selected { background: var(--cp-surface-3); }
+.cp-mde .CodeMirror-focused .CodeMirror-selected,
+.cp-mde .CodeMirror-line::selection,
+.cp-mde .CodeMirror-line > span::selection,
+.cp-mde .CodeMirror-line > span > span::selection { background: var(--cp-accent-subtle); }
+.cp-mde .CodeMirror-activeline-background { background: var(--cp-accent-wash); }
+/* markdown syntax tokens (cm-variable-2/-3 = list markers by nesting depth) */
+.cp-mde .CodeMirror-matchingbracket,
+.cp-mde .cm-s-default .cm-header,
+.cp-mde .cm-s-default .cm-link,
+.cp-mde .cm-s-default .cm-url,
+.cp-mde .cm-s-default .cm-variable-2,
+.cp-mde .cm-s-default .cm-variable-3 { color: var(--cp-accent-text); }
+.cp-mde .cm-s-default .cm-comment,   /* fenced code */
+.cp-mde .cm-s-default .cm-hr { color: var(--cp-muted); }
+.cp-mde .cm-s-default .cm-quote { color: var(--cp-success-text); }
+.cp-mde .cm-s-default .cm-string { color: var(--cp-warning-text); }
+.cp-mde .cm-s-default .cm-error { color: var(--cp-danger-text); }

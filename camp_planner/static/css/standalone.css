@@ -6,6 +6,8 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
+  background: var(--cp-bg);
+  color: var(--cp-text);
 }
 
 /* One condensed header line: grey brand · camp heading (the header_nav block) · account
@@ -22,17 +24,20 @@ body {
 
 .cp-account { margin-left: auto; display: flex; align-items: baseline; gap: 1rem; }
 .cp-account .cp-user { color: var(--cp-muted); }
-.cp-account a { text-decoration: none; color: var(--cp-accent); }
+.cp-account a { text-decoration: none; color: var(--cp-accent-text); }
 .cp-account form { margin: 0; }
-.cp-account button {        /* keep it clean: logout reads as a link, not a button */
+/* Logout only, and it reads as a link rather than a button. Scoped to the form so it
+   doesn't strip the chrome off the theme switch too — this file loads after content.css,
+   so an unscoped `.cp-account button` would beat `.cp-theme button` at equal specificity. */
+.cp-account form button {
   border: none;
   background: none;
   padding: 0;
   font: inherit;
-  color: var(--cp-accent);
+  color: var(--cp-accent-text);
   cursor: pointer;
 }
-.cp-account button:hover { text-decoration: underline; }
+.cp-account form button:hover { text-decoration: underline; }
 
 .cp-footer {
   padding: 0.35rem 1rem;

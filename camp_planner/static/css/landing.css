@@ -10,7 +10,7 @@
   border: 1px solid var(--cp-accent);
   border-radius: 5px;
   background: var(--cp-accent);
-  color: #fff;
+  color: var(--cp-text-inverse);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -30,8 +30,8 @@
 }
 .cp-camp-row:last-child { border-bottom: 1px solid var(--cp-border); }
 
-.cp-camp-row-name { font-size: 1.05rem; font-weight: 600; color: #222; text-decoration: none; }
-.cp-camp-row-name:hover { color: var(--cp-accent); }
+.cp-camp-row-name { font-size: 1.05rem; font-weight: 600; color: var(--cp-text-strong); text-decoration: none; }
+.cp-camp-row-name:hover { color: var(--cp-accent-text); }
 
 .cp-camp-row-dates { font-size: 0.9rem; }
 
@@ -42,6 +42,6 @@
   gap: 0.3rem 0.75rem;
 }
 .cp-camp-row-links a { font-size: 0.85rem; color: var(--cp-muted); text-decoration: none; }
-.cp-camp-row-links a:hover { color: var(--cp-accent); }
+.cp-camp-row-links a:hover { color: var(--cp-accent-text); }
 
 .cp-landing-empty { color: var(--cp-muted); padding: 2rem 0; }
