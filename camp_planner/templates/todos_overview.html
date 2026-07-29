@@ -1,12 +1,12 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_nav, csrf_meta %}
+{% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}Úkoly – {{ camp.name }}{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "todos") }}{% endblock %}
 
 {% block cp_head %}
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/todos.css') }}">
+  {{ css('css/components.css') }}
+  {{ css('css/todos.css') }}
   {{ csrf_meta() }}
 {% endblock %}
 
@@ -20,7 +20,7 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/todo-list.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/todos-overview.js') }}"></script>
+  {{ js('js/dom.js') }}
+  {{ js('js/todo-list.js') }}
+  {{ js('js/todos-overview.js') }}
 {% endblock %}

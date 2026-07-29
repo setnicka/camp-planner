@@ -1,11 +1,11 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_sections %}
+{% from "_macros.html" import camp_sections, css %}
 {% block title %}Akce – Camp Planner{% endblock %}
 {# "Akce" rides in the navigation header (where camp pages show the camp name). #}
 {% block header_nav %}<span class="cp-camp-name">Akce</span>{% endblock %}
 
 {% block cp_head %}
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/landing.css') }}">
+  {{ css('css/landing.css') }}
 {% endblock %}
 
 {% block cp_content %}

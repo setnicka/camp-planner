@@ -1,5 +1,5 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import csrf, csrf_meta, errors_list, camp_fields, camp_nav %}
+{% from "_macros.html" import csrf, csrf_meta, errors_list, camp_fields, camp_nav, js %}
 {% block title %}{{ camp.name }} – úprava{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
 {# camp-settings.js (the delete action) sends this token via cpDom.api's X-CSRFToken header. #}
@@ -44,6 +44,6 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/camp-settings.js') }}"></script>
+  {{ js('js/dom.js') }}
+  {{ js('js/camp-settings.js') }}
 {% endblock %}

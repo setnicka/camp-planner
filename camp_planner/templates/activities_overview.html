@@ -1,12 +1,12 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_nav, csrf_meta %}
+{% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}Seznam her – {{ camp.name }}{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
 {% block cp_head %}
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/activities-overview.css') }}">
+  {{ css('css/components.css') }}
+  {{ css('css/activities-overview.css') }}
   {{ csrf_meta() }}
 {% endblock %}
 
@@ -19,7 +19,7 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/activities-overview.js') }}"></script>
+  {{ js('js/dom.js') }}
+  {{ js('js/fuzzy.js') }}
+  {{ js('js/activities-overview.js') }}
 {% endblock %}

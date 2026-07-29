@@ -1,4 +1,4 @@
-{% from "_macros.html" import csrf, theme_switch -%}
+{% from "_macros.html" import csrf, theme_switch, css -%}
 <!doctype html>
 {# "auto" (not a missing attribute) is what opts us into prefers-color-scheme: this shell
    owns the page background, so following the OS is safe here. See content.css. #}
@@ -7,8 +7,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Camp Planner{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/content.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/standalone.css') }}">
+  {{ css('css/content.css') }}
+  {{ css('css/standalone.css') }}
   {%- if not force_theme %}
   {# Re-apply the stored theme before first paint, so a dark page doesn't flash
      white. Inline and synchronous on purpose; no store → the "auto" above stands. #}

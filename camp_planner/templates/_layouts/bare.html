@@ -1,4 +1,4 @@
-{% from "_macros.html" import theme_switch -%}
+{% from "_macros.html" import theme_switch, css -%}
 {# Embedded mode: emit the camp-nav band (grey "Camp Planner" brand + the camp heading) and the
    content; the host supplies the surrounding chrome and links css/content.css. A host can instead
    pass its own base_template to wrap our pages. Only the account controls stay standalone-only
@@ -7,7 +7,7 @@
    page.html wraps the content block below in the themed .cp-embed; the nav sits outside it
    and paints itself (content.css). A fragment has no <head>, so page stylesheets go at the
    top and scripts at the bottom — a host with a real base_template places them properly. #}
-<link rel="stylesheet" href="{{ url_for('main.static', filename='css/content.css') }}">
+{{ css('css/content.css') }}
 {% block cp_head %}{% endblock %}
 <nav class="cp-camp-nav">
   <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>

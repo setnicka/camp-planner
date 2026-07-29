@@ -2,6 +2,10 @@
 
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
+{# Static assets, path relative to static/ — url_for keeps them prefix-safe. #}
+{% macro css(path) %}<link rel="stylesheet" href="{{ url_for('main.static', filename=path) }}">{% endmacro %}
+{% macro js(path) %}<script src="{{ url_for('main.static', filename=path) }}"></script>{% endmacro %}
+
 {# CSRF token for JS mutations + the endpoint dom.js polls to refresh it. Emit in the <head>. #}
 {% macro csrf_meta() %}<meta name="csrf-token" content="{{ csrf_token() }}">
   <meta name="csrf-refresh" content="{{ url_for('main.csrf_refresh') }}">{% endmacro %}

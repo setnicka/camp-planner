@@ -1,5 +1,5 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_nav, csrf_meta %}
+{% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}{{ camp.name }} – timeline{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
@@ -9,9 +9,9 @@
      when the parser reaches the <script> at the end of <body>. #}
   <link rel="preload" as="script"
         href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/timeline.css') }}">
+  {{ css('vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}
+  {{ css('css/components.css') }}
+  {{ css('css/timeline.css') }}
   {{ csrf_meta() }}
 {% endblock %}
 
@@ -62,14 +62,14 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  <script src="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}"></script>
+  {{ js('vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}
   {% if can_edit(camp) %}
   {# editor-only: shared helpers + fuzzy search + the editing module, before timeline.js so it can call them #}
-  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/slot-orgs.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/activity-picker.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/timeline-edit.js') }}"></script>
+  {{ js('js/dom.js') }}
+  {{ js('js/fuzzy.js') }}
+  {{ js('js/slot-orgs.js') }}
+  {{ js('js/activity-picker.js') }}
+  {{ js('js/timeline-edit.js') }}
   {% endif %}
-  <script src="{{ url_for('main.static', filename='js/timeline.js') }}"></script>
+  {{ js('js/timeline.js') }}
 {% endblock %}

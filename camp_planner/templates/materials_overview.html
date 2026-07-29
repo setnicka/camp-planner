@@ -1,11 +1,11 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_nav, csrf_meta %}
+{% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}Materiál – {{ camp.name }}{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "materials") }}{% endblock %}
 
 {% block cp_head %}
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/materials.css') }}">
+  {{ css('css/components.css') }}
+  {{ css('css/materials.css') }}
   {{ csrf_meta() }}
 {% endblock %}
 
@@ -18,8 +18,8 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/material-need.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/materials-overview.js') }}"></script>
+  {{ js('js/dom.js') }}
+  {{ js('js/fuzzy.js') }}
+  {{ js('js/material-need.js') }}
+  {{ js('js/materials-overview.js') }}
 {% endblock %}

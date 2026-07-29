@@ -1,13 +1,13 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_nav, csrf_meta %}
+{% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}{{ camp.name }} – nastavení akce{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
 
 {% block cp_head %}
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
-  <link rel="stylesheet" href="{{ url_for('main.static', filename='css/settings.css') }}">
+  {{ css('css/components.css') }}
+  {{ css('css/settings.css') }}
   {% if google_data.status.enabled and google_data.may_edit %}
-    <link rel="stylesheet" href="{{ url_for('main.static', filename='css/google-sync.css') }}">
+    {{ css('css/google-sync.css') }}
   {% endif %}
   {{ csrf_meta() }}
 {% endblock %}
@@ -105,14 +105,14 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/history-feed.js') }}"></script>
-  <script src="{{ url_for('main.static', filename='js/settings.js') }}"></script>
+  {{ js('js/dom.js') }}
+  {{ js('js/history-feed.js') }}
+  {{ js('js/settings.js') }}
   {% if google_data.status.enabled and google_data.may_edit %}
-    <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
-    <script src="{{ url_for('main.static', filename='js/google-sync.js') }}"></script>
+    {{ js('js/fuzzy.js') }}
+    {{ js('js/google-sync.js') }}
   {% endif %}
   {% if tokens_data.may_edit %}
-    <script src="{{ url_for('main.static', filename='js/token-admin.js') }}"></script>
+    {{ js('js/token-admin.js') }}
   {% endif %}
 {% endblock %}
