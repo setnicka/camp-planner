@@ -1,22 +1,21 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}{{ camp.name }} – timeline{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
 
-{% block head %}
+{% block cp_head %}
   {# Start the ~550 KB timeline engine downloading during header render, instead of only
      when the parser reaches the <script> at the end of <body>. #}
   <link rel="preload" as="script"
         href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}">
-  <link rel="stylesheet"
-        href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/timeline.css') }}">
   {{ csrf_meta() }}
 {% endblock %}
 
-{% block content %}
+{% block cp_content %}
   {# left column = legend; right = control bars. all top-aligned #}
   <div class="cp-tl-top">
     <div class="cp-tl-left">
@@ -62,7 +61,7 @@
   {% endif %}
 {% endblock %}
 
-{% block scripts %}
+{% block cp_scripts %}
   <script src="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}"></script>
   {% if can_edit(camp) %}
   {# editor-only: shared helpers + fuzzy search + the editing module, before timeline.js so it can call them #}

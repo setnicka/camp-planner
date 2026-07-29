@@ -1,7 +1,7 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import csrf %}
 {% block title %}Přihlášení – Camp Planner{% endblock %}
-{% block content %}
+{% block cp_content %}
   <h1>Přihlášení</h1>
   <form class="cp-form" method="post" action="{{ url_for('auth.login') }}">
     {{ csrf() }}

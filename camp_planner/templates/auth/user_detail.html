@@ -1,7 +1,7 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import csrf %}
 {% block title %}{{ user.username }} – Uživatelé{% endblock %}
-{% block content %}
+{% block cp_content %}
   <p><a href="{{ url_for('auth.users') }}">← Všichni uživatelé</a></p>
   <h1>{{ user.username }} <small class="cp-subtitle">{{ user.display_name }}</small></h1>
 

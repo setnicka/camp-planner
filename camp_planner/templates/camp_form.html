@@ -1,7 +1,7 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import csrf, errors_list, camp_fields %}
 {% block title %}Nová akce – Camp Planner{% endblock %}
-{% block content %}
+{% block cp_content %}
   <h1>Nová akce</h1>
 
   {{ errors_list(errors) }}

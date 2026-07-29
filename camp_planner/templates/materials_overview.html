@@ -1,15 +1,15 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}Materiál – {{ camp.name }}{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "materials") }}{% endblock %}
 
-{% block head %}
+{% block cp_head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/materials.css') }}">
   {{ csrf_meta() }}
 {% endblock %}
 
-{% block content %}
+{% block cp_content %}
   {# materials-overview.js renders the camp-wide table into here from the JSON below.
      Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}
   <div id="cp-materials"></div>
@@ -17,7 +17,7 @@
   <script id="cp-materials-data" type="application/json">{{ data | tojson }}</script>
 {% endblock %}
 
-{% block scripts %}
+{% block cp_scripts %}
   <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/material-need.js') }}"></script>

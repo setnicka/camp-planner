@@ -1,16 +1,16 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}Seznam her – {{ camp.name }}{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
-{% block head %}
+{% block cp_head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/activities-overview.css') }}">
   {{ csrf_meta() }}
 {% endblock %}
 
-{% block content %}
+{% block cp_content %}
   {# activities-overview.js renders the filter header + table into here from the JSON below.
      Delete/merge affordances are gated by data.may_edit; mutations go to the api endpoints. #}
   <div id="cp-overview"></div>
@@ -18,7 +18,7 @@
   <script id="cp-overview-data" type="application/json">{{ data | tojson }}</script>
 {% endblock %}
 
-{% block scripts %}
+{% block cp_scripts %}
   <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/fuzzy.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/activities-overview.js') }}"></script>

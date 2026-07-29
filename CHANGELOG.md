@@ -19,6 +19,11 @@ Versioning convention: a release that ships a new DB migration should bump the
 - A deployment can force a theme and drop the switch: `CP_FORCE_THEME` or
   `register_camp_planner(force_theme=…)` — see docs/DEPLOYMENT.md §2.
 
+### Fixed
+
+- Embedded pages shipped no stylesheets, JavaScript or CSRF token. **Upgrade note:** a host
+  `base_template` must declare `content`, `cp_head` and `cp_scripts` (docs/DEPLOYMENT.md §2).
+
 ### Changed
 
 - One accent colour: blue; the former green lives on as „success“. Low-contrast ambers

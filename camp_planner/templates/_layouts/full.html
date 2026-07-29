@@ -15,7 +15,7 @@
   <script>try{var t=localStorage.getItem("cp-theme");
     if(t==="light"||t==="dark")document.documentElement.setAttribute("data-cp-theme",t);}catch(e){}</script>
   {%- endif %}
-  {% block head %}{% endblock %}
+  {% block cp_head %}{% endblock %}
 </head>
 <body>
   {# One condensed header line: grey brand · camp heading (header_nav) · account on the right. #}
@@ -46,6 +46,6 @@
   {%- if not force_theme %}
   <script src="{{ url_for('main.static', filename='js/theme.js') }}" defer></script>
   {%- endif %}
-  {% block scripts %}{% endblock %}
+  {% block cp_scripts %}{% endblock %}
 </body>
 </html>

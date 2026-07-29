@@ -1,9 +1,9 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}{{ camp.name }} – nastavení akce{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
 
-{% block head %}
+{% block cp_head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/settings.css') }}">
   {% if google_data.status.enabled and google_data.may_edit %}
@@ -12,7 +12,7 @@
   {{ csrf_meta() }}
 {% endblock %}
 
-{% block content %}
+{% block cp_content %}
   {% set may_edit = can_edit(camp) %}
 
   <section class="cp-section">
@@ -104,7 +104,7 @@
   {% endif %}
 {% endblock %}
 
-{% block scripts %}
+{% block cp_scripts %}
   <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/history-feed.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/settings.js') }}"></script>

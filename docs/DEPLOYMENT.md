@@ -33,6 +33,7 @@ or a single `DATABASE_URL`.
 AUTH_MODE=standalone
 SECRET_KEY=<random>
 DB_BACKEND=sqlite        # or postgresql / mysql (install the [postgres] / [mysql] extra)
+CP_FORCE_THEME=          # empty → light/auto/dark switch; "light"/"dark"/"auto" forces one
 ```
 
 ```bash
@@ -88,10 +89,55 @@ slugs are ignored — same convention as the proxy header.
   `camp_planner`** — in this module as shown, or in the environment. It can't be a
   `register_camp_planner()` argument: by then the models are already named.
 - Auth hooks are blueprint-scoped — they never touch the host's other routes.
-- **Styles:** link `css/content.css` (the `.cp-*` component styles for our forms/tables)
-  from the host's template — e.g. `url_for("main.static", filename="css/content.css")`.
-  Do *not* link `css/standalone.css`; that's our own shell's chrome (nav/body reset) and
-  would fight the host's layout.
+- **Template contract:** a `base_template` of yours declares three slots; pages carry
+  their own stylesheets and scripts, so both need a home:
+
+  ```jinja
+  <head>
+    <link rel="stylesheet" href="{{ url_for('main.static', filename='css/content.css') }}">
+    {% block cp_head %}{% endblock %}   {# page stylesheets + our CSRF meta tag #}
+  </head>
+  <body>
+    {% block content %}{% endblock %}      {# the page itself #}
+    {% block cp_scripts %}{% endblock %}   {# page scripts, after the markup they drive #}
+  </body>
+  ```
+
+  Omit one and `register_camp_planner` warns at startup. Link `content.css` (the palette +
+  `.cp-*` component styles) before `cp_head`, so page CSS can read the tokens; do *not*
+  link `css/standalone.css` — that's our own shell's chrome. Define `title` and our page
+  titles land in it. Omitting `base_template` gets our bare fragment, which links
+  `content.css` itself.
+
+- **Colour theme:** every colour is a `--cp-*` token in `content.css`. By default we
+  render a light/auto/dark switch and remember the visitor's choice; embedded we default
+  to light rather than following their OS — we can't read your page's background. Our
+  output is wrapped in `<div class="cp-embed">` carrying the active theme's own
+  background/text. To pin a theme and drop the switch:
+
+  ```python
+  register_camp_planner(app, auth_callback=..., force_theme="dark")
+  ```
+
+  | `force_theme` | your page is | we render |
+  | ------------- | ------------ | --------- |
+  | `"light"` / `"dark"` | fixed, the same for everyone | that theme, no switch |
+  | `"auto"` | itself following `prefers-color-scheme` | the OS's theme, no switch |
+  | omitted | not saying | light, **plus the switch** |
+
+  (The `CP_FORCE_THEME` env var / host `app.config` work too; the argument wins. A custom
+  `base_template` needs no markup — the `.cp-embed` wrapper carries the theme.)
+  Alternatively, set `data-cp-theme` on any element wrapping our output; the switch
+  notices the ancestor and hides itself. Either way the attribute switches the palette
+  *and* `color-scheme` — only within that element, never on your `:root`. To match your
+  own palette, override tokens after linking `content.css`:
+
+  ```css
+  [data-cp-theme="dark"] { --cp-bg: #0a0a0a; --cp-text: #e0e0e0; --cp-accent-text: #5c93d3; }
+  ```
+
+  `--cp-daynight-rgb` (the timeline's night overlay) is a bare `r g b` triplet, not a
+  colour. Per-camp category colours come from the database and are *not* themed.
 - **CSRF:** Camp Planner only enables its own `CSRFProtect` on *its own* app (standalone/
   proxy), never on the host — so CSRF for the mounted routes is the host's responsibility.
   A host using Flask-WTF's `CSRFProtect` covers Camp Planner's POSTs automatically and

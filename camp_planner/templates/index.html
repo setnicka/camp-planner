@@ -1,14 +1,14 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_sections %}
 {% block title %}Akce – Camp Planner{% endblock %}
 {# "Akce" rides in the navigation header (where camp pages show the camp name). #}
 {% block header_nav %}<span class="cp-camp-name">Akce</span>{% endblock %}
 
-{% block head %}
+{% block cp_head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/landing.css') }}">
 {% endblock %}
 
-{% block content %}
+{% block cp_content %}
   {% if can_create_camp() %}
     <p class="cp-landing-new"><a class="cp-new-camp" href="{{ url_for('main.camp_new') }}">+ Vytvořit akci</a></p>
   {% endif %}

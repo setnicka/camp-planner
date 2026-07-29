@@ -1,10 +1,10 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import csrf, csrf_meta, errors_list, camp_fields, camp_nav %}
 {% block title %}{{ camp.name }} – úprava{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
 {# camp-settings.js (the delete action) sends this token via cpDom.api's X-CSRFToken header. #}
-{% block head %}{{ csrf_meta() }}{% endblock %}
-{% block content %}
+{% block cp_head %}{{ csrf_meta() }}{% endblock %}
+{% block cp_content %}
   <h1>Úprava parametrů</h1>
   <p><a href="{{ url_for('main.camp_detail', slug=camp.slug) }}">← zpět na nastavení akce</a></p>
 
@@ -43,7 +43,7 @@
   {% endif %}
 {% endblock %}
 
-{% block scripts %}
+{% block cp_scripts %}
   <script src="{{ url_for('main.static', filename='js/dom.js') }}"></script>
   <script src="{{ url_for('main.static', filename='js/camp-settings.js') }}"></script>
 {% endblock %}

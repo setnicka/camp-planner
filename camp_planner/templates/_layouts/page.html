@@ -1,0 +1,17 @@
+{% extends layout %}
+{# Every page extends this instead of `layout` directly so that, embedded (bare.html or a
+   host's base_template), the output is wrapped in .cp-embed — forced theme + the palette's
+   bg/text, so the subtree can't come out light-on-light on someone else's page.
+   Assets are not handled here: pages declare cp_head/cp_scripts and each shell places them
+   (a host omitting a slot gets a RuntimeWarning — _check_host_template, integration.py). #}
+{% block content %}
+{%- if embedded %}<div class="cp-embed"{% if force_theme %} data-cp-theme="{{ force_theme }}"{% endif %}>{% endif %}
+{%- if embedded and not force_theme %}
+{# Re-apply a stored choice before the wrapper's content paints — a fragment has no <head>
+   for a pre-paint script like full.html's. closest(): never override a host markup-pin. #}
+<script>try{var t=localStorage.getItem("cp-theme"),e=document.currentScript.parentElement;
+if((t==="light"||t==="dark")&&!e.closest("[data-cp-theme]"))e.setAttribute("data-cp-theme",t);}catch(e){}</script>
+{%- endif %}
+{%- block cp_content %}{% endblock %}
+{%- if embedded %}</div>{% endif %}
+{%- endblock %}

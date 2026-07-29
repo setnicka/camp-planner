@@ -1,6 +1,7 @@
 // Colour-theme switch (light / auto / dark). Writes data-cp-theme on the embedded wrapper
 // if there is one, else on <html>; only a clicked light/dark is stored. The pre-paint
-// re-apply lives inline in full.html — this file only wires the control. A host pinning
+// re-apply lives inline in the shells (full.html, page.html) — this file only wires the
+// control. A host pinning
 // the theme in its own markup is invisible to the server, so detect it here and hide:
 // a nearer ancestor beats anything we set, and a dead switch is worse than none.
 (function () {

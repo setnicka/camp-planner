@@ -1,16 +1,16 @@
-{% extends layout %}
+{% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta %}
 {% block title %}{{ activity.title }} – {{ camp.name }}{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
-{% block head %}
+{% block cp_head %}
   <link rel="stylesheet" href="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/lib/codemirror.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/components.css') }}">
   <link rel="stylesheet" href="{{ url_for('main.static', filename='css/activity-detail.css') }}">
   {{ csrf_meta() }}
 {% endblock %}
 
-{% block content %}
+{% block cp_content %}
   {# activity-detail.js renders the header + all sections into here from the JSON below.
      Editing affordances are gated by data.may_edit; mutations go to the api endpoints. #}
   <div id="cp-activity"></div>
@@ -18,7 +18,7 @@
   <script id="cp-activity-data" type="application/json">{{ data | tojson }}</script>
 {% endblock %}
 
-{% block scripts %}
+{% block cp_scripts %}
   <script src="{{ url_for('main.static', filename='vendor/markdown-it@14.1.0/markdown-it.min.js') }}"></script>
   <script src="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/lib/codemirror.js') }}"></script>
   <script src="{{ url_for('main.static', filename='vendor/codemirror@5.65.18/mode/markdown/markdown.js') }}"></script>

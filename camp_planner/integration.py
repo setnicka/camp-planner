@@ -13,6 +13,8 @@ across apps and a host's own routes/templates are untouched.
 
 from __future__ import annotations
 
+import re
+import warnings
 from typing import TYPE_CHECKING, Any, Callable
 
 from flask import current_app, g
@@ -34,6 +36,44 @@ if TYPE_CHECKING:
     from camp_planner.auth.identity import AuthProvider
 
 
+# Our shells: the standalone page, and the embedded fragment (the default when a host names
+# no template of its own).
+_BARE_TEMPLATE = "_layouts/bare.html"
+_FULL_TEMPLATE = "_layouts/full.html"
+
+
+# Slots every shell must declare: our pages' markup, stylesheets and scripts render into
+# these. Checked at registration — a missing slot ships unstyled, inert pages.
+_REQUIRED_BLOCKS = ("content", "cp_head", "cp_scripts")
+
+
+def _check_host_template(app: Flask, base_template: str) -> None:
+    """Warn when a host's base template declares none of the slots our pages render into.
+
+    Static, so it only sees blocks written in that file: a template that itself extends another
+    is skipped rather than guessed at. Unreadable templates are skipped too — a host may install
+    its loader after registering us, and a check must not be the thing that breaks startup.
+    """
+    try:
+        source = app.jinja_env.loader.get_source(app.jinja_env, base_template)[0]
+    except Exception:
+        return
+    if re.search(r"{%-?\s*extends\b", source):
+        return
+    missing = [b for b in _REQUIRED_BLOCKS
+               if not re.search(r"{%-?\s*block\s+" + b + r"\b", source)]
+    if missing:
+        warnings.warn(
+            f"base_template={base_template!r} declares no {' / '.join(missing)} block. Camp "
+            "Planner renders each page's markup into `content`, its stylesheets into `cp_head` "
+            "(place it in <head>) and its scripts into `cp_scripts` (before </body>); a missing "
+            "slot means those pages ship without them. Link css/content.css there too. "
+            "See docs/DEPLOYMENT.md §2.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+
 def _state() -> dict[str, Any]:
     return current_app.extensions["camp_planner"]
 
@@ -47,9 +87,13 @@ def _load_identity() -> None:
 
 
 def _inject() -> dict[str, Any]:
+    base_template = _state()["base_template"]
     return {
-        "layout": _state()["base_template"],
+        "layout": base_template,
         "app_version": __version__,
+        # Anything but our standalone shell means we're inside someone else's page, and our
+        # output needs the .cp-embed wrapper page.html puts around it.
+        "embedded": base_template != _FULL_TEMPLATE,
         # "light" | "dark" | "auto" forces the theme and drops the switch; None = the
         # visitor chooses (and standalone then defaults to auto, embedded to light).
         "force_theme": _state()["force_theme"],
@@ -97,6 +141,7 @@ def _attach(
             f"force_theme={force_theme!r}: expected 'light', 'dark', 'auto' or None "
             "(None = show the switch and let the visitor choose)"
         )
+    _check_host_template(app, base_template)
     app.extensions["camp_planner"] = {
         "provider": provider,
         "base_template": base_template,
@@ -143,7 +188,7 @@ def register_camp_planner(
     auth_callback: Callable[[], Any],
     url_prefix: str = "/planner",
     database_uri: str | None = None,
-    base_template: str = "_layouts/bare.html",
+    base_template: str = _BARE_TEMPLATE,
     force_theme: str | None = None,
 ) -> None:
     """Mount Camp Planner's blueprints on a host Flask app (embedded mode).
@@ -156,7 +201,7 @@ def register_camp_planner(
     force_theme ("light" | "dark" | "auto") pins the theme and drops the switch; "auto"
     is for a host page that itself follows prefers-color-scheme (we can't read your
     background, so we only follow the OS when you say so). None = the visitor chooses,
-    starting light. See docs/DEPLOYMENT.md §2.
+    starting light. Works with a custom base_template too. See docs/DEPLOYMENT.md §2.
     """
     if database_uri:
         host_app.config.setdefault("SQLALCHEMY_DATABASE_URI", database_uri)
