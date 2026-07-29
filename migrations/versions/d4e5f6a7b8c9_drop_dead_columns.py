@@ -9,7 +9,7 @@ Revises: c3d4e5f6a7b8
 Create Date: 2026-07-26 12:00:00.000000
 
 """
-from alembic import op
+from alembic import context, op
 import sqlalchemy as sa
 
 # DB_TABLE_PREFIX is read at import time, so these build a prefixed or unprefixed schema
@@ -29,10 +29,13 @@ def upgrade():
     with op.batch_alter_table(table_name('camps'), schema=None) as batch_op:
         batch_op.drop_column('google_sync_token')
 
-    materials = sa.table(table_name('materials'), sa.column('acquisition_labels', sa.JSON()))
-    op.execute(materials.update()
-               .where(materials.c.acquisition_labels.is_(None))
-               .values(acquisition_labels=[]))
+    # Offline SQL (--sql) can't render a JSON literal — skip the backfill there;
+    # NULL rows must then be backfilled by hand before the NOT NULL alter below.
+    if not context.is_offline_mode():
+        materials = sa.table(table_name('materials'), sa.column('acquisition_labels', sa.JSON()))
+        op.execute(materials.update()
+                   .where(materials.c.acquisition_labels.is_(None))
+                   .values(acquisition_labels=[]))
     with op.batch_alter_table(table_name('materials'), schema=None) as batch_op:
         batch_op.alter_column('acquisition_labels', existing_type=sa.JSON(), nullable=False)
 
