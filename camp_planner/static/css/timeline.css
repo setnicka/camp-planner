@@ -3,11 +3,12 @@
  * Linked only on the timeline page; the embed-shared component styles stay in content.css.
  * Category colours (.vis-item.cat-<key>) are injected at runtime by timeline.js. */
 
-/* left column (legend) vs right column (control bars), top-aligned so the legend sits
-   beside the 2-row buttons (the camp nav spans the full width above this row) */
-.cp-tl-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
-.cp-tl-left { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-.cp-tl-bars { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+/* left column (legend) vs right column (control bars), top-aligned; the help sits outside
+   as a full-width line under both. The legend grows and wraps its chips beside the bars
+   down to its 18rem basis; below that the bars wrap under it, both full width. */
+.cp-tl-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; }
+.cp-tl-left { flex: 1 1 18rem; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.cp-tl-bars { flex: 1 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
 
 /* Reserve height so the header doesn't jump when vis-timeline mounts. #cp-timeline is
    empty until the JS fills it, so :empty shows the loading hint only during the load. */
@@ -15,7 +16,7 @@
 #cp-timeline:empty { display: flex; align-items: center; justify-content: center; }
 #cp-timeline:empty::before { content: "Načítám timeline…"; color: var(--cp-muted); font-size: 14px; }
 .cp-tl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
-.cp-tl-help { margin: 0; font-size: 12px; color: var(--cp-muted); line-height: 1.35; }
+.cp-tl-help { margin: 0.5rem 0 0; font-size: 12px; color: var(--cp-muted); line-height: 1.35; }
 
 /* vis renders the slot tooltip (item `title`) as a global div.vis-tooltip. vis injects
    its own CSS via JS at runtime (after this file), so !important is needed to win. */
@@ -30,16 +31,20 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 .cp-tl-legend-item.on { background: var(--cp-accent-subtle); border-color: var(--cp-accent); font-weight: 600; }
 .cp-tl-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
 
-/* controls bar (day/night toggle + zoom; second row = edit buttons) */
-.cp-tl-bar { display: flex; align-items: center; gap: 0.5rem; }
+/* controls bar (day/night toggle + zoom; second row = edit buttons); stretch keeps the
+   zoom pair — smaller font, no side padding — the same height as its text neighbours */
+.cp-tl-bar { display: flex; align-items: stretch; gap: 0.5rem; }
 .cp-tl-btn {
   font: inherit; font-size: 13px; padding: 0.3rem 0.7rem; cursor: pointer;
   border: 1px solid var(--cp-border); border-radius: 6px; background: var(--cp-surface); color: var(--cp-text);
 }
 .cp-tl-btn:hover { background: var(--cp-surface-2); }
 .cp-tl-btn.on { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
-.cp-tl-zoom { display: inline-flex; gap: 4px; }
-.cp-tl-zoom .cp-tl-btn { width: 2rem; padding: 0.3rem 0; text-align: center; font-size: 16px; line-height: 1; }
+/* joined − / + pair: one pill, the shared border collapsed by the -1px overlap */
+.cp-tl-zoom { display: inline-flex; }
+.cp-tl-zoom .cp-tl-btn { width: 2rem; padding: 0.3rem 0; text-align: center; font-size: 16px; line-height: 1; border-radius: 0; }
+.cp-tl-zoom .cp-tl-btn:first-child { border-radius: 6px 0 0 6px; }
+.cp-tl-zoom .cp-tl-btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
 .cp-tl-filter-label { font-size: 12px; font-weight: 600; color: var(--cp-muted); }
 .cp-tl-select {
   font: inherit; font-size: 13px; padding: 0.25rem 0.4rem; max-width: 16rem;

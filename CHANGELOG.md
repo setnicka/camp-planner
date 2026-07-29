@@ -29,6 +29,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - One accent colour: blue; the former green lives on as „success“. Low-contrast ambers
   and greens darkened (WCAG AA).
 - Timeline slot-action buttons dropped the dark outline.
+- Timeline header: camp-timezone clock only when it differs from the browser's, filter
+  help below the controls, zoom −/+ joined.
 
 ## [0.3.0] - 2026-07-26
 

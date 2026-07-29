@@ -16,17 +16,9 @@
 {% endblock %}
 
 {% block cp_content %}
-  {# left column = legend; right = control bars. all top-aligned #}
+  {# left column = legend (injected by timeline.js); right = control bars. all top-aligned #}
   <div class="cp-tl-top">
-    <div class="cp-tl-left">
-      {# legend injected here by timeline.js, before the help below #}
-      <p class="cp-tl-help"><small><b>Filtruj</b> klikáním na kategorie/orgy/hry výše. <b>Kliknutím na slot</b> otevřeš <b>menu</b>.
-        {%- if can_edit(camp) %}
-        Pro změnu/přidání slotů přepni do <b>editačního módu</b>, v něm: <b>dvojklik</b> na prázdném místě
-        vytvoří <b>nový slot</b>, kliknutí na slot umožní <b>mazat</b>, tažení slot <b>přesune nebo
-        zmenší/zvětší</b>.
-        {%- endif %}</small></p>
-    </div>
+    <div class="cp-tl-left"></div>
     <div class="cp-tl-bars">
       <div class="cp-tl-bar">
         <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc">🌙 Den/noc</button>
@@ -46,6 +38,14 @@
       {% endif %}
     </div>
   </div>
+
+  {# full-width, below the legend and the control bars #}
+  <p class="cp-tl-help"><small><b>Filtruj</b> klikáním na kategorie/orgy/hry výše. <b>Kliknutím na slot</b> otevřeš <b>menu</b>.
+    {%- if can_edit(camp) %}
+    Pro změnu/přidání slotů přepni do <b>editačního módu</b>, v něm: <b>dvojklik</b> na prázdném místě
+    vytvoří <b>nový slot</b>, kliknutí na slot umožní <b>mazat</b>, tažení slot <b>přesune nebo
+    zmenší/zvětší</b>.
+    {%- endif %}</small></p>
 
   {# the activity-detail URL template rides on the mount for viewers and editors alike #}
   <div id="cp-timeline"

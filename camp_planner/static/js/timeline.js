@@ -103,10 +103,10 @@
   legend.innerHTML = `<span class="cp-tl-filter-label">Kategorie:</span>` +
     payload.categories.map((c) => legendItem(c.key, c.color, c.label)).join("") +
     (payload.segments.some((s) => s.cat_key === "_none") ? legendItem("_none", "#9e9e9e", "Bez kategorie") : "");
-  // stack under the title (left column), above the editor help text if present; bars
-  // are the right column. Falls back to above the timeline if that container isn't present.
+  // into the left column (bars are the right one); falls back to above the timeline
+  // if that container isn't present.
   const left = document.querySelector(".cp-tl-left");
-  if (left) left.insertBefore(legend, left.querySelector(".cp-tl-help"));
+  if (left) left.append(legend);
   else container.parentNode.insertBefore(legend, container);
 
   // --- groups (day rows) -----------------------------------------------------
@@ -434,28 +434,27 @@
     row.className = "cp-tl-frow";
     const fLabel = (text) => Object.assign(document.createElement("span"), { className: "cp-tl-filter-label", textContent: text });
 
-    // The current time in the camp timezone (appended after the Org/Hra filters below). When that
-    // differs from the viewer's own timezone, the tz name follows in small grey so the wall clock
-    // isn't ambiguous. Ticks every second; formatted directly in the camp tz via Intl (no offset math).
-    const clock = document.createElement("span");
-    clock.className = "cp-tl-clock";
-    clock.title = "Aktuální čas v časovém pásmu tábora";
-    const clockTime = Object.assign(document.createElement("b"), { className: "cp-tl-clock-time" });
-    clock.append("🕒 ", clockTime);
+    // The current time in the camp timezone (appended after the Org/Hra filters below),
+    // with the tz name in small grey — only when that differs from the viewer's own
+    // timezone, i.e. when the wall clock is ambiguous. Intl does the tz math.
+    let clock = null;
     let browserTz = "";
     try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_e) { /* leave "" */ }
     if (camp.timezone && camp.timezone !== browserTz) {
-      clock.append(Object.assign(document.createElement("span"),
+      clock = document.createElement("span");
+      clock.className = "cp-tl-clock";
+      clock.title = "Aktuální čas v časovém pásmu tábora";
+      const clockTime = Object.assign(document.createElement("b"), { className: "cp-tl-clock-time" });
+      clock.append("🕒 ", clockTime, Object.assign(document.createElement("span"),
         { className: "cp-tl-clock-tz", textContent: camp.timezone }));
-    }
-    const fmtCampClock = () => {
       const opts = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
-      try { return new Intl.DateTimeFormat("cs-CZ", { timeZone: camp.timezone, ...opts }).format(new Date()); }
-      catch (_e) { return new Intl.DateTimeFormat("cs-CZ", opts).format(new Date()); }
-    };
-    const tickClock = () => { clockTime.textContent = fmtCampClock(); };
-    tickClock();
-    setInterval(tickClock, 1000);
+      let fmt;
+      try { fmt = new Intl.DateTimeFormat("cs-CZ", { timeZone: camp.timezone, ...opts }); }
+      catch (_e) { fmt = new Intl.DateTimeFormat("cs-CZ", opts); }   // unknown tz → viewer's
+      const tickClock = () => { clockTime.textContent = fmt.format(new Date()); };
+      tickClock();
+      setInterval(tickClock, 1000);
+    }
 
     // org chips (each org listed once); click cycles garant → účast → off
     const orgChips = [];
@@ -484,7 +483,7 @@
       activities.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
       row.append(fLabel("Hra:"), actSel);
     }
-    row.append(clock);   // camp-timezone clock, after the Org/Hra filters
+    if (clock) row.append(clock);   // camp-timezone clock, after the Org/Hra filters
     if (row.children.length) {   // skip an empty row (no orgs and no slotted activities)
       if (legend) legend.after(row);
       else (left || container.parentNode).insertBefore(row, container);
