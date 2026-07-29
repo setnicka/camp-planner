@@ -23,6 +23,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Embedded pages shipped no stylesheets, JavaScript or CSRF token. **Upgrade note:** a host
   `base_template` must declare `content`, `cp_head` and `cp_scripts` (docs/DEPLOYMENT.md §2).
+- Selected chips in the org/category pickers fill solid blue instead of a faint tint —
+  they were hard to tell apart in both themes; „+ Přidat“ buttons match the height of
+  their neighbours.
 
 ### Changed
 

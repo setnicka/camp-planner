@@ -115,7 +115,11 @@
   border: 1px solid var(--cp-border); border-radius: 999px; background: var(--cp-surface);
 }
 .cp-cat-chip:hover { background: var(--cp-surface-2); }
-.cp-cat-chip.on { border-color: var(--cp-accent); background: var(--cp-accent-subtle); font-weight: 600; }
+.cp-cat-chip.on {
+  border-color: var(--cp-accent); background: var(--cp-accent);
+  color: var(--cp-text-inverse); font-weight: 600;
+}
+.cp-cat-chip.on:hover { filter: brightness(1.12); }   /* clicking again deselects */
 .cp-cat-chip .cp-swatch { width: 14px; height: 14px; margin: 0; }
 
 /* --- modal buttons (content.css only styles .cp-primary/.cp-cancel under forms) --- */
@@ -155,10 +159,12 @@
 }
 @keyframes cp-spin { to { transform: rotate(360deg); } }
 
-/* --- "+ Přidat …" ghost button under a list --- */
-.cp-add { font: inherit; font-size: 0.9rem; padding: 0.25rem 0.7rem; margin-top: 0.4rem;
+/* --- "+ Přidat …" ghost button under a list; metrics match the standard buttons so it
+   also lines up when it shares a row with them (settings .cp-edit-actions) --- */
+.cp-add { font: inherit; padding: 0.35rem 0.7rem; margin-top: 0.4rem;
   border: 1px dashed var(--cp-border); border-radius: 6px; background: var(--cp-surface); color: var(--cp-accent-text); cursor: pointer; }
 .cp-add:hover { background: var(--cp-accent-wash); }
+.cp-edit-actions .cp-add { margin-top: 0; }   /* the row's own margin spaces it */
 
 /* --- compact in-row action buttons (✎ / ✕ / ⤳) — shared by the inline-edit + overview pages --- */
 .cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
