@@ -1,7 +1,6 @@
 {% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}Úkoly – {{ camp.name }}{% endblock %}
-{% block main_class %}cp-wide{% endblock %}
 {% block header_nav %}{{ camp_nav(camp, "todos") }}{% endblock %}
 
 {% block cp_head %}
