@@ -74,6 +74,16 @@ window.cpDom = (function () {
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
   const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "var(--cp-text-dim)") });
 
+  // Body-level portals sit outside the element carrying data-cp-theme; the palette
+  // reaches them via :has() but color-scheme does not, leaving native widgets light in a
+  // dark dialog — so stamp the theme onto the portal itself (no attribute = light =
+  // stamp nothing). theme.js re-stamps open portals on a switch.
+  function stampTheme(node) {
+    const t = document.querySelector("[data-cp-theme]");
+    if (t) node.setAttribute("data-cp-theme", t.getAttribute("data-cp-theme"));
+    return node;
+  }
+
   // Mount a dialog inside a backdrop overlay: Escape / backdrop-click dismiss it, Tab is
   // trapped inside, focus returns to the opener, onClose runs once on any dismissal.
   // `confirmClose` (optional) guards only Escape/backdrop — return false to keep the
@@ -82,7 +92,7 @@ window.cpDom = (function () {
     const opener = document.activeElement;
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
-    const overlay = el("div", { class: "cp-modal-overlay" }, dialog);
+    const overlay = stampTheme(el("div", { class: "cp-modal-overlay" }, dialog));
     let closed = false;
     const close = () => {
       if (closed) return;
@@ -301,7 +311,7 @@ window.cpDom = (function () {
   // Click to dismiss early. The stack container is created on first use.
   function toast(message, isError) {
     let stack = document.getElementById("cp-toasts");
-    if (!stack) { stack = el("div", { id: "cp-toasts", class: "cp-toasts" }); document.body.append(stack); }
+    if (!stack) { stack = stampTheme(el("div", { id: "cp-toasts", class: "cp-toasts" })); document.body.append(stack); }
     const box = el("div", { class: "cp-toast" + (isError ? " cp-toast-error" : "") }, message);
     const dismiss = () => {
       box.classList.remove("cp-toast-show");

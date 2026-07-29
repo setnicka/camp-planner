@@ -129,8 +129,9 @@ slugs are ignored — same convention as the proxy header.
   `base_template` needs no markup — the `.cp-embed` wrapper carries the theme.)
   Alternatively, set `data-cp-theme` on any element wrapping our output; the switch
   notices the ancestor and hides itself. Either way the attribute switches the palette
-  *and* `color-scheme` — only within that element, never on your `:root`. To match your
-  own palette, override tokens after linking `content.css`:
+  *and* `color-scheme` — only within that element, never on your `:root`. Our dialogs
+  and toasts follow too; you never need to declare `color-scheme` on your own page. To
+  match your own palette, override tokens after linking `content.css`:
 
   ```css
   [data-cp-theme="dark"] { --cp-bg: #0a0a0a; --cp-text: #e0e0e0; --cp-accent-text: #5c93d3; }

@@ -26,6 +26,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Selected chips in the org/category pickers fill solid blue instead of a faint tint —
   they were hard to tell apart in both themes; „+ Přidat“ buttons match the height of
   their neighbours.
+- Native widgets inside dialogs and toasts (date picker, select popups, scrollbars)
+  follow the colour theme when embedded; a host needs no `color-scheme` of its own.
 
 ### Changed
 

@@ -222,7 +222,8 @@
 
 /* color-scheme (form controls, scrollbars) follows the palette, but only on an element
    carrying data-cp-theme: embedded, :root is the *host's* document. Not on the :has()
-   arms — those only lift tokens. */
+   arms — those only lift tokens; the body-level portals get their scheme from the
+   attribute dom.js stamps onto them. */
 [data-cp-theme="light"],
 [data-cp-theme="auto"] { color-scheme: light; }
 [data-cp-theme="dark"] { color-scheme: dark; }

@@ -30,6 +30,10 @@
     const explicit = mode === "light" || mode === "dark";
     const active = explicit ? mode : "auto";
     target.setAttribute(ATTR, active);
+    // Open body-level portals carry the theme themselves (dom.js stamps new ones).
+    for (const p of document.querySelectorAll(".cp-modal-overlay, #cp-toasts")) {
+      p.setAttribute(ATTR, active);
+    }
     if (persist) {   // only a click is a choice — never store the fallback
       try {
         if (explicit) localStorage.setItem(KEY, mode);
