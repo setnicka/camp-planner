@@ -14,6 +14,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Added
 
+- Czech user guide with screenshots (`docs/pruvodce.md`); `docs/index.md` as the
+  documentation entry point.
 - `flask seed-demo`: deterministic demo camp in a standalone SQLite file.
 - `scripts/shoot_docs.py` re-shoots the guide's screenshots as lossless WebP
   (new `[docs]` extra).

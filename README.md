@@ -8,6 +8,8 @@ a server-rendered **web UI** (vis-timeline day-grid editor, camp settings,
 activity and material pages), and a pydantic-validated **JSON REST API** under
 `/api` (Swagger at `/apidoc/swagger`).
 
+![The day-grid timeline editor](docs/screenshots/01-timeline.webp)
+
 ## Quick start
 
 ```bash
@@ -21,6 +23,16 @@ uv run flask --app wsgi run                        # http://127.0.0.1:5000/
 ```
 
 Run the tests with `uv run pytest`.
+
+## Documentation
+
+[docs/index.md](docs/index.md) is the entry point. The Czech user guide with screenshots
+of every page is [docs/pruvodce.md](docs/pruvodce.md); deployment shapes are covered in
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and the calendar sync setup in
+[docs/google_calendar_setup.md](docs/google_calendar_setup.md).
+
+To explore the app with data in it, `flask seed-demo` builds the demo camp the guide's
+screenshots show (see [docs/index.md](docs/index.md)).
 
 ## Database
 
@@ -78,7 +90,7 @@ AuditLog              (append-only; grouped by activity_id; field-level JSON dif
 
 Slots carry real clock times (naive datetimes in the camp timezone), 24h day rows may cross
 midnight (`Camp.window_start_min`), overlaps are allowed, and prep/cleanup are independent
-`Slot` rows. See `docs/REQUIREMENTS.md` for how each decision maps to a requirement.
+`Slot` rows.
 
 ## Migrations
 
@@ -99,7 +111,7 @@ camp_planner/
   __init__.py     app factory
   config.py       config + DB-backend selection + table-name prefix
   extensions.py   db, migrate, declarative Base
-  cli.py          init-db / create-user / grant-role / api-token / sync-google
+  cli.py          init-db / create-user / grant-role / api-token / sync-google / seed-demo
   api.py          JSON REST API blueprint (/api)
   schemas.py      pydantic request/response models (validation + OpenAPI)
   views.py        HTML pages (camp list, timeline, detail, settings)
@@ -112,5 +124,5 @@ camp_planner/
 migrations/       Alembic migration scripts
 tests/            pytest suite
 wsgi.py           entry point
-docs/             requirements, deployment, frontend research, timeline mockups
+docs/             user guide (Czech) + screenshots, deployment, Google Calendar setup
 ```
