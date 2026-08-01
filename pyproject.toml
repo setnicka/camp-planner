@@ -30,6 +30,11 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Re-shooting the documentation screenshots (scripts/shoot_docs.py). Needs a browser
+# binary too: `uv run playwright install chromium`. Pillow converts Playwright's PNG
+# output to lossless WebP (same pixels, ~3.6× smaller); Playwright itself writes only
+# PNG/JPEG.
+docs = ["playwright>=1.40", "pillow>=10"]
 
 [tool.ruff]
 line-length = 100

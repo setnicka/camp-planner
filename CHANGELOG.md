@@ -12,6 +12,12 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- `flask seed-demo`: deterministic demo camp in a standalone SQLite file.
+- `scripts/shoot_docs.py` re-shoots the guide's screenshots as lossless WebP
+  (new `[docs]` extra).
+
 ## [0.3.1] - 2026-07-29
 
 ### Added

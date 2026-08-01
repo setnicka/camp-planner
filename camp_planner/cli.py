@@ -54,6 +54,42 @@ def register_cli(app: Flask) -> None:
         uri = make_url(current_app.config["SQLALCHEMY_DATABASE_URI"])
         click.echo(f"Schema created on {uri.render_as_string(hide_password=True)}")
 
+    @app.cli.command("seed-demo")
+    @click.option("--out", "out", default="demo/demo.sqlite", show_default=True,
+                  type=click.Path(dir_okay=False), help="SQLite file to create (overwritten).")
+    @click.option("--seed", default=20260801, show_default=True,
+                  help="Random seed; the same seed reproduces the same camp.")
+    @click.option("--calendar", "calendar_id", default=None, metavar="CALENDAR_ID",
+                  help="Connect the demo camp to this Google calendar. Omitted = not "
+                       "connected, which is what you want unless you can write to it.")
+    def seed_demo(out: str, seed: int, calendar_id: str | None) -> None:
+        """Build the demo camp used for the documentation screenshots.
+
+        Writes a self-contained SQLite file, leaving the configured database alone.
+        Schema is created directly (like init-db), so it carries no Alembic stamp.
+        """
+        from pathlib import Path
+
+        from camp_planner.demo_data import ADMIN_USER, EDITOR_USER, PASSWORD, SLUG, build
+        from camp_planner.services import errors
+
+        try:
+            counts = build(out, seed, calendar_id)
+        except errors.Invalid as exc:
+            raise click.ClickException(str(exc)) from None
+        summary = ", ".join(f"{v} {k}" for k, v in counts.items())
+        click.echo(f"Wrote {out}: {summary}.")
+        click.echo(f"Log in as {EDITOR_USER!r} (editor) or {ADMIN_USER!r}, "
+                   f"password {PASSWORD!r}.")
+        # Absolute URL, not SQLITE_PATH: a relative SQLITE_PATH resolves against the Flask
+        # instance path, which would quietly create an empty DB somewhere else.
+        db_url = f"sqlite:///{Path(out).resolve()}"
+        click.echo(f'Run it with: DATABASE_URL="{db_url}" uv run flask --app wsgi run')
+        if calendar_id:
+            # The seed leaves the outbound queue full, so the push is one command.
+            click.echo(f'Push to the calendar with: DATABASE_URL="{db_url}" '
+                       f"uv run flask --app wsgi sync-google --camp {SLUG}")
+
     @app.cli.command("create-user")
     @click.argument("username")
     @click.option("--display-name", default=None, help="Shown in the UI; defaults to username.")
