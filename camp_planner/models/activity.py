@@ -82,8 +82,10 @@ class Activity(TimestampMixin, Base):
     todos: Mapped[list[Todo]] = relationship(
         back_populates="activity", cascade="all, delete-orphan", order_by="Todo.id"
     )
+    # Baseline order for the read paths that take only tag_ids and so never load the Tag row;
+    # where it is loaded, serialize.py re-sorts by the curated Tag.sort_order.
     tags: Mapped[list[ActivityTag]] = relationship(
-        back_populates="activity", cascade="all, delete-orphan"
+        back_populates="activity", cascade="all, delete-orphan", order_by="ActivityTag.tag_id"
     )
 
     def __repr__(self) -> str:

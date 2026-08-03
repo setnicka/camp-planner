@@ -151,7 +151,7 @@ def set_orgs(activity: Activity, payload: ActivityOrgsIn) -> dict:
         for slot in activity.slots:
             google_sync.enqueue_upsert(activity.camp, slot)
         db.session.commit()
-    return {"orgs": [serialize.assignment(a) for a in activity.assignments]}
+    return {"orgs": serialize.activity_orgs(activity)}
 
 
 def _normalize_tag_value(kind: TagKind, value: str | None) -> str | None:
@@ -196,7 +196,7 @@ def set_tags(activity: Activity, payload: TagsIn) -> dict:
         new[item.tag_id] = _normalize_tag_value(tag.kind, item.value)
 
     if new == old:
-        return {"tags": [serialize.tag_link(t) for t in activity.tags]}  # unchanged → no write
+        return {"tags": serialize.activity_tags(activity)}  # unchanged → no write
 
     activity.tags = [ActivityTag(tag_id=tid, value=val) for tid, val in new.items()]  # delete-orphan drops old links
     # field-level diff keyed by tag name: value (or ✓) when applied, None when absent.
@@ -210,7 +210,7 @@ def set_tags(activity: Activity, payload: TagsIn) -> dict:
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.tag,
                  entity_id=None, action=AuditAction.update, changes=changes)
     db.session.commit()
-    return {"tags": [serialize.tag_link(t) for t in activity.tags]}
+    return {"tags": serialize.activity_tags(activity)}
 
 
 def set_tag_value(link: ActivityTag, payload: TagValueUpdate) -> dict:

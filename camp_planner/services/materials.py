@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from camp_planner.extensions import db
 from camp_planner.models.audit import AuditAction, EntityType
+from camp_planner.models.common import czech_sort_key
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
 from camp_planner.services import audit, errors, orgs, serialize
 
@@ -29,14 +30,19 @@ if TYPE_CHECKING:
 
 # --- catalog (registry) ------------------------------------------------------
 
+def _by_name(materials: list[Material]) -> list[Material]:
+    """Camp.materials has no SQL order — Czech collation isn't something the database can do."""
+    return sorted(materials, key=lambda m: (czech_sort_key(m.name), m.id))
+
+
 def list_materials(camp: Camp) -> dict:
-    return {"materials": [serialize.material(m) for m in camp.materials]}
+    return {"materials": [serialize.material(m) for m in _by_name(camp.materials)]}
 
 
 def list_materials_overview(camp: Camp) -> dict:
     """All catalog materials, each with the activity needs that use it (camp-wide
     materials page; per-unit sums are computed client-side)."""
-    return {"materials": [serialize.material_overview(m) for m in camp.materials]}
+    return {"materials": [serialize.material_overview(m) for m in _by_name(camp.materials)]}
 
 
 def create_material(camp: Camp, payload: MaterialCreate) -> dict:

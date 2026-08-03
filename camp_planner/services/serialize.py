@@ -71,6 +71,17 @@ def _tag_link(t: ActivityTag) -> TagLinkOut:
                       pinned=t.tag.pinned, value=t.value)
 
 
+# Sorted, and shared: the whole-activity payload and the PUT responses that replace part of
+# it must agree, or saving orgs/tags reshuffles the chips against a freshly loaded page.
+def _orgs(a: Activity) -> list[AssignmentOut]:
+    return [_assignment(x)
+            for x in sorted(a.assignments, key=lambda x: czech_sort_key(x.org.initials))]
+
+
+def _tags(a: Activity) -> list[TagLinkOut]:
+    return [_tag_link(t) for t in sorted(a.tags, key=lambda t: (t.tag.sort_order, t.tag_id))]
+
+
 def _material_need(m: MaterialNeed) -> MaterialNeedOut:
     """An activity's material need, with the catalog material nested."""
     return MaterialNeedOut(id=m.id, amount=m.amount, unit=m.unit, note=m.note,
@@ -85,10 +96,6 @@ def slot(s: Slot) -> dict:
 
 def slot_orgs(s: Slot) -> list[dict]:
     return [_dump(o) for o in _org_refs(s.assignments)]
-
-
-def assignment(a: ActivityAssignment) -> dict:
-    return _dump(_assignment(a))
 
 
 def tag_link(t: ActivityTag) -> dict:
@@ -139,13 +146,15 @@ def audit_entry(row: AuditLog) -> dict:
 
 
 def material_overview(m: Material) -> dict:
-    """A catalog material with every activity need that uses it (camp materials page)."""
+    """A catalog material with every activity need that uses it (camp materials page).
+    Material.needs has no SQL order and the page renders the rows as-is, so sort here."""
+    needs = sorted(m.needs, key=lambda n: (czech_sort_key(n.activity.title), n.id))
     return _dump(MaterialWithUsagesOut(
         **_material(m).model_dump(),   # shared catalog fields (name/unit/acquisition/orgs/…)
         usages=[MaterialUsageOut(
             need_id=n.id, activity_id=n.activity_id, activity_title=n.activity.title,
             amount=n.amount, unit=n.unit, note=n.note, is_ready=n.is_ready)
-            for n in m.needs],
+            for n in needs],
     ))
 
 
@@ -177,15 +186,25 @@ def activity_overview(a: Activity) -> dict:
     }
 
 
+def activity_orgs(a: Activity) -> list[dict]:
+    return [_dump(x) for x in _orgs(a)]
+
+
+def activity_tags(a: Activity) -> list[dict]:
+    return [_dump(t) for t in _tags(a)]
+
+
 def activity(a: Activity) -> dict:
+    # slots and todos arrive ordered from their relationship; needs have no SQL order
+    needs = sorted(a.material_needs, key=lambda n: (czech_sort_key(n.material.name), n.id))
     return _dump(ActivityOut(
         id=a.id, camp_id=a.camp_id, title=a.title, type=a.type,
         category_id=a.category_id, description_md=a.description_md, config=a.config,
         slots=[_slot(s) for s in a.slots],
-        orgs=[_assignment(x) for x in a.assignments],
-        tags=[_tag_link(t) for t in a.tags],
+        orgs=_orgs(a),
+        tags=_tags(a),
         todos=[_todo(t) for t in a.todos],
-        material_needs=[_material_need(m) for m in a.material_needs],
+        material_needs=[_material_need(m) for m in needs],
     ))
 
 

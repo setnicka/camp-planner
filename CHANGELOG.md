@@ -25,6 +25,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Remove delay before displaying the timeline.
 - Deterministic order of overlapping slots (by start time, end time and id) in
   both the API and the timeline frontend.
+- Deterministic, Czech-collated order for the lists the API used to return in
+  database row order: an activity's organizers, tags and materials, a material's
+  usages and the material catalog.
 
 ## [0.3.1] - 2026-07-29
 

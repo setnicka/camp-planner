@@ -1,5 +1,5 @@
-"""Web (main blueprint) page tests. Currently the timeline edit-mode wiring:
-editors get the edit controls + the API edit-config block; viewers don't."""
+"""Web (main blueprint) page tests: the embedded JSON renders with resolved URLs, and the edit
+affordances follow the viewer's permissions. The serializers behind it: test_serialize.py."""
 
 from __future__ import annotations
 
@@ -98,64 +98,6 @@ def test_overview_page_renders_with_data(client, seeded):
     assert '"slots"' in html                              # per-activity slot list (counts + chrono spans)
     assert '"window_start_min": 240' in html              # camp day-window block for chrono grouping
     assert '"length_days": 3' in html
-
-
-def test_activity_overview_serializes_slots(app, seeded):
-    """activity_overview exposes every slot (role + span + override_name), time-ordered, so the
-    overview can derive per-role counts and the chronological sort's main-slot rows client-side."""
-    from datetime import datetime
-
-    from camp_planner.extensions import db
-    from camp_planner.models.activity import Activity
-    from camp_planner.models.slot import Slot, SlotRole
-    from camp_planner.services import serialize
-
-    a = db.session.get(Activity, seeded["activity_id"])
-    db.session.add_all([   # main + prep slots added out of order — Activity.slots time-orders them
-        Slot(activity_id=a.id, role=SlotRole.main, override_name="Odpolední",
-             start_at=datetime(2026, 7, 5, 14, 0), end_at=datetime(2026, 7, 5, 15, 0)),
-        Slot(activity_id=a.id, role=SlotRole.main,
-             start_at=datetime(2026, 7, 5, 9, 0), end_at=datetime(2026, 7, 5, 10, 0)),
-        Slot(activity_id=a.id, role=SlotRole.prep, override_name="Příprava",
-             start_at=datetime(2026, 7, 5, 8, 0), end_at=datetime(2026, 7, 5, 8, 30)),
-    ])
-    db.session.commit()
-
-    out = serialize.activity_overview(a)
-    # all roles, time-ordered (prep 08:00 first), each with span + override_name
-    assert [(s["role"], s["start_at"]) for s in out["slots"]] == [
-        ("prep", "2026-07-05T08:00:00"),
-        ("main", "2026-07-05T09:00:00"),
-        ("main", "2026-07-05T14:00:00"),
-    ]
-    main = [s for s in out["slots"] if s["role"] == "main"]
-    assert main[0]["override_name"] is None
-    assert main[1]["override_name"] == "Odpolední"
-    assert main[1]["end_at"] == "2026-07-05T15:00:00"
-
-
-def test_activity_slots_relationship_is_time_ordered(app, seeded):
-    """Activity.slots is ordered by the same keys as the timeline's `order` comparator, so every
-    consumer sees one sequence whatever order the rows were written in. Unordered, the DB may
-    return them differently after an edit and reshuffle how overlapping slots stack."""
-    from datetime import datetime
-
-    from camp_planner.extensions import db
-    from camp_planner.models.activity import Activity
-    from camp_planner.models.slot import Slot, SlotRole
-
-    a = db.session.get(Activity, seeded["activity_id"])
-    db.session.add_all([   # written out of order
-        Slot(activity_id=a.id, role=SlotRole.main,
-             start_at=datetime(2026, 7, 5, s), end_at=datetime(2026, 7, 5, e))
-        for s, e in [(20, 21), (8, 9), (14, 15), (8, 12)]
-    ])
-    db.session.commit()
-    db.session.expire_all()   # force a reload, so this reads the relationship's ORDER BY
-
-    a = db.session.get(Activity, seeded["activity_id"])
-    # 08:00–12:00 before 08:00–09:00: equal starts put the longer slot first (bottom lane)
-    assert [(s.start_at.hour, s.end_at.hour) for s in a.slots] == [(8, 12), (8, 9), (14, 15), (20, 21)]
 
 
 def test_overview_viewer_read_only(client, seeded):
