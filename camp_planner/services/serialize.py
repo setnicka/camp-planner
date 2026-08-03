@@ -156,14 +156,12 @@ def activity_overview(a: Activity) -> dict:
     and sorting are done client-side from this shape."""
     garants = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.garant), key=czech_sort_key)
     helpers = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.helper), key=czech_sort_key)
-    # Every slot (role + span + display name, naive ISO), time-ordered — the client derives the
-    # per-role counts and, for the chronological sort, the main-slot rows. Lean subset of SlotOut
-    # (no id/attendees — the overview loader deliberately doesn't fetch slot attendees).
-    slots = sorted(
-        ({"role": s.role.value, "start_at": s.start_at.isoformat(), "end_at": s.end_at.isoformat(),
-          "override_name": s.override_name or None}
-         for s in a.slots),
-        key=lambda s: s["start_at"])
+    # Every slot (role + span + display name, naive ISO); Activity.slots is time-ordered — the
+    # client derives the per-role counts and, for the chronological sort, the main-slot rows.
+    # Lean subset of SlotOut (no id/attendees — the overview loader doesn't fetch slot attendees).
+    slots = [{"role": s.role.value, "start_at": s.start_at.isoformat(),
+              "end_at": s.end_at.isoformat(), "override_name": s.override_name or None}
+             for s in a.slots]
     return {
         "id": a.id,
         "title": a.title,

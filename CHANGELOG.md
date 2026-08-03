@@ -23,6 +23,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Fixed
 
 - Remove delay before displaying the timeline.
+- Deterministic order of overlapping slots (by start time, end time and id) in
+  both the API and the timeline frontend.
 
 ## [0.3.1] - 2026-07-29
 

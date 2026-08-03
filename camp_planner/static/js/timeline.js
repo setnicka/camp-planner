@@ -232,6 +232,11 @@
   const timeline = new vis.Timeline(container, items, groups, {
     stack: true,
     stackSubgroups: false,
+    // Lane order, explicit so it can't ride on the order segments arrive in. vis puts the
+    // first-sorted item in the bottom lane: earliest start lowest, longest first on equal
+    // starts, unsaved slots (no slotId) on top.
+    order: (a, b) => (a.start - b.start) || (b.end - a.end)
+      || ((a.slotId ?? Infinity) - (b.slotId ?? Infinity)),
     groupOrder: "id",
     orientation: { axis: "both" },
     min: winStart, max: winEnd,

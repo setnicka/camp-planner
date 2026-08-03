@@ -67,8 +67,11 @@ class Activity(TimestampMixin, Base):
     camp: Mapped[Camp] = relationship(back_populates="activities")
     category: Mapped[Category | None] = relationship(back_populates="activities")
 
+    # Same keys as the timeline's `order` comparator (timeline.js). Unordered, the DB may
+    # return a different row order after an edit and reshuffle how overlapping slots stack.
     slots: Mapped[list[Slot]] = relationship(
-        back_populates="activity", cascade="all, delete-orphan"
+        back_populates="activity", cascade="all, delete-orphan",
+        order_by="Slot.start_at, Slot.end_at.desc(), Slot.id",
     )
     assignments: Mapped[list[ActivityAssignment]] = relationship(
         back_populates="activity", cascade="all, delete-orphan"

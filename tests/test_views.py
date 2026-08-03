@@ -111,7 +111,7 @@ def test_activity_overview_serializes_slots(app, seeded):
     from camp_planner.services import serialize
 
     a = db.session.get(Activity, seeded["activity_id"])
-    db.session.add_all([   # main + prep slots added out of order — the serializer time-sorts them
+    db.session.add_all([   # main + prep slots added out of order — Activity.slots time-orders them
         Slot(activity_id=a.id, role=SlotRole.main, override_name="Odpolední",
              start_at=datetime(2026, 7, 5, 14, 0), end_at=datetime(2026, 7, 5, 15, 0)),
         Slot(activity_id=a.id, role=SlotRole.main,
@@ -132,6 +132,30 @@ def test_activity_overview_serializes_slots(app, seeded):
     assert main[0]["override_name"] is None
     assert main[1]["override_name"] == "Odpolední"
     assert main[1]["end_at"] == "2026-07-05T15:00:00"
+
+
+def test_activity_slots_relationship_is_time_ordered(app, seeded):
+    """Activity.slots is ordered by the same keys as the timeline's `order` comparator, so every
+    consumer sees one sequence whatever order the rows were written in. Unordered, the DB may
+    return them differently after an edit and reshuffle how overlapping slots stack."""
+    from datetime import datetime
+
+    from camp_planner.extensions import db
+    from camp_planner.models.activity import Activity
+    from camp_planner.models.slot import Slot, SlotRole
+
+    a = db.session.get(Activity, seeded["activity_id"])
+    db.session.add_all([   # written out of order
+        Slot(activity_id=a.id, role=SlotRole.main,
+             start_at=datetime(2026, 7, 5, s), end_at=datetime(2026, 7, 5, e))
+        for s, e in [(20, 21), (8, 9), (14, 15), (8, 12)]
+    ])
+    db.session.commit()
+    db.session.expire_all()   # force a reload, so this reads the relationship's ORDER BY
+
+    a = db.session.get(Activity, seeded["activity_id"])
+    # 08:00–12:00 before 08:00–09:00: equal starts put the longer slot first (bottom lane)
+    assert [(s.start_at.hour, s.end_at.hour) for s in a.slots] == [(8, 12), (8, 9), (14, 15), (20, 21)]
 
 
 def test_overview_viewer_read_only(client, seeded):
