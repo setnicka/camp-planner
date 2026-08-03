@@ -19,6 +19,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - `flask seed-demo`: deterministic demo camp in a standalone SQLite file.
 - `scripts/shoot_docs.py` re-shoots the guide's screenshots as lossless WebP
   (new `[docs]` extra).
+- Timeline: Shift + wheel pans the grid sideways.
 
 ### Changed
 
@@ -27,6 +28,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Fixed
 
 - Remove delay before displaying the timeline.
+- Timeline: a slot's label no longer drifts inside its block while panning.
 - Deterministic order of overlapping slots (by start time, end time and id) in
   both the API and the timeline frontend.
 - Deterministic, Czech-collated order for the lists the API used to return in

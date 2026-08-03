@@ -250,6 +250,12 @@
     showMajorLabels: false,
     format: { minorLabels: { hour: "HH:mm" } },
     zoomKey: "ctrlKey",
+    // Shift + wheel pans; a plain wheel is left to the page. vis consults
+    // horizontalScrollKey only when verticalScroll is on — inert here, the grid auto-sizes.
+    horizontalScroll: true,
+    horizontalScrollKey: "shiftKey",
+    verticalScroll: true,
+    align: "left",   // pin the label to its box; vis's default slides it along the left edge
     snap: (date) => {
       const ms = camp.snap_minutes * 60 * 1000;
       return new Date(Math.round(date / ms) * ms);
