@@ -20,6 +20,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - `scripts/shoot_docs.py` re-shoots the guide's screenshots as lossless WebP
   (new `[docs]` extra).
 
+### Changed
+
+- Vendored vis-timeline upgraded 7.7.3 → 8.5.2. Same rendering, no API changes on our side.
+
 ### Fixed
 
 - Remove delay before displaying the timeline.

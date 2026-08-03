@@ -8,8 +8,8 @@
   {# Start the ~550 KB timeline engine downloading during header render, instead of only
      when the parser reaches the <script> at the end of <body>. #}
   <link rel="preload" as="script"
-        href="{{ url_for('main.static', filename='vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}">
-  {{ css('vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.css') }}
+        href="{{ url_for('main.static', filename='vendor/vis-timeline@8.5.2/vis-timeline-graph2d.min.js') }}">
+  {{ css('vendor/vis-timeline@8.5.2/vis-timeline-graph2d.min.css') }}
   {{ css('css/components.css') }}
   {{ css('css/timeline.css') }}
   {{ csrf_meta() }}
@@ -62,7 +62,7 @@
 {% endblock %}
 
 {% block cp_scripts %}
-  {{ js('vendor/vis-timeline@7.7.3/vis-timeline-graph2d.min.js') }}
+  {{ js('vendor/vis-timeline@8.5.2/vis-timeline-graph2d.min.js') }}
   {% if can_edit(camp) %}
   {# editor-only: shared helpers + fuzzy search + the editing module, before timeline.js so it can call them #}
   {{ js('js/dom.js') }}
