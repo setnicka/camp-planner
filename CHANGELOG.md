@@ -20,6 +20,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - `scripts/shoot_docs.py` re-shoots the guide's screenshots as lossless WebP
   (new `[docs]` extra).
 
+### Fixed
+
+- Remove delay before displaying the timeline.
+
 ## [0.3.1] - 2026-07-29
 
 ### Added

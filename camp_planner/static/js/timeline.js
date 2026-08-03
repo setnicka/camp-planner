@@ -253,6 +253,12 @@
 
   window.cpTimeline = timeline; // for debugging in the console
 
+  // vis keeps its root hidden until a `changed` handler sees this flag, so the
+  // grid stays blank until the 1 s autoResize poll. Pre-setting it reveals the
+  // grid with the rest of the page (safe because Range applies start/end
+  // synchronously, only the event is debounced).
+  timeline.initialRangeChangeDone = true;
+
   // Vertical line at midnight — the day boundary that falls inside the window when it opens
   // at e.g. 04:00. One marker spans every row (all days map onto the same 24h window). Skip
   // it if the window opens at midnight (the line would sit on the left edge).
