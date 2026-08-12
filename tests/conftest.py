@@ -72,6 +72,22 @@ def make_camp(client, slug, **overrides) -> dict:
     return resp.get_json()["camp"]
 
 
+# --- embedded-mode helpers ---------------------------------------------------
+# Identity comes from the host's auth_callback, not headers, and the api sits behind the
+# mount prefix. Shared by test_embedded and test_injected_session.
+
+HOST_ADMIN = {"user_id": "host-admin", "display_name": "Host Admin", "is_admin": True}
+
+
+def make_camp_embedded(client, prefix="/planner", slug="t") -> dict:
+    """Create a camp through a mounted api and return its envelope dict."""
+    resp = client.post(f"{prefix}/api/camps", json={
+        "name": "Tábor", "slug": slug, "start_date": "2026-07-04", "length_days": 3,
+        "timezone": "Europe/Prague", "window_start_min": 240, "snap_minutes": 15})
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()["camp"]
+
+
 # --- auth header helpers -----------------------------------------------------
 
 ADMIN = {"X-Remote-User": "admin", "X-Remote-Roles": "admin"}

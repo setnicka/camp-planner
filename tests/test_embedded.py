@@ -13,6 +13,7 @@ from jinja2 import DictLoader
 
 from camp_planner import register_camp_planner
 from camp_planner.extensions import db
+from tests.conftest import HOST_ADMIN, make_camp_embedded
 
 
 @pytest.fixture
@@ -60,14 +61,11 @@ def embedded_dark(embedded_factory):
 
 
 def _admin(holder):
-    holder["value"] = {"user_id": "host-admin", "display_name": "Host Admin", "is_admin": True}
+    holder["value"] = HOST_ADMIN
 
 
 def _make_camp(client):
-    resp = client.post("/planner/api/camps", json={
-        "name": "Tábor", "slug": "t", "start_date": "2026-07-04", "length_days": 3,
-        "timezone": "Europe/Prague", "window_start_min": 240, "snap_minutes": 15})
-    assert resp.status_code == 200
+    make_camp_embedded(client)
 
 
 def test_mounts_under_prefix_with_host_identity(embedded):
