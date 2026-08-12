@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 from camp_planner.auth.permissions import can_view
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Camp
 from camp_planner.models.common import slugify
@@ -83,7 +83,7 @@ def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=Non
     Raises errors.Invalid on a bad copy source or a slug collision."""
     source = None
     if copy_from_slug:
-        source = db.session.scalar(db.select(Camp).filter_by(slug=copy_from_slug))
+        source = db_session.scalar(db.select(Camp).filter_by(slug=copy_from_slug))
         if source is None or not can_view(source):
             raise errors.Invalid("Převzít z akce: vyberte platnou akci.")
     slug = data.get("slug") or slugify(data["name"])
@@ -98,9 +98,9 @@ def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=Non
         latitude=data.get("latitude"),
         longitude=data.get("longitude"),
     )
-    db.session.add(camp)
+    db_session.add(camp)
     try:
-        db.session.flush()  # assign camp.id; a dup slug raises here, before copy_into runs
+        db_session.flush()  # assign camp.id; a dup slug raises here, before copy_into runs
         if source is not None:
             taxonomy.copy_into(camp, source, parts=copy_parts)
         audit.record(
@@ -110,9 +110,9 @@ def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=Non
             action=AuditAction.create,
             changes={"name": [None, camp.name], "slug": [None, camp.slug]},
         )
-        db.session.commit()
+        db_session.commit()
     except IntegrityError:  # dup slug at flush, or a race lost at commit
-        db.session.rollback()
+        db_session.rollback()
         raise errors.Invalid(f"Slug „{slug}“ už používá jiná akce.") from None
     return camp
 
@@ -125,8 +125,8 @@ def delete_camp(camp: Camp) -> dict:
     if camp.activities:
         raise errors.Invalid("Akci nelze smazat – nejprve odstraňte všechny její aktivity.")
     camp_id = camp.id
-    db.session.delete(camp)
-    db.session.commit()
+    db_session.delete(camp)
+    db_session.commit()
     return {"id": camp_id}
 
 
@@ -138,7 +138,7 @@ def _calendar_conflict(calendar_id: str, start, end, exclude_camp_id: int) -> Ca
     """Another camp connected to the same calendar whose time window overlaps [start, end),
     or None. One calendar may be shared by several camps, but only if their dates don't
     overlap (events from different camps would otherwise collide on the calendar)."""
-    others = db.session.scalars(
+    others = db_session.scalars(
         db.select(Camp).where(Camp.google_calendar_id == calendar_id, Camp.id != exclude_camp_id)
     ).all()
     for other in others:
@@ -194,7 +194,7 @@ def set_google_calendar(camp: Camp, calendar_id: str) -> dict:
         google_sync.enqueue_upsert(camp, slot)
     audit.record(camp_id=camp.id, entity_type=EntityType.camp, entity_id=camp.id,
                  action=AuditAction.update, changes={"google_calendar_id": [was, calendar_id]})
-    db.session.commit()
+    db_session.commit()
     log.info("Google Calendar connected: camp %s → calendar %s (%d events queued, %d adopted)",
              camp.slug, calendar_id, google_sync.pending_count(camp), len(owned))
     return {"google": google_status(camp)}
@@ -211,10 +211,10 @@ def disconnect_google(camp: Camp) -> dict:
     for slot in _all_slots(camp):
         slot.google_event_id = None
     for op in list(camp.sync_ops):
-        db.session.delete(op)
+        db_session.delete(op)
     audit.record(camp_id=camp.id, entity_type=EntityType.camp, entity_id=camp.id,
                  action=AuditAction.update, changes={"google_calendar_id": [old, None]})
-    db.session.commit()
+    db_session.commit()
     log.info("Google Calendar disconnected: camp %s (was calendar %s)", camp.slug, old)
     return {"google": google_status(camp)}
 
@@ -278,4 +278,4 @@ def save_camp_settings(camp: Camp, data: dict, *, allow_meta: bool) -> None:
         action=AuditAction.update,
         changes=changes,
     )
-    db.session.commit()
+    db_session.commit()

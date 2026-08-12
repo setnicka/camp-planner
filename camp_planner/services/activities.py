@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db_session
 from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, OrgRole
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import TagKind
@@ -34,12 +34,12 @@ def create_activity(camp: Camp, payload: ActivityCreate) -> dict:
     _check_category(camp, payload.category_id)
     activity = Activity(camp_id=camp.id, title=payload.title, category_id=payload.category_id,
                         type=payload.type, description_md=payload.description_md, config=payload.config)
-    db.session.add(activity)
-    db.session.flush()
+    db_session.add(activity)
+    db_session.flush()
     audit.record(camp_id=camp.id, activity_id=activity.id, entity_type=EntityType.activity,
                  entity_id=activity.id, action=AuditAction.create,
                  changes={"title": [None, payload.title]})
-    db.session.commit()
+    db_session.commit()
     return {"activity": serialize.activity(activity)}
 
 
@@ -56,7 +56,7 @@ def update_activity(activity: Activity, payload: ActivityUpdate) -> dict:
         if "title" in changes or "category_id" in changes:
             for slot in activity.slots:
                 google_sync.enqueue_upsert(activity.camp, slot)
-        db.session.commit()
+        db_session.commit()
     return {"activity": serialize.activity(activity)}
 
 
@@ -68,10 +68,10 @@ def delete_activity(activity: Activity) -> dict:
             f"Aktivitu „{activity.title}“ nelze smazat – má naplánované sloty. "
             f"Nejprve je odeber z timeline, nebo aktivitu sluč s jinou.")
     activity_id, camp_id, title = activity.id, activity.camp_id, activity.title
-    db.session.delete(activity)
+    db_session.delete(activity)
     audit.record(camp_id=camp_id, activity_id=None, entity_type=EntityType.activity,
                  entity_id=activity_id, action=AuditAction.delete, changes={"title": [title, None]})
-    db.session.commit()
+    db_session.commit()
     return {"id": activity_id}
 
 
@@ -113,14 +113,14 @@ def merge_activities(source: Activity, target: Activity) -> dict:
 
     # source's org assignments + tags are dropped with the source (cascade delete-orphan)
     source_title = source.title
-    db.session.delete(source)
+    db_session.delete(source)
     timeline.bump_timeline_rev(target.camp)
     audit.record(camp_id=target.camp_id, activity_id=target.id, entity_type=EntityType.activity,
                  entity_id=target.id, action=AuditAction.merge, changes={"merged_from": [source_title, None]})
     # Reassigned slots now belong to the target, so their events' summary changes.
     for slot in reassigned_slots:
         google_sync.enqueue_upsert(target.camp, slot)
-    db.session.commit()
+    db_session.commit()
     return {"activity": serialize.activity(target)}
 
 
@@ -150,7 +150,7 @@ def set_orgs(activity: Activity, payload: ActivityOrgsIn) -> dict:
         # the activity's slots on any assignment change (no-op unless the camp is connected).
         for slot in activity.slots:
             google_sync.enqueue_upsert(activity.camp, slot)
-        db.session.commit()
+        db_session.commit()
     return {"orgs": serialize.activity_orgs(activity)}
 
 
@@ -209,7 +209,7 @@ def set_tags(activity: Activity, payload: TagsIn) -> dict:
             changes[name] = [before, after]
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.tag,
                  entity_id=None, action=AuditAction.update, changes=changes)
-    db.session.commit()
+    db_session.commit()
     return {"tags": serialize.activity_tags(activity)}
 
 
@@ -222,5 +222,5 @@ def set_tag_value(link: ActivityTag, payload: TagValueUpdate) -> dict:
     link.value = new
     audit.record(camp_id=link.activity.camp_id, activity_id=link.activity_id, entity_type=EntityType.tag,
                  entity_id=link.tag_id, action=AuditAction.update, changes={link.tag.name: [old, new]})
-    db.session.commit()
+    db_session.commit()
     return {"tag": serialize.tag_link(link)}

@@ -19,7 +19,7 @@ from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 
 from camp_planner import schemas
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session
 from camp_planner.models.activity import Activity, ActivityAssignment, OrgRole
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import czech_sort_key
@@ -48,7 +48,7 @@ def _already_queued(camp: Camp, *conditions) -> bool:
     so it also sees ops staged earlier in the current transaction — hence repeated enqueues
     within one request collapse to a single row. (drain() still dedupes, to cover ops raced
     in by a concurrent request whose row this query couldn't yet see.)"""
-    return db.session.scalar(
+    return db_session.scalar(
         db.select(GoogleSyncOp.id).where(GoogleSyncOp.camp_id == camp.id, *conditions).limit(1)
     ) is not None
 
@@ -61,7 +61,7 @@ def enqueue_upsert(camp: Camp, slot: Slot) -> None:
         return
     if _already_queued(camp, GoogleSyncOp.slot_id == slot.id, GoogleSyncOp.op == SyncOpKind.upsert):
         return
-    db.session.add(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert))
+    db_session.add(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert))
 
 
 def enqueue_delete(camp: Camp, google_event_id: str | None) -> None:
@@ -72,14 +72,14 @@ def enqueue_delete(camp: Camp, google_event_id: str | None) -> None:
     if _already_queued(camp, GoogleSyncOp.google_event_id == google_event_id,
                        GoogleSyncOp.op == SyncOpKind.delete):
         return
-    db.session.add(
+    db_session.add(
         GoogleSyncOp(camp_id=camp.id, op=SyncOpKind.delete, google_event_id=google_event_id)
     )
 
 
 def pending_count(camp: Camp) -> int:
     """How many outbound ops are still queued for this camp (for the status UI)."""
-    return db.session.scalar(
+    return db_session.scalar(
         db.select(db.func.count())
         .select_from(GoogleSyncOp)
         .where(GoogleSyncOp.camp_id == camp.id)
@@ -94,12 +94,12 @@ def resync_all(camp: Camp) -> dict:
     if not camp.google_calendar_id:
         return {"queued": 0}
     # One query for the already-queued slot ids (enqueue_upsert would issue one per slot).
-    queued = set(db.session.scalars(db.select(GoogleSyncOp.slot_id).where(
+    queued = set(db_session.scalars(db.select(GoogleSyncOp.slot_id).where(
         GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.op == SyncOpKind.upsert)))
     slots = [slot for activity in camp.activities for slot in activity.slots]
-    db.session.add_all(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert)
+    db_session.add_all(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert)
                        for slot in slots if slot.id not in queued)
-    db.session.commit()
+    db_session.commit()
     log.info("Google Calendar resync (camp %s): queued %d slots", camp.slug, len(slots))
     return {"queued": len(slots)}
 
@@ -107,7 +107,7 @@ def resync_all(camp: Camp) -> dict:
 def failure_summary(camp: Camp) -> tuple[int, str | None]:
     """(# of queued ops that have failed at least once, the most recent error text) — lets
     the UI surface a stuck sync, e.g. a calendar shared read-only so every push 403s."""
-    failed = db.session.scalars(
+    failed = db_session.scalars(
         db.select(GoogleSyncOp)
         .where(GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.attempts > 0)
         .order_by(GoogleSyncOp.id.desc())
@@ -137,13 +137,15 @@ def _drain_lock(camp: Camp):
     connection for the whole drain — so it outlives drain's mid-flow commit and a pooled-connection
     swap can't leak it — and is advisory, so it never blocks timeline edits. No-op on SQLite (no
     advisory locks), where the idempotent op-deletion in drain() covers the race."""
-    sql = _LOCK_SQL.get(db.session.get_bind().dialect.name)
+    # The bind comes off the session: embedded, our own SQLAlchemy may have no engine.
+    bind = db_session.get_bind()
+    sql = _LOCK_SQL.get(bind.dialect.name)
     if sql is None:
         yield True
         return
     acquire, release, make_key = sql
     key = make_key(camp.id)
-    conn = db.engine.connect()
+    conn = bind.connect()
     try:
         got = conn.execute(db.text(acquire), {"k": key}).scalar()
         try:
@@ -196,7 +198,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
     Owns its transaction."""
     result = {"pushed": 0, "failed": 0, "pending": 0}
     cal = camp.google_calendar_id
-    ops = db.session.scalars(
+    ops = db_session.scalars(
         db.select(GoogleSyncOp)
         .where(GoogleSyncOp.camp_id == camp.id)
         .order_by(GoogleSyncOp.id)
@@ -233,7 +235,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
             push_ops.append(google_client.PushOp(key=key, kind="delete",
                                                  calendar_id=cal, event_id=op.google_event_id))
             continue
-        slot = db.session.get(Slot, op.slot_id) if op.slot_id else None
+        slot = db_session.get(Slot, op.slot_id) if op.slot_id else None
         if slot is None:  # slot deleted before we pushed it — nothing to create
             done_ids.append(op.id)
             result["pushed"] += 1
@@ -256,7 +258,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
         res = outcomes.get(pop.key)
         if pop.kind != "patch" or res is None or res.ok or res.status not in _EVENT_GONE:
             continue
-        slot = db.session.get(Slot, op_by_key[pop.key].slot_id)
+        slot = db_session.get(Slot, op_by_key[pop.key].slot_id)
         if slot is None:  # slot deleted meanwhile → leave as a normal failure below
             continue
         slot.google_event_id = None  # dead mapping — drop it; the re-insert remaps the slot
@@ -302,8 +304,8 @@ def _deliver_queued_ops(camp: Camp) -> dict:
                         camp.slug, op.op.value, op.slot_id, op.google_event_id, op.attempts, raw)
 
     if done_ids:  # one bulk delete (tolerates already-gone rows) rather than per-row ORM deletes
-        db.session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id.in_(done_ids)))
-    db.session.commit()
+        db_session.execute(db.delete(GoogleSyncOp).where(GoogleSyncOp.id.in_(done_ids)))
+    db_session.commit()
     result["pending"] = pending_count(camp)
     if ops:
         log.info("Google Calendar drain (camp %s): pushed=%d failed=%d pending=%d",
@@ -475,7 +477,7 @@ def _detect(camp: Camp) -> list[dict]:
     # Events we've already queued for deletion (slot deleted here, delete op not yet drained, or
     # the push keeps failing). Their marker is our own now-gone slot id, so they'd otherwise look
     # "foreign" and be re-offered for import — re-creating the slot we just deleted. Skip them.
-    pending_deletes = set(db.session.scalars(
+    pending_deletes = set(db_session.scalars(
         db.select(GoogleSyncOp.google_event_id).where(
             GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.op == SyncOpKind.delete)
     ).all())
@@ -663,7 +665,7 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
             audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
                          entity_id=slot.id, action=AuditAction.delete,
                          changes={"start_at": [slot.start_at, None], "end_at": [slot.end_at, None]})
-            db.session.delete(slot)
+            db_session.delete(slot)
             applied["deleted"] += 1
 
         elif kind == "attendants_change":
@@ -707,14 +709,14 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
             if decision.action == "attach":
                 if decision.target_activity_id not in activity_ids:
                     raise errors.Invalid("Import: vybraná aktivita nepatří této akci.")
-                activity = db.session.get(Activity, decision.target_activity_id)
+                activity = db_session.get(Activity, decision.target_activity_id)
             else:
                 # Trust the chosen category (the preview already pre-fills the color-inferred
                 # one); an explicit "bez kategorie" (null) or a foreign id → no category.
                 category_id = decision.category_id if decision.category_id in category_ids else None
                 activity = Activity(camp_id=camp.id, title=c["summary"][:255], category_id=category_id)
-                db.session.add(activity)
-                db.session.flush()
+                db_session.add(activity)
+                db_session.flush()
                 audit.record(camp_id=camp.id, activity_id=activity.id, entity_type=EntityType.activity,
                              entity_id=activity.id, action=AuditAction.create,
                              changes={"title": [None, activity.title]})
@@ -728,8 +730,8 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
             slot = Slot(activity_id=activity.id, role=SlotRole.main, start_at=c["new_start"],
                         end_at=c["new_end"], google_event_id=c["event_id"],
                         assignments=[SlotAssignment(org_id=i) for i in att_ids])
-            db.session.add(slot)
-            db.session.flush()
+            db_session.add(slot)
+            db_session.flush()
             audit.record(camp_id=camp.id, activity_id=activity.id, entity_type=EntityType.slot,
                          entity_id=slot.id, action=AuditAction.create,
                          changes={"role": [None, slot.role.value], "start_at": [None, slot.start_at],
@@ -743,6 +745,6 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
                  "updated=%d deleted=%d", camp.slug, applied["created_activities"],
                  applied["imported_slots"], applied["updated"], applied["deleted"])
     camp.google_last_pull_at = datetime.now()  # naive local — display metadata only
-    db.session.commit()
+    db_session.commit()
     # skipped: chosen changes that vanished between preview and apply.
     return {"applied": applied, "skipped": sorted(set(chosen) - seen)}

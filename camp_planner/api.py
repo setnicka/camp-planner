@@ -26,7 +26,7 @@ from werkzeug.exceptions import HTTPException
 
 from camp_planner.auth.permissions import can_create_camp, can_edit, can_edit_camp_meta, can_view
 from camp_planner.auth.token import resolve_identity as _resolve_token_identity
-from camp_planner.extensions import csrf, db
+from camp_planner.extensions import csrf, db, db_session, first_or_404, get_or_404
 from camp_planner.models.activity import Activity, Todo
 from camp_planner.models.audit import EntityType
 from camp_planner.models.auth import ApiToken
@@ -188,7 +188,7 @@ def _camp(slug: str, *options, edit: bool | None) -> Camp:
     """Resolve a camp by slug (404) and enforce the camp permission (401/403):
     edit=True for mutations, False for reads, None when the caller does its own
     stricter check. loaders.* options eager-load the graph a read serializes."""
-    camp = db.first_or_404(
+    camp = first_or_404(
         db.select(Camp).filter_by(slug=slug).options(*options), description="Akce nenalezena.")
     if edit is not None:
         _guard(camp, edit=edit)
@@ -196,7 +196,7 @@ def _camp(slug: str, *options, edit: bool | None) -> Camp:
 
 
 def _activity(activity_id: int, *options, edit: bool | None) -> Activity:
-    activity = db.first_or_404(
+    activity = first_or_404(
         db.select(Activity).filter_by(id=activity_id).options(*options),
         description="Aktivita nenalezena.")
     if edit is not None:
@@ -205,25 +205,25 @@ def _activity(activity_id: int, *options, edit: bool | None) -> Activity:
 
 
 def _slot(slot_id: int, *, edit: bool) -> Slot:
-    slot = db.get_or_404(Slot, slot_id, description="Slot nenalezen.")
+    slot = get_or_404(Slot, slot_id, description="Slot nenalezen.")
     _guard(slot.activity.camp, edit=edit)
     return slot
 
 
 def _todo(todo_id: int, *, edit: bool) -> Todo:
-    todo = db.get_or_404(Todo, todo_id, description="Úkol nenalezen.")
+    todo = get_or_404(Todo, todo_id, description="Úkol nenalezen.")
     _guard(todo.activity.camp, edit=edit)
     return todo
 
 
 def _need(need_id: int, *, edit: bool) -> MaterialNeed:
-    need = db.get_or_404(MaterialNeed, need_id, description="Potřeba materiálu nenalezena.")
+    need = get_or_404(MaterialNeed, need_id, description="Potřeba materiálu nenalezena.")
     _guard(need.activity.camp, edit=edit)
     return need
 
 
 def _material(camp: Camp, material_id: int) -> Material:
-    return db.first_or_404(
+    return first_or_404(
         db.select(Material).filter_by(id=material_id, camp_id=camp.id),
         description="Materiál nenalezen.")
 
@@ -233,7 +233,7 @@ def _material(camp: Camp, material_id: int) -> Material:
 @bp.get("/camps")
 @spec.validate(resp=Response(HTTP_200=CampListEnvelope), tags=["camps"])
 def camp_list():
-    camps = db.session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
+    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
     visible = [c for c in camps if can_view(c)]
     return _run(lambda: {"camps": [serialize.camp(c) for c in visible]})
 
@@ -295,7 +295,7 @@ def _no_api_token() -> None:
 
 
 def _api_token(token_id: int) -> ApiToken:
-    token = db.get_or_404(ApiToken, token_id, description="Token nenalezen.")
+    token = get_or_404(ApiToken, token_id, description="Token nenalezen.")
     _guard(token.camp, edit=True)
     return token
 

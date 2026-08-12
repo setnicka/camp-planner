@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from flask import g
 from sqlalchemy.exc import IntegrityError
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.auth import ApiToken
 from camp_planner.services import audit, errors
@@ -58,19 +58,19 @@ def create(camp: Camp, name: str, role: CampRole, created_by: str) -> tuple[ApiT
     secret = _PREFIX + secrets.token_urlsafe(32)
     token = ApiToken(name=name, token_hash=_hash(secret), camp_id=camp.id,
                      role=role, created_by=created_by)
-    db.session.add(token)
+    db_session.add(token)
     try:
-        db.session.flush()   # get token.id + catch a duplicate name before auditing
+        db_session.flush()   # get token.id + catch a duplicate name before auditing
     except IntegrityError:
-        db.session.rollback()
+        db_session.rollback()
         raise errors.Invalid(f"Token „{name}“ už v tomto táboře existuje.") from None
     _audit(token, AuditAction.create)
-    db.session.commit()
+    db_session.commit()
     return token, secret
 
 
 def list_for_camp(camp: Camp) -> list[ApiToken]:
-    return list(db.session.scalars(
+    return list(db_session.scalars(
         db.select(ApiToken).filter_by(camp_id=camp.id).order_by(ApiToken.name)
     ).all())
 
@@ -78,19 +78,19 @@ def list_for_camp(camp: Camp) -> list[ApiToken]:
 def revoke(token: ApiToken) -> dict:
     token_id = token.id
     _audit(token, AuditAction.delete)   # stage while id/name are still live
-    db.session.delete(token)
-    db.session.commit()
+    db_session.delete(token)
+    db_session.commit()
     return {"id": token_id}
 
 
 def authenticate(secret: str) -> ApiToken | None:
     """Resolve a presented secret to its token, refreshing last_used_at at most once
     per _TOUCH_AFTER. Returns None for an unknown/revoked secret."""
-    token = db.session.scalar(db.select(ApiToken).filter_by(token_hash=_hash(secret)))
+    token = db_session.scalar(db.select(ApiToken).filter_by(token_hash=_hash(secret)))
     if token is None:
         return None
     now = _now()
     if token.last_used_at is None or now - token.last_used_at > _TOUCH_AFTER:
         token.last_used_at = now
-        db.session.commit()
+        db_session.commit()
     return token

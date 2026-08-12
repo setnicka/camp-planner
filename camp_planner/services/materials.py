@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import IntegrityError
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import czech_sort_key
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
@@ -51,15 +51,15 @@ def create_material(camp: Camp, payload: MaterialCreate) -> dict:
     name = payload.name.strip()
     material = Material(camp_id=camp.id, name=name, unit=payload.unit,
                         note=payload.note, url=payload.url)
-    db.session.add(material)
+    db_session.add(material)
     try:
-        db.session.flush()  # assign id; a duplicate normalized_name raises here
+        db_session.flush()  # assign id; a duplicate normalized_name raises here
     except IntegrityError:
-        db.session.rollback()
+        db_session.rollback()
         raise errors.Invalid(f"Materiál „{name}“ už v katalogu existuje.") from None
     audit.record(camp_id=camp.id, entity_type=EntityType.material, entity_id=material.id,
                  action=AuditAction.create, changes={"name": [None, name]})
-    db.session.commit()
+    db_session.commit()
     return {"material": serialize.material(material)}
 
 
@@ -83,13 +83,13 @@ def update_material(material: Material, payload: MaterialUpdateIn) -> dict:
     if not changes:
         return {"material": serialize.material(material)}
     try:
-        db.session.flush()
+        db_session.flush()
     except IntegrityError:
-        db.session.rollback()
+        db_session.rollback()
         raise errors.Invalid(f"Materiál „{material.name}“ už v katalogu existuje.") from None
     audit.record(camp_id=material.camp_id, entity_type=EntityType.material, entity_id=material.id,
                  action=AuditAction.update, changes=changes)
-    db.session.commit()
+    db_session.commit()
     return {"material": serialize.material(material)}
 
 
@@ -125,7 +125,7 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
             # activity already uses target (same effective unit) → sum the amounts
             if need.amount is not None:
                 existing.amount = (existing.amount or 0) + need.amount
-            db.session.delete(need)
+            db_session.delete(need)
             continue
         if need.unit is None and source.unit != target.unit:
             need.unit = source.unit   # keep the old effective unit
@@ -143,10 +143,10 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
             a.material = target
             tgt_org_ids.add(a.org_id)
 
-    db.session.delete(source)
+    db_session.delete(source)
     audit.record(camp_id=camp.id, entity_type=EntityType.material, entity_id=target.id,
                  action=AuditAction.merge, changes={"merged_from": [source.name, None]})
-    db.session.commit()
+    db_session.commit()
     return {"material": serialize.material(target)}
 
 
@@ -158,10 +158,10 @@ def delete_material(material: Material) -> dict:
             f"Materiál „{material.name}“ nelze smazat – používají ho aktivity. "
             f"Nejprve ho slučte s jiným, nebo ho odeberte z aktivit.")
     camp_id, material_id, name = material.camp_id, material.id, material.name
-    db.session.delete(material)
+    db_session.delete(material)
     audit.record(camp_id=camp_id, entity_type=EntityType.material, entity_id=material_id,
                  action=AuditAction.delete, changes={"name": [name, None]})
-    db.session.commit()
+    db_session.commit()
     return {"id": material_id}
 
 
@@ -177,11 +177,11 @@ def add_need(activity: Activity, payload: MaterialNeedAddIn) -> dict:
     need = MaterialNeed(activity_id=activity.id, material_id=material.id,
                         amount=payload.amount, unit=payload.unit,
                         note=payload.note, is_ready=payload.is_ready)
-    db.session.add(need)
-    db.session.flush()
+    db_session.add(need)
+    db_session.flush()
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.material_need,
                  entity_id=need.id, action=AuditAction.create, changes={"material": [None, material.name]})
-    db.session.commit()
+    db_session.commit()
     return {"need": serialize.material_need(need)}
 
 
@@ -191,14 +191,14 @@ def update_need(need: MaterialNeed, payload: MaterialNeedUpdateIn) -> dict:
         audit.record(camp_id=need.activity.camp_id, activity_id=need.activity_id,
                      entity_type=EntityType.material_need, entity_id=need.id,
                      action=AuditAction.update, changes=changes)
-        db.session.commit()
+        db_session.commit()
     return {"need": serialize.material_need(need)}
 
 
 def delete_need(need: MaterialNeed) -> dict:
     need_id, activity, name = need.id, need.activity, need.material.name
-    db.session.delete(need)
+    db_session.delete(need)
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.material_need,
                  entity_id=need_id, action=AuditAction.delete, changes={"material": [name, None]})
-    db.session.commit()
+    db_session.commit()
     return {"id": need_id}

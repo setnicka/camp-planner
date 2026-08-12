@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.slot import Slot, SlotAssignment
 from camp_planner.services import audit, errors, google_sync, orgs, serialize
@@ -46,7 +46,7 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
         audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
                      entity_id=slot.id, action=AuditAction.update, changes=changes)
         google_sync.enqueue_upsert(camp, slot)
-        db.session.commit()
+        db_session.commit()
     return {"orgs": serialize.slot_orgs(slot), "override_name": slot.override_name}
 
 
@@ -82,7 +82,7 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
         _check_window(spec.start_at, spec.end_at)
         slot = Slot(activity_id=spec.activity_id, role=spec.role,
                     start_at=spec.start_at, end_at=spec.end_at)
-        db.session.add(slot)
+        db_session.add(slot)
         created.append(slot)
 
     moved: list[tuple] = []  # (slot, old_start, old_end) — old times captured before the change
@@ -103,10 +103,10 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
     for slot_id in payload.deletes:
         slot = _slot(slot_id)
         deleted.append((slot.id, slot.activity_id, slot.start_at, slot.end_at, slot.google_event_id))
-        db.session.delete(slot)
+        db_session.delete(slot)
 
     bump_timeline_rev(camp)
-    db.session.flush()  # assign ids to the created slots; apply deletes
+    db_session.flush()  # assign ids to the created slots; apply deletes
 
     # One batch-level summary, then a per-slot row grouped under each slot's activity, so
     # an activity's history shows exactly which of its slots were added/moved/removed.
@@ -149,5 +149,5 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
     for _sid, _activity_id, _old_start, _old_end, event_id in deleted:
         google_sync.enqueue_delete(camp, event_id)
 
-    db.session.commit()
+    db_session.commit()
     return {"rev": camp.timeline_rev, "created": [serialize.slot(s) for s in created]}

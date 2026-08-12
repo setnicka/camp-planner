@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db_session
 from camp_planner.models.activity import Todo, TodoAssignment
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.services import audit, orgs, serialize
@@ -32,15 +32,15 @@ def list_todos_overview(camp: Camp) -> dict:
 def create_todo(activity: Activity, payload: TodoCreate) -> dict:
     todo = Todo(activity_id=activity.id, title=payload.title, note=payload.note,
                 due_date=payload.due_date, is_done=payload.is_done)
-    db.session.add(todo)
+    db_session.add(todo)
     changes: dict[str, list] = {"title": [None, todo.title]}
     orgs_diff = orgs.replace_assignments(todo, activity.camp, payload.org_ids, TodoAssignment)
     if orgs_diff:
         changes["orgs"] = orgs_diff
-    db.session.flush()
+    db_session.flush()
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.todo,
                  entity_id=todo.id, action=AuditAction.create, changes=changes)
-    db.session.commit()
+    db_session.commit()
     return {"todo": serialize.todo(todo)}
 
 
@@ -54,14 +54,14 @@ def update_todo(todo: Todo, payload: TodoUpdate) -> dict:
     if changes:
         audit.record(camp_id=todo.activity.camp_id, activity_id=todo.activity_id, entity_type=EntityType.todo,
                      entity_id=todo.id, action=AuditAction.update, changes=changes)
-        db.session.commit()
+        db_session.commit()
     return {"todo": serialize.todo(todo)}
 
 
 def delete_todo(todo: Todo) -> dict:
     todo_id, activity, title = todo.id, todo.activity, todo.title
-    db.session.delete(todo)
+    db_session.delete(todo)
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.todo,
                  entity_id=todo_id, action=AuditAction.delete, changes={"title": [title, None]})
-    db.session.commit()
+    db_session.commit()
     return {"id": todo_id}

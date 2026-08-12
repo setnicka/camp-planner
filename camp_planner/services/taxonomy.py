@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Callable
 
 from sqlalchemy.exc import IntegrityError
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Category, Tag, TagKind
 from camp_planner.models.common import czech_sort_key, slugify
@@ -80,7 +80,7 @@ def _reconcile(
         obj = existing.get(item.id)
         if obj is None:
             obj = model(camp_id=camp.id)
-            db.session.add(obj)
+            db_session.add(obj)
         else:
             seen.add(obj.id)
         apply_fn(obj, item, idx)
@@ -93,15 +93,15 @@ def _reconcile(
         if oid not in seen:
             if block_delete and (error := block_delete(obj)):
                 raise errors.Invalid(error)
-            db.session.delete(obj)
+            db_session.delete(obj)
     after = [display(obj) for obj in final]
     if before != after:
         audit.record(camp_id=camp.id, entity_type=entity_type, entity_id=None,
                      action=AuditAction.update, changes={"items": [before, after]})
     try:
-        db.session.commit()
+        db_session.commit()
     except IntegrityError:  # unique-constraint backstop (race / in-place swap)
-        db.session.rollback()
+        db_session.rollback()
         raise errors.Invalid("Uložení selhalo – některá hodnota se opakuje. Zkuste to prosím znovu.") from None
 
 
@@ -174,12 +174,12 @@ def copy_into(dest: Camp, source: Camp, *, parts=None) -> None:
     parts = set(COPY_PARTS if parts is None else parts)
     if "categories" in parts:
         for cat in source.categories:
-            db.session.add(Category(camp_id=dest.id, key=cat.key, label=cat.label,
+            db_session.add(Category(camp_id=dest.id, key=cat.key, label=cat.label,
                                     color=cat.color, sort_order=cat.sort_order))
     if "orgs" in parts:
         for org in source.orgs:
-            db.session.add(Org(camp_id=dest.id, name=org.name, initials=org.initials))
+            db_session.add(Org(camp_id=dest.id, name=org.name, initials=org.initials))
     if "tags" in parts:
         for tag in source.tags:
-            db.session.add(Tag(camp_id=dest.id, name=tag.name, kind=tag.kind,
+            db_session.add(Tag(camp_id=dest.id, name=tag.name, kind=tag.kind,
                                pinned=tag.pinned, sort_order=tag.sort_order))

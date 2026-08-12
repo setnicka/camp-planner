@@ -72,13 +72,13 @@ def can_manage_users(identity: Identity | None = None) -> bool:
 
 def _resolve_camp(view_kwargs: dict[str, object]) -> Camp:
     """Look up the camp a decorated view operates on, from its route kwargs."""
-    from camp_planner.extensions import db
+    from camp_planner.extensions import db, first_or_404, get_or_404
     from camp_planner.models.camp import Camp
 
     if "camp_id" in view_kwargs:
-        return db.get_or_404(Camp, view_kwargs["camp_id"])
+        return get_or_404(Camp, view_kwargs["camp_id"])
     if "slug" in view_kwargs:
-        return db.first_or_404(db.select(Camp).filter_by(slug=view_kwargs["slug"]))
+        return first_or_404(db.select(Camp).filter_by(slug=view_kwargs["slug"]))
     abort(500)  # decorator applied to a view without a camp_id/slug param
 
 

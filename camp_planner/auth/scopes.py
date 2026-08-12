@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from camp_planner.auth.identity import ALL
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session
 from camp_planner.models.camp import Camp
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ def resolve_slug_grants(
     (ALL); unknown/not-yet-created slugs are dropped."""
     slugs = {slug for _, scope in grants if scope is not None for slug in scope}
     slug_to_id: dict[str, int] = (
-        dict(db.session.execute(db.select(Camp.slug, Camp.id).where(Camp.slug.in_(slugs))).all())
+        dict(db_session.execute(db.select(Camp.slug, Camp.id).where(Camp.slug.in_(slugs))).all())
         if slugs
         else {}
     )

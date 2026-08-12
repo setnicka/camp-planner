@@ -12,7 +12,7 @@ from flask import Flask, current_app
 from sqlalchemy import make_url
 
 from camp_planner.auth.identity import CampRole
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session
 
 
 def _parse_grant(token: str) -> tuple[CampRole, int | None]:
@@ -42,7 +42,7 @@ def _require_camp(camp_id: int | None) -> None:
         return
     from camp_planner.models.camp import Camp
 
-    if db.session.get(Camp, camp_id) is None:
+    if db_session.get(Camp, camp_id) is None:
         raise click.BadParameter(f"no camp with id {camp_id}")
 
 
@@ -106,7 +106,7 @@ def register_cli(app: Flask) -> None:
         """Create a standalone-auth user (with optional role grants)."""
         from camp_planner.models.auth import User, UserCampRole
 
-        if db.session.scalar(db.select(User).filter_by(username=username)):
+        if db_session.scalar(db.select(User).filter_by(username=username)):
             click.echo(f"User {username!r} already exists — aborting.")
             return
         user = User(username=username, display_name=display_name or username, is_admin=admin)
@@ -114,11 +114,11 @@ def register_cli(app: Flask) -> None:
         parsed = [_parse_grant(g) for g in grants]
         for _, camp_id in parsed:
             _require_camp(camp_id)
-        db.session.add(user)
-        db.session.flush()
+        db_session.add(user)
+        db_session.flush()
         for role, camp_id in parsed:
-            db.session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
-        db.session.commit()
+            db_session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
+        db_session.commit()
         scope = "admin" if admin else (", ".join(grants) or "no grants")
         click.echo(f"Created user {username!r} ({scope}).")
 
@@ -129,26 +129,26 @@ def register_cli(app: Flask) -> None:
         """Add a per-camp grant to an existing user, e.g. editor:12 or viewer:*."""
         from camp_planner.models.auth import User, UserCampRole
 
-        user = db.session.scalar(db.select(User).filter_by(username=username))
+        user = db_session.scalar(db.select(User).filter_by(username=username))
         if user is None:
             click.echo(f"No such user {username!r}.")
             return
         role, camp_id = _parse_grant(grant)
         _require_camp(camp_id)
-        exists = db.session.scalar(
+        exists = db_session.scalar(
             db.select(UserCampRole).filter_by(user_id=user.id, camp_id=camp_id, role=role)
         )
         if exists:
             click.echo(f"{username!r} already has {grant}.")
             return
-        db.session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
-        db.session.commit()
+        db_session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
+        db_session.commit()
         click.echo(f"Granted {grant} to {username!r}.")
 
     def _camp_by_slug(slug: str):
         from camp_planner.models.camp import Camp
 
-        camp = db.session.scalar(db.select(Camp).filter_by(slug=slug))
+        camp = db_session.scalar(db.select(Camp).filter_by(slug=slug))
         if camp is None:
             raise click.BadParameter(f"no camp with slug {slug!r}")
         return camp
@@ -184,7 +184,7 @@ def register_cli(app: Flask) -> None:
         query = db.select(ApiToken).order_by(ApiToken.name)
         if slug:
             query = query.filter_by(camp_id=_camp_by_slug(slug).id)
-        tokens = db.session.scalars(query).all()
+        tokens = db_session.scalars(query).all()
         if not tokens:
             click.echo("No API tokens.")
             return
@@ -203,7 +203,7 @@ def register_cli(app: Flask) -> None:
         query = db.select(ApiToken).filter_by(name=name)
         if slug:
             query = query.filter_by(camp_id=_camp_by_slug(slug).id)
-        tokens = db.session.scalars(query).all()
+        tokens = db_session.scalars(query).all()
         if not tokens:
             click.echo(f"No token named {name!r}.")
             return
@@ -224,7 +224,7 @@ def register_cli(app: Flask) -> None:
         query = db.select(Camp).where(Camp.google_calendar_id.is_not(None))
         if slug:
             query = query.filter_by(slug=slug)
-        camps = db.session.scalars(query).all()
+        camps = db_session.scalars(query).all()
         for camp in camps:
             t0 = time.perf_counter()
             res = google_sync.drain(camp)
@@ -266,6 +266,7 @@ def register_cli(app: Flask) -> None:
                            f"retrying next interval: {exc}", err=True)
             finally:
                 # Drop the scoped session so the next pass starts on a fresh connection /
-                # identity map rather than a stale, long-lived transaction.
+                # identity map rather than a stale, long-lived transaction. Around the
+                # proxy: remove() is scoped_session's, and this loop is standalone-only.
                 db.session.remove()
             time.sleep(interval)

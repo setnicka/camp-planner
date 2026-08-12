@@ -14,7 +14,7 @@ from flask import g
 from pydantic_core import to_jsonable_python
 from sqlalchemy import and_, or_
 
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, AuditLog, EntityType
 from camp_planner.services import errors, serialize
 
@@ -52,7 +52,7 @@ def record(
     coerced JSON-safe here, so callers needn't.
     """
     identity: Identity = g.identity
-    db.session.add(
+    db_session.add(
         AuditLog(
             camp_id=camp_id,
             activity_id=activity_id,
@@ -115,7 +115,7 @@ def list_audit(
         query = query.filter_by(entity_id=entity_id)
     if before is not None:
         query = query.where(AuditLog.id < before)
-    rows = db.session.scalars(query.order_by(AuditLog.id.desc()).limit(limit)).all()
+    rows = db_session.scalars(query.order_by(AuditLog.id.desc()).limit(limit)).all()
     next_before = rows[-1].id if len(rows) == limit else None  # full page → more may follow
     return {"entries": [serialize.audit_entry(r) for r in rows], "next_before": next_before}
 
@@ -125,7 +125,7 @@ def _names(camp: Camp, model, name_col, ids: set[int]) -> dict[int, str]:
     so the view can show an entity's name (and link) instead of a generic noun."""
     if not ids:
         return {}
-    rows = db.session.execute(
+    rows = db_session.execute(
         db.select(model.id, name_col).where(model.camp_id == camp.id, model.id.in_(ids)))
     return {row[0]: row[1] for row in rows}
 

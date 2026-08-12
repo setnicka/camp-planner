@@ -16,7 +16,7 @@ from camp_planner.auth.permissions import (
     require_edit,
     require_view,
 )
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session, first_or_404
 from camp_planner.models.activity import Activity
 from camp_planner.models.camp import Camp
 from camp_planner.models.common import czech_sort_key
@@ -61,7 +61,7 @@ def _camp_or_404(slug: str) -> Camp:
     camp = getattr(g, "camp", None)  # stashed by @require_view/@require_edit
     if camp is not None and camp.slug == slug:
         return camp
-    return db.first_or_404(db.select(Camp).filter_by(slug=slug))
+    return first_or_404(db.select(Camp).filter_by(slug=slug))
 
 
 @bp.context_processor
@@ -72,7 +72,7 @@ def _form_choices() -> dict:
 
 @bp.get("/")
 def index():
-    camps = db.session.scalars(db.select(Camp).order_by(Camp.start_date.desc())).all()
+    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date.desc())).all()
     visible = [camp for camp in camps if can_view(camp)]
     return render_template("index.html", camps=visible)
 
@@ -86,7 +86,7 @@ def csrf_refresh() -> dict:
 
 def _copy_sources() -> list[Camp]:
     """Existing camps a new camp may copy its taxonomies from (those the user can view)."""
-    camps = db.session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
+    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
     return [camp for camp in camps if can_view(camp)]
 
 
@@ -119,7 +119,7 @@ def camp_create():
 @bp.get("/camps/<slug>")
 @require_view
 def camp_timeline(slug: str):
-    camp = db.first_or_404(db.select(Camp).filter_by(slug=slug).options(*loaders.TIMELINE))
+    camp = first_or_404(db.select(Camp).filter_by(slug=slug).options(*loaders.TIMELINE))
     return render_template("camp_timeline.html", camp=camp, timeline=build_timeline(camp))
 
 
@@ -144,7 +144,7 @@ def activity_detail(slug: str, activity_id: int):
     from the embedded JSON via the api endpoints (no reloads). Edit affordances are
     gated by can_edit; the api re-checks server-side."""
     camp = _camp_or_404(slug)
-    activity = db.first_or_404(
+    activity = first_or_404(
         db.select(Activity).filter_by(id=activity_id, camp_id=camp.id).options(*loaders.ACTIVITY),
         description="Aktivita nenalezena.")
     tax = taxonomy.serialize(camp)
@@ -186,7 +186,7 @@ def camp_materials(slug: str):
     """Camp-wide materials overview: one row per catalog material with the activity needs
     that use it, edited in place from the embedded JSON via the api endpoints (no reloads).
     Edit affordances are gated by can_edit; the api re-checks server-side."""
-    camp = db.first_or_404(
+    camp = first_or_404(
         db.select(Camp).filter_by(slug=slug).options(*loaders.MATERIALS_OVERVIEW),
         description="Akce nenalezena.")
     data = {
@@ -212,7 +212,7 @@ def camp_overview(slug: str):
     table — category, orgs, todo/material progress, a column per pinned tag, slot counts —
     with delete and merge from the embedded JSON via the api endpoints. Edit affordances are
     gated by can_edit; the api re-checks server-side."""
-    camp = db.first_or_404(
+    camp = first_or_404(
         db.select(Camp).filter_by(slug=slug).options(*loaders.ACTIVITIES_OVERVIEW),
         description="Akce nenalezena.")
     tax = taxonomy.serialize(camp)   # categories / orgs (czech-sorted) / tags — reused as filter metadata
@@ -246,7 +246,7 @@ def camp_todos(slug: str):
     status, activity, assigned orgs, due date and note — checked/edited/deleted in place
     from the embedded JSON via the api endpoints. Edit affordances are gated by can_edit;
     the api re-checks server-side."""
-    camp = db.first_or_404(
+    camp = first_or_404(
         db.select(Camp).filter_by(slug=slug).options(*loaders.TODOS_OVERVIEW),
         description="Akce nenalezena.")
     activities = sorted(camp.activities, key=lambda a: czech_sort_key(a.title))

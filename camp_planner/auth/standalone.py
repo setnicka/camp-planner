@@ -17,7 +17,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from camp_planner.auth.identity import ALL, ANONYMOUS, CampRole, Identity, build_identity
 from camp_planner.auth.permissions import require_admin
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session, get_or_404
 from camp_planner.models.auth import User, UserCampRole
 from camp_planner.models.camp import Camp
 
@@ -31,7 +31,7 @@ class StandaloneProvider:
         user_id = session.get("user_id")
         if user_id is None:
             return ANONYMOUS
-        user = db.session.get(User, user_id)
+        user = db_session.get(User, user_id)
         if user is None:                       # stale session (user deleted)
             session.pop("user_id", None)
             return ANONYMOUS
@@ -71,7 +71,7 @@ def _is_self(user: User) -> bool:
 def login():
     if request.method == "POST":
         password = request.form.get("password", "")
-        user = db.session.scalar(
+        user = db_session.scalar(
             db.select(User).filter_by(username=request.form.get("username", ""))
         )
         if user and user.check_password(password):
@@ -93,8 +93,8 @@ def logout():
 @bp.get("/users")
 @require_admin
 def users():
-    rows = db.session.scalars(db.select(User).order_by(User.username)).all()
-    camp_slugs = {camp.id: camp.slug for camp in db.session.scalars(db.select(Camp)).all()}
+    rows = db_session.scalars(db.select(User).order_by(User.username)).all()
+    camp_slugs = {camp.id: camp.slug for camp in db_session.scalars(db.select(Camp)).all()}
     return render_template(
         "auth/users.html",
         users=rows,
@@ -112,13 +112,13 @@ def create_user():
     is_admin = bool(request.form.get("is_admin"))
     if not username or not password:
         flash("Uživatelské jméno a heslo jsou povinné.", "error")
-    elif db.session.scalar(db.select(User).filter_by(username=username)):
+    elif db_session.scalar(db.select(User).filter_by(username=username)):
         flash(f"Uživatel {username!r} už existuje.", "error")
     else:
         user = User(username=username, display_name=display_name or username, is_admin=is_admin)
         user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
+        db_session.add(user)
+        db_session.commit()
         flash(f"Uživatel {username!r} byl vytvořen.", "success")
     return redirect(url_for("auth.users"))
 
@@ -126,13 +126,13 @@ def create_user():
 @bp.post("/users/<int:user_id>/delete")
 @require_admin
 def delete_user(user_id: int):
-    user = db.get_or_404(User, user_id)
+    user = get_or_404(User, user_id)
     if _is_self(user):
         # Refusing self-deletion also guarantees at least one admin always survives.
         flash("Nemůžete smazat vlastní účet.", "error")
     else:
-        db.session.delete(user)
-        db.session.commit()
+        db_session.delete(user)
+        db_session.commit()
         flash(f"Uživatel {user.username!r} byl smazán.", "success")
     return redirect(url_for("auth.users"))
 
@@ -140,8 +140,8 @@ def delete_user(user_id: int):
 @bp.get("/users/<int:user_id>")
 @require_admin
 def user_detail(user_id: int):
-    user = db.get_or_404(User, user_id)
-    camps = db.session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
+    user = get_or_404(User, user_id)
+    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
     return render_template(
         "auth/user_detail.html",
         user=user,
@@ -155,7 +155,7 @@ def user_detail(user_id: int):
 @bp.post("/users/<int:user_id>/profile")
 @require_admin
 def update_profile(user_id: int):
-    user = db.get_or_404(User, user_id)
+    user = get_or_404(User, user_id)
     username = request.form.get("username", "").strip()
     display_name = request.form.get("display_name", "").strip()
     password = request.form.get("password", "")
@@ -163,7 +163,7 @@ def update_profile(user_id: int):
     # is disabled for self in the form, so a disabled (= unsubmitted) box stays on.
     make_admin = True if _is_self(user) else bool(request.form.get("is_admin"))
 
-    clash = db.session.scalar(db.select(User).filter_by(username=username)) if username else None
+    clash = db_session.scalar(db.select(User).filter_by(username=username)) if username else None
     if not username or not display_name:
         flash("Uživatelské jméno a zobrazované jméno jsou povinné.", "error")
     elif clash is not None and clash.id != user.id:
@@ -174,7 +174,7 @@ def update_profile(user_id: int):
         user.is_admin = make_admin
         if password:
             user.set_password(password)
-        db.session.commit()
+        db_session.commit()
         flash(f"Uživatel {user.username!r} byl upraven.", "success")
     return redirect(url_for("auth.user_detail", user_id=user.id))
 
@@ -182,7 +182,7 @@ def update_profile(user_id: int):
 @bp.post("/users/<int:user_id>/grants")
 @require_admin
 def add_grant(user_id: int):
-    user = db.get_or_404(User, user_id)
+    user = get_or_404(User, user_id)
     try:
         role = CampRole(request.form.get("role", ""))
     except ValueError:
@@ -190,15 +190,15 @@ def add_grant(user_id: int):
         return redirect(url_for("auth.user_detail", user_id=user.id))
     camp_raw = request.form.get("camp_id", "").strip()
     camp_id = int(camp_raw) if camp_raw else None       # blank = all camps
-    if camp_id is not None and db.session.get(Camp, camp_id) is None:
+    if camp_id is not None and db_session.get(Camp, camp_id) is None:
         flash(f"Akce s id {camp_id} neexistuje.", "error")
-    elif db.session.scalar(
+    elif db_session.scalar(
         db.select(UserCampRole).filter_by(user_id=user.id, camp_id=camp_id, role=role)
     ):
         flash("Toto oprávnění už existuje.", "error")
     else:
-        db.session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
-        db.session.commit()
+        db_session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
+        db_session.commit()
         flash("Oprávnění bylo přidáno.", "success")
     return redirect(url_for("auth.user_detail", user_id=user.id))
 
@@ -206,10 +206,10 @@ def add_grant(user_id: int):
 @bp.post("/users/<int:user_id>/grants/<int:grant_id>/delete")
 @require_admin
 def remove_grant(user_id: int, grant_id: int):
-    grant = db.get_or_404(UserCampRole, grant_id)
+    grant = get_or_404(UserCampRole, grant_id)
     if grant.user_id != user_id:
         abort(404)
-    db.session.delete(grant)
-    db.session.commit()
+    db_session.delete(grant)
+    db_session.commit()
     flash("Oprávnění bylo odebráno.", "success")
     return redirect(url_for("auth.user_detail", user_id=user_id))
