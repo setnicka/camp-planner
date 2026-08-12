@@ -12,6 +12,12 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Embedded mode: `register_camp_planner(session=…)` runs Camp Planner on the host's
+  SQLAlchemy session instead of opening a second one over the same database. The session
+  must carry no open transaction at request entry (see `docs/DEPLOYMENT.md` §2).
+
 ## [0.3.2] - 2026-08-03
 
 ### Added

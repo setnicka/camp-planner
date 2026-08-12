@@ -112,7 +112,7 @@ from camp_planner.version import __version__
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 # CSRF defends cookie auth; Bearer-token requests can't be forged cross-site, so the
-# blueprint is exempted from the automatic check and _api_token_auth re-applies it
+# blueprint is exempted from the automatic check and api_token_auth re-applies it
 # (csrf.protect) only to cookie-authenticated requests.
 csrf.exempt(bp)
 
@@ -145,10 +145,10 @@ def _json_error(exc: HTTPException):
     return jsonify(ok=False, error=exc.description), exc.code or 500
 
 
-@bp.before_request
-def _api_token_auth() -> None:
+def api_token_auth() -> None:
     """Authenticate a Bearer token (before the session provider resolves identity);
-    for cookie-authenticated requests, enforce CSRF (a no-op on safe methods)."""
+    for cookie-authenticated requests, enforce CSRF (a no-op on safe methods).
+    Registered by integration._wire_blueprint, which owns the hook order."""
     identity = _resolve_token_identity()
     if identity is not None:
         g.identity = identity   # a token authenticated this request

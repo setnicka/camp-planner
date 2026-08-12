@@ -83,7 +83,8 @@ slugs are ignored — same convention as the proxy header.
 
 - **Database:** Camp Planner binds its own SQLAlchemy to the host app and shares the
   host's `SQLALCHEMY_DATABASE_URI` (pass `database_uri=` only if the host sets none).
-  Run its migrations once against that database.
+  Run its migrations once against that database. To share the host's session and pool
+  instead of opening a second one, see `session` below.
 - **Table prefix:** set `DB_TABLE_PREFIX` (e.g. `cp_`) so its tables don't clash. It's
   read at *import* time (table names are fixed then), so set it **before importing
   `camp_planner`** — in this module as shown, or in the environment. It can't be a
@@ -145,6 +146,30 @@ slugs are ignored — same convention as the proxy header.
   exposes the `csrf_token()` template global our forms use; a host with a different CSRF
   scheme must supply its own token to those forms. (Camp Planner has no forms of its own
   in embedded mode — login/logout exist only in standalone.)
+
+### Sharing the host's session (`session`)
+
+By default both apps open their own engine, pool and session over the same database. Pass
+`session` and Camp Planner runs on yours instead, creating no engine, pool or teardown:
+
+```python
+register_camp_planner(
+    app,
+    auth_callback=current_identity,
+    session=db_session,   # a scoped_session, or a plain Session
+)
+```
+
+Not a `sessionmaker`: SQLAlchemy calls that a session factory, and a fresh Session per call
+would scatter our writes. Mutually exclusive with `database_uri`.
+
+**Contract: no transaction may be open when a planner request starts.** Our services commit
+mid-request, which would end a unit of work you still believe is open. Autobegin means even
+a bare `SELECT` opens one. A `before_request` checks this and raises `RuntimeError`; in
+practice it holds by itself, since the planner's URLs are its own.
+
+This shares a session, not a transaction: writes to your tables and to the `cp_*` ones
+cannot be made atomic. Cleanup stays yours too, as we register no `teardown_appcontext`.
 
 ## 3. Proxy (behind nginx, any-stack app)
 

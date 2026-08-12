@@ -20,18 +20,20 @@ from typing import TYPE_CHECKING, Any, Callable
 from flask import current_app, g
 
 import camp_planner.models  # noqa: F401  (register mappers on the shared Base)
+from camp_planner.api import api_token_auth
 from camp_planner.api import bp as api_bp
 from camp_planner.auth import permissions
 from camp_planner.auth.callback import CallbackProvider
 from camp_planner.auth.identity import ANONYMOUS
 from camp_planner.auth.standalone import StandaloneProvider
 from camp_planner.auth.standalone import bp as auth_bp
-from camp_planner.extensions import db
+from camp_planner.extensions import db, db_session, state
 from camp_planner.version import __version__
 from camp_planner.views import bp as main_bp
 
 if TYPE_CHECKING:
     from flask import Blueprint, Flask
+    from sqlalchemy.orm import Session
 
     from camp_planner.auth.identity import AuthProvider
 
@@ -74,20 +76,29 @@ def _check_host_template(app: Flask, base_template: str) -> None:
         )
 
 
-def _state() -> dict[str, Any]:
-    return current_app.extensions["camp_planner"]
+def _check_session_contract() -> None:
+    """Refuse to run on an injected session the host left mid-transaction: our services
+    commit mid-request, which would end a transaction the host still believes is open.
+    Reads local state only, no round-trip."""
+    if state().get("session") is None:      # ours; nobody else to disturb
+        return
+    if db_session.in_transaction():
+        raise RuntimeError(
+            "camp_planner: the injected session has an active transaction at request "
+            "entry; the host must commit/rollback before planner views run (autobegin "
+            "means even a bare SELECT opens one)")
 
 
 def _load_identity() -> None:
     # A Bearer token may already have resolved the identity on the api blueprint
-    # (see api._api_token_auth, which stashes g.api_token); otherwise the configured
+    # (see api.api_token_auth, which stashes g.api_token); otherwise the configured
     # provider takes over.
     if g.get("api_token") is None:
-        g.identity = _state()["provider"].load_identity() or ANONYMOUS
+        g.identity = state()["provider"].load_identity() or ANONYMOUS
 
 
 def _inject() -> dict[str, Any]:
-    base_template = _state()["base_template"]
+    base_template = state()["base_template"]
     return {
         "layout": base_template,
         "app_version": __version__,
@@ -96,7 +107,7 @@ def _inject() -> dict[str, Any]:
         "embedded": base_template != _FULL_TEMPLATE,
         # "light" | "dark" | "auto" forces the theme and drops the switch; None = the
         # visitor chooses (and standalone then defaults to auto, embedded to light).
-        "force_theme": _state()["force_theme"],
+        "force_theme": state()["force_theme"],
         "identity": g.get("identity", ANONYMOUS),
         # standalone only (we own login/logout); lets templates skip url_for('auth.*').
         "auth_enabled": bool(current_app.config.get("AUTH_LOGIN_ENDPOINT")),
@@ -113,10 +124,18 @@ _wired: set[Blueprint] = set()
 
 def _wire_blueprint(bp: Blueprint) -> None:
     """Register our hooks once per blueprint (they're module-level singletons
-    shared across apps, so re-registering would stack duplicate hooks)."""
+    shared across apps, so re-registering would stack duplicate hooks).
+
+    Registration order is the hook order, and it is load-bearing: the contract check
+    must see the session before anything of ours queries it, and _load_identity defers
+    to the token api_token_auth resolves. Hence api.py registers no hook of its own.
+    """
     if bp in _wired:
         return
     _wired.add(bp)
+    bp.before_request(_check_session_contract)
+    if bp is api_bp:
+        bp.before_request(api_token_auth)
     bp.before_request(_load_identity)
     bp.context_processor(_inject)
 
@@ -130,6 +149,7 @@ def _attach(
     login_endpoint: str | None = None,
     url_prefix: str | None = None,
     force_theme: str | None = None,
+    session: Session | Callable[[], Session] | None = None,
 ) -> None:
     # An explicit argument (embedded) wins over the CP_FORCE_THEME env var (standalone/
     # proxy). Kept in our own extensions state, not app.config: embedded, that dict belongs
@@ -146,6 +166,8 @@ def _attach(
         "provider": provider,
         "base_template": base_template,
         "force_theme": force_theme or None,
+        # None = ours; else a callable giving the host's, normalized once here.
+        "session": session if session is None or callable(session) else lambda: session,
     }
     if login_endpoint:
         app.config["AUTH_LOGIN_ENDPOINT"] = login_endpoint
@@ -188,6 +210,7 @@ def register_camp_planner(
     auth_callback: Callable[[], Any],
     url_prefix: str = "/planner",
     database_uri: str | None = None,
+    session: Session | Callable[[], Session] | None = None,
     base_template: str = _BARE_TEMPLATE,
     force_theme: str | None = None,
 ) -> None:
@@ -198,14 +221,25 @@ def register_camp_planner(
     (table prefix avoids clashes); pass database_uri only if the host sets none.
     Pass base_template (e.g. the host's base) to wrap our pages in its chrome.
 
+    session is optional: pass the host's own session, normally its scoped_session and
+    never a sessionmaker, and we run on it instead of an engine of our own (which rules
+    out database_uri). It must then carry no open transaction when a request starts, or
+    we raise at request entry, and its cleanup stays the host's. See docs/DEPLOYMENT.md §2.
+
     force_theme ("light" | "dark" | "auto") pins the theme and drops the switch; "auto"
     is for a host page that itself follows prefers-color-scheme (we can't read your
     background, so we only follow the OS when you say so). None = the visitor chooses,
     starting light. Works with a custom base_template too. See docs/DEPLOYMENT.md §2.
     """
-    if database_uri:
-        host_app.config.setdefault("SQLALCHEMY_DATABASE_URI", database_uri)
-    db.init_app(host_app)
+    if session is not None and database_uri:
+        raise ValueError(
+            "session and database_uri are mutually exclusive: with an injected session we "
+            "open no connection of our own, so there is nothing to point at a URI")
+    if session is None:
+        # init_app is what gives us an engine, a pool and a teardown of our own.
+        if database_uri:
+            host_app.config.setdefault("SQLALCHEMY_DATABASE_URI", database_uri)
+        db.init_app(host_app)
 
     _attach(
         host_app,
@@ -214,4 +248,5 @@ def register_camp_planner(
         base_template=base_template,
         url_prefix=url_prefix,
         force_theme=force_theme,
+        session=session,
     )
