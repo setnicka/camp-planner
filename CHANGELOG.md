@@ -12,6 +12,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-08-14
+
 ### Added
 
 - iCal export: a modal under the timeline builds a subscription URL for the new
@@ -278,7 +280,8 @@ overlapping activities across days.
 - Alembic DB migrations with runtime `DB_TABLE_PREFIX` support.
 - Unit tests, README, and deployment docs.
 
-[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/setnicka/camp-planner/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/setnicka/camp-planner/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/setnicka/camp-planner/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/setnicka/camp-planner/compare/v0.3.0...v0.3.1
