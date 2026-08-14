@@ -38,10 +38,22 @@ window.cpDom = (function () {
     return refreshing;
   }
 
+  // Proactive refresh, started lazily by the first api() call so read-only pages never
+  // poll. The reactive retry in api() (also covers laptop sleep) stays a rare fallback.
+  let csrfStarted = false;
+  function startCsrfTimer() {
+    if (csrfStarted) return;
+    csrfStarted = true;
+    if (document.querySelector('meta[name="csrf-refresh"]')) {
+      setInterval(csrfRefresh, 30 * 60 * 1000);
+    }
+  }
+
   // JSON call against an /api endpoint: attaches the CSRF header, JSON-encodes `body` when
   // given, parses the {ok, …} envelope and throws Error(json.error) on failure (so callers
   // just try/catch). Returns the parsed JSON on success. On an expired token, refresh + retry once.
   async function api(method, url, body, _retried) {
+    startCsrfTimer();
     const opts = { method, headers: { "X-CSRFToken": csrf() } };
     if (body !== undefined) {
       opts.headers["Content-Type"] = "application/json";
@@ -64,12 +76,6 @@ window.cpDom = (function () {
   const withId = (tpl, id) => tpl.replace(/\d+$/, id);
   // Merge URLs end …/0/merge — swap the sentinel inside.
   const mergeUrl = (tpl, id) => tpl.replace(/\/0\/merge$/, "/" + id + "/merge");
-
-  // Refresh proactively, well before the token's server-side limit, so the reactive retry
-  // above (which also covers laptop sleep) stays a rare fallback.
-  if (document.querySelector('meta[name="csrf-refresh"]')) {
-    setInterval(csrfRefresh, 30 * 60 * 1000);
-  }
 
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
   const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "var(--cp-text-dim)") });
@@ -288,8 +294,9 @@ window.cpDom = (function () {
 
   // Selectable chip set (`.cp-cat-chips`). Each entry is [value, ...chipChildren]; clicking
   // toggles the `on` class. Returns { node, get() } — get() yields the selected value, or
-  // (multi) the array of selected values. Used by the role / category / org pickers.
-  function chipGroup(entries, { multi = false, selected } = {}) {
+  // (multi) the array of selected values. onChange fires after each toggle.
+  // Used by the role / category / org pickers.
+  function chipGroup(entries, { multi = false, selected, onChange } = {}) {
     const node = el("div", { class: "cp-cat-chips" });
     const els = new Map();
     const sel = multi ? new Set(selected || []) : { v: selected };
@@ -300,6 +307,7 @@ window.cpDom = (function () {
       chip.addEventListener("click", () => {
         if (multi) { sel.has(value) ? sel.delete(value) : sel.add(value); } else { sel.v = value; }
         sync();
+        if (onChange) onChange();
       });
       els.set(value, chip);
       node.append(chip);

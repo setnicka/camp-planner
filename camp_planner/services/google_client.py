@@ -33,8 +33,6 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 # import candidate). Holds the originating slot id as a string.
 SLOT_PROP = "cpSlotId"
 
-_ROLE_SUFFIX = {"prep": " (příprava)", "cleanup": " (úklid)"}
-
 
 def is_configured() -> bool:
     """True when the deployment has a service-account key, i.e. the feature is enabled."""
@@ -96,7 +94,7 @@ def format_location(garants: list[str], helpers: list[str]) -> str:
 
 def event_body(slot: Slot) -> dict:
     """Build the full Google event payload mirroring a slot. Field mapping:
-    - summary     ← slot name override, else activity title (+ role suffix for prep/cleanup)
+    - summary     ← slot.calendar_summary (name override else activity title, + role suffix)
     - location    ← garants (joined by '+') then helpers, e.g. "K+M, P" (format_location)
     - description ← the slot's attendant orgs (initials)
     - colorId     ← the activity's category colour snapped to the palette (omitted if none)
@@ -109,7 +107,7 @@ def event_body(slot: Slot) -> dict:
     helpers = [a.org.initials for a in activity.assignments if a.role == OrgRole.helper]
     attendants = [a.org.initials for a in slot.assignments]
     body = {
-        "summary": f"{slot.override_name or activity.title}{_ROLE_SUFFIX.get(slot.role.value, '')}",
+        "summary": slot.calendar_summary,
         "location": format_location(garants, helpers),
         "description": initials_csv(attendants),
         "start": {"dateTime": slot.start_at.isoformat(), "timeZone": camp.timezone},

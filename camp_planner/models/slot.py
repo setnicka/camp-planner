@@ -26,6 +26,10 @@ class SlotRole(str, enum.Enum):
     cleanup = "cleanup"
 
 
+# Czech suffix for the margin roles in calendar exports; read via Slot.calendar_summary.
+_ROLE_SUFFIX = {SlotRole.prep: " (příprava)", SlotRole.cleanup: " (úklid)"}
+
+
 class Slot(Base):
     """An independently-placeable time span belonging to an activity.
 
@@ -57,6 +61,12 @@ class Slot(Base):
     assignments: Mapped[list[SlotAssignment]] = relationship(
         back_populates="slot", cascade="all, delete-orphan"
     )
+
+    @property
+    def calendar_summary(self) -> str:
+        """Calendar-export title (Google sync, iCal feed): override name or activity
+        title, plus the prep/cleanup suffix. Not a generic display name."""
+        return (self.override_name or self.activity.title) + _ROLE_SUFFIX.get(self.role, "")
 
     def __repr__(self) -> str:
         return f"<Slot {self.role.value} {self.start_at}–{self.end_at}>"

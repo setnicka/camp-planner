@@ -39,18 +39,28 @@ ACTIVITY = _activity_graph()
 # GET /camps/<slug>/activities — the same graph for every activity of the camp.
 ACTIVITIES = (selectinload(Camp.activities).options(*_activity_graph()),)
 
+
+def _calendar_graph() -> tuple:
+    """Per-activity options shared by TIMELINE and ICAL: category, role assignments,
+    placed slots with attendees."""
+    return (
+        selectinload(Activity.category),
+        selectinload(Activity.assignments).selectinload(ActivityAssignment.org),
+        selectinload(Activity.slots).selectinload(Slot.assignments).selectinload(SlotAssignment.org),
+    )
+
+
 # GET /camps/<slug>/timeline (+ web camp_timeline) — only what build_timeline reads:
 # categories, and per activity its category, role assignments, tag links and placed
 # slots with attendees. Notably NOT todos/needs (the timeline doesn't show them).
 TIMELINE = (
     selectinload(Camp.categories),
-    selectinload(Camp.activities).options(
-        selectinload(Activity.category),
-        selectinload(Activity.assignments).selectinload(ActivityAssignment.org),
-        selectinload(Activity.tags),
-        selectinload(Activity.slots).selectinload(Slot.assignments).selectinload(SlotAssignment.org),
-    ),
+    selectinload(Camp.activities).options(*_calendar_graph(), selectinload(Activity.tags)),
 )
+
+# GET /ical/<slug> — only what build_feed reads: the shared slot graph, and notably
+# NOT camp.categories or tags.
+ICAL = (selectinload(Camp.activities).options(*_calendar_graph()),)
 
 # GET /camps/<slug>/materials — the catalog list; serialize.material walks each material's
 # responsible orgs (the activity-detail picker reads it).

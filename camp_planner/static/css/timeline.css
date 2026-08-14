@@ -239,3 +239,14 @@ div.vis-tooltip {
   color: var(--cp-text) !important;
   box-shadow: 3px 3px 10px var(--cp-shadow-1) !important;
 }
+
+/* --- iCal export (link under the grid + modal, js/ical-export.js) --- */
+.cp-tl-export { margin: 0.15rem 0 0; text-align: right; font-size: 12px; line-height: 1.2; }
+.cp-tl-export button {
+  font: inherit; padding: 0; border: 0; background: none;
+  color: var(--cp-muted); cursor: pointer;
+}
+.cp-tl-export button:hover { color: var(--cp-text); text-decoration: underline; }
+/* fields share the modal skin (cp-modal-name / cp-act-textarea); only the mono look is ours */
+.cp-ical-token, .cp-ical-url { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.cp-ical-url { overflow-wrap: break-word; }

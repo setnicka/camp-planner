@@ -84,13 +84,16 @@ def revoke(token: ApiToken) -> dict:
 
 
 def authenticate(secret: str) -> ApiToken | None:
-    """Resolve a presented secret to its token, refreshing last_used_at at most once
-    per _TOUCH_AFTER. Returns None for an unknown/revoked secret."""
-    token = db_session.scalar(db.select(ApiToken).filter_by(token_hash=_hash(secret)))
-    if token is None:
-        return None
+    """Resolve a presented secret to its token (None for an unknown/revoked secret).
+    Pure lookup; recording the use is the caller's touch() call."""
+    return db_session.scalar(db.select(ApiToken).filter_by(token_hash=_hash(secret)))
+
+
+def touch(token: ApiToken) -> None:
+    """Refresh last_used_at, at most once per _TOUCH_AFTER. What counts as a use is the
+    caller's rule: the API counts presenting a valid token, the iCal feed only a served
+    response. Commits (expiring everything loaded in the session)."""
     now = _now()
     if token.last_used_at is None or now - token.last_used_at > _TOUCH_AFTER:
         token.last_used_at = now
         db_session.commit()
-    return token

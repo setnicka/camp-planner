@@ -198,6 +198,7 @@ upstream camp_planner { server 127.0.0.1:8000; }
 
 location = /_planner_auth {
     internal;
+    if ($request_uri ~ ^/planner/ical/) { return 200; }   # iCal feeds carry their own ?token= (section 4)
     # if ($http_authorization ~* "^Bearer ") { return 200; }  # to make API tokens work, see section 4
     proxy_pass http://127.0.0.1:9000/auth/planner_check;  # the existing app's auth-check URL
     proxy_pass_request_body off;
@@ -224,6 +225,10 @@ location /planner/ {
 }
 location @planner_login { return 302 $login; }
 ```
+
+On the `/planner/ical/` exception the auth endpoint replies 200 without identity
+headers, so `$u` is empty and nginx drops `X-Remote-*` — the request reaches the app
+anonymous and the feed's own `?token=` check is the only guard.
 
 Auth-check endpoint (PHP example — reads the app's session, replies 200+headers or
 401+login URL):
@@ -268,6 +273,12 @@ uv run flask --app wsgi api-token create import-script --camp smf-2026 --role ed
 A token is scoped to one camp + role (editor/viewer), carries no CSRF requirement
 (a Bearer header can't be sent cross-site), and is resolved by the app in every
 AUTH_MODE. Tokens are also managed per camp under settings → **API tokeny**.
+
+The iCal feed (`GET /ical/<slug>?token=…`) accepts a **viewer** token in the query
+string instead of a header — calendar apps can't send either a session or a Bearer
+header. The whole `/ical/` path must therefore be exempt from any fronting session
+check (see the `$request_uri` exception in the auth endpoint, section 3; embedded
+hosts need an equivalent public route).
 
 In **embedded** mode the app doesn't run its own CSRF layer, so if the host app
 enforces CSRF globally it will reject a token-only request (no `X-CSRFToken`) before

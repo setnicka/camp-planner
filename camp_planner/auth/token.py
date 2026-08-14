@@ -27,6 +27,7 @@ def resolve_identity() -> Identity | None:
     token = api_tokens.authenticate(secret.strip())
     if token is None:
         return None
+    api_tokens.touch(token)
     g.api_token = token
     return build_identity(
         # id, not name — names are unique only per camp

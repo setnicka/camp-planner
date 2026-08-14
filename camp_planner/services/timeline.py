@@ -32,8 +32,13 @@ if TYPE_CHECKING:
     from datetime import date
 
     from camp_planner.models.camp import Camp
+    from camp_planner.models.slot import Slot
 
 DAY_MIN = 24 * 60
+
+# cat_key sentinel for an activity with no category (shared by the legend and the
+# iCal filter grammar).
+NO_CATEGORY = "_none"
 
 
 def bump_timeline_rev(camp: Camp) -> None:
@@ -86,6 +91,14 @@ def slice_segments(
     return segments
 
 
+def slot_visible(camp: Camp, slot: Slot) -> bool:
+    """True when the timeline renders at least a (possibly clipped) segment of the slot;
+    looser than the write-path span_in_window (a straddling slot is clipped, not hidden)."""
+    s_abs = _abs_min(slot.start_at, camp.start_date)
+    e_abs = _abs_min(slot.end_at, camp.start_date)
+    return bool(slice_segments(s_abs, e_abs, camp.window_start_min, camp.length_days))
+
+
 def _groups(camp: Camp) -> list[TimelineGroup]:
     """One row per camp day, carrying its date; the frontend formats weekday + label."""
     return [TimelineGroup(id=i, iso_date=(camp.start_date + timedelta(days=i)).isoformat())
@@ -116,7 +129,7 @@ def _segments(camp: Camp) -> list[TimelineSegment]:
     org_key = {o.id: czech_sort_key(o.initials) for o in camp.orgs}  # org-id lists sort by this
     segments: list[TimelineSegment] = []
     for activity in camp.activities:
-        cat_key = activity.category.key if activity.category else "_none"
+        cat_key = activity.category.key if activity.category else NO_CATEGORY
         garants = sorted((a.org_id for a in activity.assignments if a.role is OrgRole.garant),
                          key=org_key.get)
         helpers = sorted((a.org_id for a in activity.assignments if a.role is OrgRole.helper),

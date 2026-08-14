@@ -12,6 +12,12 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- iCal export: a modal under the timeline builds a subscription URL for the new
+  `GET /ical/<slug>` endpoint, guarded by a read-only token; filters reuse the
+  timeline's `filter=type:value` grammar.
+
 ## [0.3.3] - 2026-08-12
 
 ### Added

@@ -5,9 +5,10 @@ from __future__ import annotations
 
 from zoneinfo import available_timezones
 
-from flask import Blueprint, flash, g, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, g, redirect, render_template, request, url_for
 from flask_wtf.csrf import generate_csrf
 
+from camp_planner.auth.identity import CampRole
 from camp_planner.auth.permissions import (
     can_edit,
     can_edit_camp_meta,
@@ -22,7 +23,7 @@ from camp_planner.models.camp import Camp
 from camp_planner.models.common import czech_sort_key
 from camp_planner.services import camps as camps_service
 from camp_planner.services import errors as svc_errors
-from camp_planner.services import api_tokens, loaders, serialize, taxonomy
+from camp_planner.services import api_tokens, ical, loaders, serialize, taxonomy
 from camp_planner.services.timeline import build_timeline
 
 bp = Blueprint("main", __name__, template_folder="templates", static_folder="static")
@@ -121,6 +122,33 @@ def camp_create():
 def camp_timeline(slug: str):
     camp = first_or_404(db.select(Camp).filter_by(slug=slug).options(*loaders.TIMELINE))
     return render_template("camp_timeline.html", camp=camp, timeline=build_timeline(camp))
+
+
+@bp.get("/ical/<slug>")
+def camp_ical(slug: str):
+    """Token-guarded iCal feed, deliberately session-free: the read-only ?token= is the
+    only credential, so calendar apps can subscribe. Token checked before the camp
+    loads, so unauthenticated probes learn nothing about slugs."""
+    secret = request.args.get("token", "").strip()
+    token = api_tokens.authenticate(secret) if secret else None
+    if token is None:
+        abort(401, description="Chybějící nebo neplatný token.")
+    if token.role is not CampRole.viewer:
+        abort(403, description="Kalendář vyžaduje read-only token (role „Jen čtení“).")
+    try:
+        filters = ical.parse_filters(request.args.getlist("filter"))
+    except svc_errors.Invalid as exc:
+        abort(400, description=str(exc))
+    camp = first_or_404(db.select(Camp).filter_by(slug=slug).options(*loaders.ICAL))
+    if token.camp_id != camp.id:
+        abort(404)   # same answer as an unknown slug: no cross-camp existence oracle
+    body = ical.build_feed(camp, filters)
+    # no-store: the URL carries the credential, keep it out of shared caches
+    headers = {"Content-Disposition": f'inline; filename="{camp.slug}.ics"',
+               "Cache-Control": "no-store"}
+    # touch last: only a served request counts as a use, and its commit expires the session
+    api_tokens.touch(token)
+    return Response(body, mimetype="text/calendar", headers=headers)
 
 
 @bp.get("/camps/<slug>/detail")

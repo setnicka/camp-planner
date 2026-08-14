@@ -128,8 +128,8 @@
   border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text);
 }
 .cp-modal .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
-.cp-modal .cp-primary:disabled { opacity: .5; cursor: default; }
-.cp-modal .cp-primary:hover:not(:disabled), .cp-modal .cp-cancel:hover { filter: brightness(1.06); }
+.cp-modal .cp-primary:disabled, .cp-modal .cp-cancel:disabled { opacity: .5; cursor: default; }
+.cp-modal .cp-primary:hover:not(:disabled), .cp-modal .cp-cancel:hover:not(:disabled) { filter: brightness(1.06); }
 /* colour variants — defined AFTER .cp-primary so they win at equal specificity */
 .cp-modal .cp-warn-btn { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
 .cp-modal .cp-danger-btn { background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
