@@ -93,8 +93,9 @@
 .cp-hist-oldblock { background: var(--cp-danger-subtle); }
 .cp-hist-newblock { background: var(--cp-success-subtle); }
 
-/* search box + result list (fuzzy pickers) */
-.cp-modal-search, .cp-modal-name, .cp-act-textarea {
+/* search box + result list (fuzzy pickers); .cp-num/.cp-need-unit share the recipe and
+   narrow below */
+.cp-modal-search, .cp-modal-name, .cp-act-textarea, .cp-num, .cp-need-unit {
   font: inherit; padding: 0.5rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 100%; box-sizing: border-box;
   background: var(--cp-surface); color: var(--cp-text);
 }
@@ -140,8 +141,7 @@
 .cp-act-textarea { resize: vertical; }   /* shares the input rule above; only adds vertical resize */
 .cp-need-amount-row { display: flex; gap: 0.4rem; align-items: center; }
 .cp-num { width: 6rem; }
-.cp-need-unit { font: inherit; padding: 0.3rem 0.4rem; border: 1px solid var(--cp-border); border-radius: 6px; width: 8rem;
-  background: var(--cp-surface); color: var(--cp-text); }
+.cp-need-unit { width: 8rem; }
 
 /* --- segmented control (pill toggle) — sort modes, history modes, import choice --- */
 .cp-seg { display: inline-flex; border: 1px solid var(--cp-border); border-radius: 6px; overflow: hidden; }

@@ -12,6 +12,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Changed
+
+- Other small visual improvements.
+
 ## [0.3.4] - 2026-08-14
 
 ### Added
