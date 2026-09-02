@@ -217,7 +217,7 @@ def test_header_merges_brand_camp_heading_and_account(client, seeded):
     assert 'class="cp-nav"' not in html                  # old top bar is gone
     assert "cp-brand" in html and "Camp Planner" in html  # grey brand
     assert "cp-camp-name" in html and "Tábor" in html     # camp name now lives in the header
-    assert "cp-account" in html                           # name / Uživatelé / Logout on the right
+    assert "cp-account-menu" in html                      # name / user admin / logout, in the menu
 
 
 def test_landing_heading_rides_in_header(client, seeded):
@@ -226,6 +226,18 @@ def test_landing_heading_rides_in_header(client, seeded):
     # "Akce" sits in the header's camp-name slot (where camp pages show the camp name)
     head = html[html.index('class="cp-header"'):html.index("</header>")]
     assert "cp-camp-name" in head and "Akce" in head
+
+
+def test_header_folds_its_controls_into_one_menu(client, seeded):
+    # The bar carries the heading and the section links; everything else (account, theme)
+    # hangs in the menu, on every screen width. The links sit in their own box so a phone
+    # can give them a row of their own.
+    html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
+    head = html[html.index('class="cp-header"'):html.index("</header>")]
+    assert "cp-camp-links" in head
+    pop = head[head.index("cp-account-pop"):]
+    assert "data-cp-theme-switch" in pop                   # the theme lives in the menu
+    assert head.count("data-cp-theme-switch") == 1         # and only there
 
 
 def test_landing_page_renders_camp_rows(client, seeded):

@@ -1,4 +1,4 @@
-{% from "_macros.html" import csrf, theme_switch, css -%}
+{% from "_macros.html" import brand, csrf, theme_switch, css -%}
 <!doctype html>
 {# "auto" (not a missing attribute) is what opts us into prefers-color-scheme: this shell
    owns the page background, so following the OS is safe here. See content.css. #}
@@ -18,20 +18,34 @@
   {% block cp_head %}{% endblock %}
 </head>
 <body>
-  {# One condensed header line: grey brand · camp heading (cp_nav) · account on the right. #}
-  <header class="cp-header">
-    <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>
+  {# The account and the theme sit behind one button at every width, leaving a phone
+     header room for the heading (layout in standalone.css). #}
+  <header class="cp-header{{ ' cp-header-anon' if not identity.is_authenticated }}">
+    {{ brand() }}
     {% block cp_nav %}{% endblock %}
-    <div class="cp-account">
-      {% if identity.is_authenticated %}<span class="cp-user">{{ identity.display_name }}</span>{% endif %}
-      {% if auth_enabled and can_manage_users() %}<a href="{{ url_for('auth.users') }}">Uživatelé</a>{% endif %}
-      {% if identity.is_authenticated and auth_enabled %}
-        <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}<button type="submit">Odhlásit se</button></form>
-      {% elif auth_enabled %}
-        <a href="{{ url_for('auth.login') }}">Přihlásit se</a>
-      {% endif %}
-      {{ theme_switch(force_theme) }}
-    </div>
+    {% if identity.is_authenticated or not force_theme %}
+    <details class="cp-account-menu">
+      {# A person, not a burger: no navigation folds in here, only the account and the theme.
+         Signing in is not among them; that visitor is sent to the login page (views.index). #}
+      <summary title="Účet" aria-label="Účet">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="8" r="3.6"/>
+          <path d="M5 19.6c0-3.7 3.1-5.9 7-5.9s7 2.2 7 5.9"/>
+        </svg>
+      </summary>
+      <div class="cp-account-pop">
+        {% if identity.is_authenticated %}
+          <span class="cp-user">{{ identity.display_name }}</span>
+          {% if auth_enabled and can_manage_users() %}<a href="{{ url_for('auth.users') }}">Správa uživatelů</a>{% endif %}
+          {% if auth_enabled %}
+            <form method="post" action="{{ url_for('auth.logout') }}">{{ csrf() }}<button type="submit">Odhlásit se</button></form>
+          {% endif %}
+        {% endif %}
+        {{ theme_switch(force_theme) }}
+      </div>
+    </details>
+    {% endif %}
   </header>
   <noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -43,6 +57,7 @@
   {% endwith %}
   <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
   <footer class="cp-footer">Camp Planner v{{ app_version }}</footer>
+  <script src="{{ url_for('main.static', filename='js/header.js') }}" defer></script>
   {%- if not force_theme %}
   <script src="{{ url_for('main.static', filename='js/theme.js') }}" defer></script>
   {%- endif %}

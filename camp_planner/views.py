@@ -13,6 +13,7 @@ from camp_planner.auth.permissions import (
     can_edit,
     can_edit_camp_meta,
     can_view,
+    login_redirect,
     require_admin,
     require_edit,
     require_view,
@@ -75,6 +76,9 @@ def _form_choices() -> dict:
 def index():
     camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date.desc())).all()
     visible = [camp for camp in camps if can_view(camp)]
+    # Anonymous with nothing visible: to login (embedded has none, the empty list stays).
+    if not visible and not g.identity.is_authenticated and (login := login_redirect()):
+        return login
     return render_template("index.html", camps=visible)
 
 
