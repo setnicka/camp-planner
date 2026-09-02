@@ -244,6 +244,7 @@
    inside the .cp-camp-nav band, which carries the same grey "Camp Planner" brand. */
 .cp-brand { color: var(--cp-muted); font-size: 0.8rem; text-decoration: none; }
 .cp-brand:hover { color: var(--cp-accent-text); }
+.cp-brand-mark { display: none; }   /* the wordmark's stand-in on a phone, see below */
 /* Our output when embedded (page.html wraps it). Carries the theme's own bg/text — the
    subtree must not pair the host's background with our palette's text. Colour only, no
    layout. isolation: the day/night items are z-index:-1, and a background on a
@@ -261,9 +262,55 @@
   margin: 0; border-bottom: 1px solid var(--cp-border); padding: 0 0 0.4rem;
 }
 .cp-camp-name { font-size: 1.3rem; font-weight: 700; color: var(--cp-text-strong); text-decoration: none; margin-right: 0.3rem; }
+/* The section tabs in one box, so a phone can move them as a whole. */
+.cp-camp-links { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 1rem; min-width: 0; }
 .cp-camp-link { text-decoration: none; color: var(--cp-muted); font-weight: 500; }
 .cp-camp-link:hover { color: var(--cp-accent-text); }
 .cp-camp-link.is-active { color: var(--cp-text-strong); box-shadow: inset 0 -2px var(--cp-accent); }
+
+/* Phone header: heading and controls on one row, the section tabs on a scrolling second
+   one. Shared by both shells: the standalone bar (standalone.css) and the band above. */
+@media (max-width: 40rem) {
+  .cp-camp-nav { align-items: center; gap: 0 0.6rem; padding-bottom: 0; }
+  .cp-camp-nav .cp-theme { flex: none; }
+  /* The wordmark becomes a house: it spares the bar's width and fits a fingertip. */
+  .cp-brand {
+    flex: none;
+    display: flex; align-items: center; justify-content: center;
+    width: 2.25rem; height: 2.25rem;
+  }
+  .cp-brand-word { display: none; }
+  .cp-brand-mark { display: block; width: 20px; height: 20px; }
+  /* flex-basis 0 keeps a long name from forcing a line break: it takes what is left over
+     and cuts itself short, rather than pushing the controls onto a row of their own. */
+  .cp-camp-name {
+    font-size: 1.15rem; flex: 1 1 0; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* order puts the box last whatever the shell around it, flex-basis breaks the row before
+     it, and scrolling rather than wrapping keeps it one row however many sections there are. */
+  .cp-camp-links {
+    order: 1; flex-basis: 100%; flex-wrap: nowrap;
+    gap: 0 1.1rem; overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: none;   /* a scrollbar under the strip would cost the row we saved */
+    --fade-left: 0px;
+    --fade-right: 0px;
+    -webkit-mask-image: linear-gradient(to right, transparent, var(--cp-text) var(--fade-left),
+                        var(--cp-text) calc(100% - var(--fade-right)), transparent);
+    mask-image: linear-gradient(to right, transparent, var(--cp-text) var(--fade-left),
+                var(--cp-text) calc(100% - var(--fade-right)), transparent);
+  }
+  .cp-camp-links::-webkit-scrollbar { display: none; }
+  /* Fingertip-sized rows; the active underline (an inset box-shadow) follows the padding. */
+  .cp-camp-link { padding: 0.5rem 0; white-space: nowrap; }
+  /* overflow-x on the strip clips an outline drawn outside the link, so draw it inside. */
+  .cp-camp-link:focus-visible { outline: 2px solid var(--cp-accent-text); outline-offset: -2px; }
+  /* header.js marks the ends that still have sections behind them. A mask, so the fade
+     needs no matching background and any opaque colour does in it, only the alpha counts;
+     prefixed too, because iOS wanted -webkit- until 15.4. */
+  .cp-camp-links.cp-more-left { --fade-left: 1.5rem; }
+  .cp-camp-links.cp-more-right { --fade-right: 1.5rem; }
+}
 
 /* Read-only parameter table (camp detail page): condensed, label left. */
 .cp-params { border-collapse: collapse; }

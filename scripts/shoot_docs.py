@@ -219,10 +219,13 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
         else:
             print("  10-google-nacteni.webp skipped — demo seeded without --calendar")
 
-        # 11 — the same timeline in the dark theme.
+        # 11 — the same timeline in the dark theme. The switch sits in the account
+        # menu now, so the menu has to be opened for it and closed again before the shot.
         page.goto(camp)
         page.wait_for_selector(".vis-timeline")
+        page.locator(".cp-account-menu summary").click()
         page.click('[data-cp-theme-switch] button[data-theme="dark"]')
+        page.keyboard.press("Escape")
         shoot(page, out, "11-tmavy-rezim.webp")
 
         # 02 — creating a camp is admin-only. A fresh context, not a logout: it drops the
@@ -231,7 +234,8 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
         page = browser.new_context(**CONTEXT).new_page()
         login(page, base, ADMIN_USER)
         page.goto(f"{base}/camps/new")
-        page.wait_for_selector("form")
+        # The camp form, not the logout form the account menu now folds in.
+        page.wait_for_selector("select[name=copy_from]")
         # Pick last year's camp so the shot actually shows the copy-settings feature
         # rather than its empty default.
         page.select_option("select[name=copy_from]", label=PREV_CAMP_NAME)

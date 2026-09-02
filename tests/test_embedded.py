@@ -118,7 +118,8 @@ def test_forced_theme_wraps_our_output_and_drops_the_switch(embedded_factory, th
     client, _ = embedded_factory(force_theme=theme)
     html = client.get("/planner/").get_data(as_text=True)
     assert f'<div class="cp-embed" data-cp-theme="{theme}">' in html
-    assert html.rstrip().endswith("</div>")
+    # the wrapper closes our markup; only the deferred header script follows it
+    assert html.split("<script")[0].rstrip().endswith("</div>")
     assert "data-cp-theme-switch" not in html
     assert "js/theme.js" not in html
 

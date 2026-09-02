@@ -19,18 +19,32 @@
   ("settings",  "main.camp_detail",    "Nastavení akce"),
 ] %}
 
-{# The camp heading: camp name plus the section tabs, on one compact line. Goes through
+{# The way back to the camp list; a phone shows the house instead (content.css). #}
+{% macro brand() %}
+  <a class="cp-brand" href="{{ url_for('main.index') }}" title="Camp Planner" aria-label="Camp Planner">
+    <span class="cp-brand-word">Camp Planner</span>
+    <svg class="cp-brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" d="M3.6 11.3 12 4.2l8.4 7.1M6.2 10.6V19.8h11.6v-9.2"/>
+    </svg>
+  </a>
+{% endmacro %}
+
+{# The camp heading: camp name plus the section tabs, on one compact line. The tabs sit in
+   their own .cp-camp-links box, which a phone moves onto a second row. Goes through
    the page's `cp_nav` block — into the standalone top bar (.cp-header) on full.html, and
    into the .cp-camp-nav band when embedded (bare.html). `active` ∈
    timeline|materials|overview|todos|settings highlights the current one; drill-downs pick
    their nearest section (activity detail uses "overview"); pass "" for none. #}
 {% macro camp_nav(camp, active="") %}
   <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
-  {% for key, endpoint, label in camp_sections %}
+  <div class="cp-camp-links">
+  {%- for key, endpoint, label in camp_sections %}
     <a class="cp-camp-link {{ 'is-active' if active == key }}"
        href="{{ url_for(endpoint, slug=camp.slug) }}"
        {{ 'aria-current=page' if active == key }}>{{ label }}</a>
-  {% endfor %}
+  {%- endfor %}
+  </div>
 {% endmacro %}
 
 {# Colour-theme switch (light / auto / dark). Renders nothing when the deployment pins the

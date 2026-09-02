@@ -49,6 +49,17 @@ def _login(client, username="franta", password="tajne", next_=""):
 
 # --- login / logout ------------------------------------------------------------------
 
+def test_anonymous_landing_goes_to_the_login_page(client, app):
+    # With nothing visible and no session, the camp list would say only that the visitor is
+    # not signed in, so the login page stands in for it.
+    resp = client.get("/")
+    assert resp.status_code == 302 and "/auth/login" in resp.headers["Location"]
+
+    _add_user()
+    _login(client)
+    assert client.get("/").status_code == 200
+
+
 def test_login_success_and_logout(client, app):
     _add_user()
     resp = _login(client)
@@ -58,7 +69,8 @@ def test_login_success_and_logout(client, app):
     assert "Franta" in html and "Odhlásit se" in html    # logged in, display name shown
 
     assert client.post("/auth/logout").status_code == 302
-    html = client.get("/").get_data(as_text=True)
+    # signed out, the landing page hands the visitor on to the login form
+    html = client.get("/", follow_redirects=True).get_data(as_text=True)
     assert "Franta" not in html and "Přihlásit se" in html
 
 
@@ -81,7 +93,7 @@ def test_stale_session_is_anonymous_not_500(client):
     db.session.delete(user)                               # account removed mid-session
     db.session.commit()
 
-    resp = client.get("/")
+    resp = client.get("/", follow_redirects=True)
     assert resp.status_code == 200                        # request survives
     assert "Franta" not in resp.get_data(as_text=True)    # treated as anonymous
 

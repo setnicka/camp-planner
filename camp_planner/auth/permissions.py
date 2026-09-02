@@ -82,13 +82,17 @@ def _resolve_camp(view_kwargs: dict[str, object]) -> Camp:
     abort(500)  # decorator applied to a view without a camp_id/slug param
 
 
+def login_redirect():
+    """A redirect to this deployment's login page, or None where it has none (embedded, the
+    host owns auth)."""
+    endpoint = current_app.config.get("AUTH_LOGIN_ENDPOINT")
+    return redirect(url_for(endpoint, next=request.url)) if endpoint else None
+
+
 def _deny():
     """Anonymous -> login (if any) else 401; authenticated-but-forbidden -> 403."""
     if not g.identity.is_authenticated:
-        endpoint = current_app.config.get("AUTH_LOGIN_ENDPOINT")
-        if endpoint:
-            return redirect(url_for(endpoint, next=request.url))
-        abort(401)
+        return login_redirect() or abort(401)
     abort(403)
 
 

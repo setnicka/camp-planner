@@ -295,8 +295,9 @@ Nastavení servisního účtu popisuje [google_calendar_setup.md](google_calenda
 
 ![Tmavý režim](screenshots/11-tmavy-rezim.webp)
 
-Přepínač vpravo nahoře má tři polohy: světlý mód, automaticky podle systému a
-tmavý mód. Volba se pamatuje v prohlížeči. Planner vložený do cizího webu se
+Přepínač má tři polohy: světlý mód, automaticky podle systému a tmavý mód. Ve
+vlastním rozhraní Planneru je pod ikonkou účtu vpravo nahoře, ve vloženém režimu
+sedí přímo v liště. Volba se pamatuje v prohlížeči. Planner vložený do cizího webu se
 výchozím nastavením drží světlé varianty a přepínač zmizí, pokud si téma řídí
 hostitelská stránka nebo je nastavené napevno.
 
