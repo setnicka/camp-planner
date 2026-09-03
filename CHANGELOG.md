@@ -14,7 +14,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Changed
 
-- Better responsive header on small screens.
+- Better responsive header and forms on small screens.
 - Embedded contract: the page navigation slot is `cp_nav` (was `header_nav`), and a
   `base_template` that omits it warns at startup like the other three.
 

@@ -348,6 +348,19 @@
   border-top: 1px solid var(--cp-border); font-size: 1.05rem; font-weight: 600;
 }
 
+/* A phone puts the caption over its input: the two-column grid cannot shrink below the
+   widest caption plus an input's default width, which on a 360px screen pushed the whole
+   page sideways. The captions are anonymous grid items (labels are display: contents), so
+   the space between fields hangs off the inputs rather than off a caption rule. */
+@media (max-width: 40rem) {
+  .cp-form { grid-template-columns: minmax(0, 1fr); gap: 0.15rem; }
+  .cp-form label > input:not([type="checkbox"]),
+  .cp-form label > select,
+  .cp-form label > .cp-field,
+  .cp-form label > .cp-inputs { margin-bottom: 0.55rem; }
+  .cp-form .cp-copy-parts { grid-column: 1; }
+}
+
 /* Inline add form: a horizontal row of stacked label-over-input fields. */
 .cp-form-inline { display: flex; align-items: end; flex-wrap: wrap; gap: 0.8rem; max-width: none; }
 .cp-form-inline label { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; }
