@@ -19,6 +19,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Phones: the header fits the screen.
 - Other small visual improvements.
 
+### Fixed
+
+- Standalone login returns to the page that asked for it, not to the camp list.
+
 ## [0.3.4] - 2026-08-14
 
 ### Added
