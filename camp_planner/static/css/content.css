@@ -487,7 +487,6 @@ tr.cp-dragging { opacity: 0.5; }
 .cp-pill button.on { color: var(--cp-text-inverse); }
 .cp-pill:has(button.on:hover) .cp-pill-knob { filter: brightness(1.15); }
 .cp-pill button:focus-visible { outline: 2px solid var(--cp-accent-text); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) { .cp-pill button { transition: none; } }
 
 /* Colour-theme switch: three positions, defaulting to the middle one (auto) — that's what
    the CSS alone shows if theme.js never runs. */
@@ -498,7 +497,6 @@ tr.cp-dragging { opacity: 0.5; }
 .cp-theme button svg { display: block; width: 13px; height: 13px; }
 /* Animate only once theme.js has set the real position, so it doesn't slide in on load. */
 .cp-theme.is-ready .cp-pill-knob { transition: transform 0.18s ease; }
-@media (prefers-reduced-motion: reduce) { .cp-theme.is-ready .cp-pill-knob { transition: none; } }
 /* embedded shell: push it to the right end of the camp-nav band */
 .cp-camp-nav .cp-theme { margin-left: auto; }
 
