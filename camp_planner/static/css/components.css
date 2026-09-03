@@ -216,7 +216,6 @@
 .cp-th-slider .cp-pill-knob { opacity: 0; transition: transform .15s ease, opacity .15s ease; }
 .cp-th-slider:has(button.on) .cp-pill-knob { opacity: 1; }
 .cp-th-slider button { width: 1.35rem; height: 1.2rem; font-size: 12px; font-weight: 600; }
-@media (prefers-reduced-motion: reduce) { .cp-th-slider .cp-pill-knob { transition: none; } }
 
 /* filter control under the title (select / checkbox / dropdown button) */
 .cp-th-filter { margin-top: 0.25rem; font: inherit; font-size: 12px; font-weight: normal;
