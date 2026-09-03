@@ -216,7 +216,8 @@
     const wrap = el("span");
     orgs.forEach((o, i) => {
       if (i) wrap.append(", ");
-      wrap.append(el("span", { title: orgName.get(o.org_id) || "" }, o.initials));
+      // initials only: data-cp-hint puts the full name within reach of a tap as well
+      wrap.append(el("span", { "data-cp-hint": "", title: orgName.get(o.org_id) || "" }, o.initials));
     });
     return wrap;
   }
@@ -239,7 +240,8 @@
       el("td", null, m.unit || dash()),
       el("td", null, unitTotals(m) || dash(),
         m.sum_strategy === "max"
-          ? el("span", { class: "cp-muted cp-mat-agg", title: "Maximum napříč aktivitami" }, " (max)")
+          ? el("span", { class: "cp-muted cp-mat-agg", "data-cp-hint": "",
+                          title: "Maximum napříč aktivitami" }, " (max)")
           : null),
       el("td", { class: "cp-mat-acq" }, acqCell(m)),
       el("td", { class: "cp-mat-orgs" }, orgsCell(m)),

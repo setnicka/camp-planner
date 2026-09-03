@@ -44,7 +44,12 @@ window.cpActivityPicker = (function () {
     const cats = chipGroup(
       categories.map((c) => [c.id, swatch(c.color), c.label]),
       { selected: noCats ? null : categories[0].id });
-    const createBtn = el("button", { type: "button", class: "cp-primary", disabled: noCats }, "Vytvořit a přidat");
+    // Without a category there is nothing to create the activity in, and the button says so
+    // on a tap instead of sitting there dead.
+    const createBtn = el("button", { type: "button", class: "cp-primary",
+      ...(noCats ? { "aria-disabled": "true", "data-cp-hint": "",
+                     title: "Akce nemá žádnou kategorii – nejdřív ji přidej v nastavení akce." } : {}) },
+      "Vytvořit a přidat");
 
     // keyboard-navigable existing-activity list (cpDom.keyList): arrows move, Enter picks
     const setRows = keyList(search);

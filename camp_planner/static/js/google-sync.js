@@ -68,11 +68,13 @@
     if (statusInfoEl) statusInfoEl.replaceChildren(...statusInfoNodes());
   }
 
-  // Nothing queued → nothing to push, so the manual-sync button is disabled.
+  // Nothing queued → nothing to push. aria-disabled, not disabled: greyed out but still
+  // tappable, so the tap shows why.
   function applySyncState() {
     if (!syncBtn) return;
     const has = !!status.pending_ops;
-    syncBtn.disabled = !has;
+    syncBtn.toggleAttribute("aria-disabled", !has);
+    syncBtn.toggleAttribute("data-cp-hint", !has);
     syncBtn.title = has ? "" : "Žádné změny k odeslání.";
   }
 

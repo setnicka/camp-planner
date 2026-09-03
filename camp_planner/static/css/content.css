@@ -393,7 +393,8 @@
 .cp-edit-actions button { padding: 0.35rem 0.8rem; }
 .cp-form button:hover:not(:disabled), .cp-danger:hover:not(:disabled),
 .cp-edit-actions button:hover:not(:disabled) { filter: brightness(1.08); }
-.cp-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+/* aria-disabled: unavailable but still tappable, so a tap can show why (data-cp-hint). */
+.cp-danger:disabled, .cp-danger[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 
 /* Destructive actions, set apart from the settings form by a rule above them. */
 .cp-danger-zone { margin-top: 1.6rem; padding-top: 1rem; border-top: 1px solid var(--cp-border); }

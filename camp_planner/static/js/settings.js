@@ -87,7 +87,9 @@
 
     // ---- edit view ----
     function dragHandle(tr) {
-      const h = el("span", { class: "cp-drag", title: "Přetáhněte pro změnu pořadí" }, "⠿");
+      // A tap says what the grip is for (dragging is pointer events, so the hint is clear of it).
+      const h = el("span", { class: "cp-drag", "data-cp-hint": "",
+                             title: "Přetáhněte pro změnu pořadí" }, "⠿");
       h.draggable = true;
       h.addEventListener("dragstart", (e) => {
         dragRow = tr; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text", ""); tr.classList.add("cp-dragging");

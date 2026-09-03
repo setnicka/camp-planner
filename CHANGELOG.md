@@ -18,6 +18,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   **Upgrade note:** a host `base_template` must rename the block.
 - Phones: the header fits the screen and form fields stack.
 - The browser's/phone's Back closes an open dialog instead of leaving the page.
+- Title tooltips also show on tap, so touch screens get them.
 - Other small visual improvements.
 
 ### Fixed
