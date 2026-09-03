@@ -18,6 +18,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Embedded contract: the page navigation slot is `cp_nav` (was `header_nav`), and a
   `base_template` that omits it warns at startup like the other three.
 
+### Fixed
+
+- Standalone login returns to the page that asked for it, not to the camp list.
+
 ## [0.3.4] - 2026-08-14
 
 ### Added

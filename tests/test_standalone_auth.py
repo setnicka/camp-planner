@@ -8,6 +8,7 @@ AUTH_MODE=standalone.
 from __future__ import annotations
 
 from datetime import date
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -96,6 +97,13 @@ def test_stale_session_is_anonymous_not_500(client):
     resp = client.get("/", follow_redirects=True)
     assert resp.status_code == 200                        # request survives
     assert "Franta" not in resp.get_data(as_text=True)    # treated as anonymous
+
+
+def test_the_way_back_from_login_is_root_relative(client):
+    # _safe_next refuses an absolute one, landing the visitor on the camp list instead.
+    resp = client.get("/auth/users?page=2")
+    target = parse_qs(urlparse(resp.headers["Location"]).query)["next"][0]
+    assert target == "/auth/users?page=2"
 
 
 def test_anonymous_admin_page_redirects_to_login(client):

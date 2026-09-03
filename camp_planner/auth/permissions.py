@@ -84,9 +84,12 @@ def _resolve_camp(view_kwargs: dict[str, object]) -> Camp:
 
 def login_redirect():
     """A redirect to this deployment's login page, or None where it has none (embedded, the
-    host owns auth)."""
+    host owns auth). The way back is root-relative: _safe_next refuses anything else."""
     endpoint = current_app.config.get("AUTH_LOGIN_ENDPOINT")
-    return redirect(url_for(endpoint, next=request.url)) if endpoint else None
+    if not endpoint:
+        return None
+    here = request.script_root + (request.full_path if request.query_string else request.path)
+    return redirect(url_for(endpoint, next=here))
 
 
 def _deny():
