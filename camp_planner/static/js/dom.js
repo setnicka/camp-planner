@@ -93,25 +93,64 @@ window.cpDom = (function () {
     return node;
   }
 
-  // Mount a dialog inside a backdrop overlay: Escape / backdrop-click dismiss it, Tab is
-  // trapped inside, focus returns to the opener, onClose runs once on any dismissal.
-  // `confirmClose` (optional) guards only Escape/backdrop — return false to keep the
-  // dialog open; the returned close() is always unconditional.
+  // history.back() calls of our own (a dialog taking its entry off) versus real Backs, so
+  // ours never close the dialog underneath as well. The count is consumed here, at
+  // document level, because the dialog that issued it has already stopped listening when
+  // the popstate arrives.
+  let ownBacks = 0;
+  let ownPop = false;
+  // A dialog opening while a back() of ours is in flight (a picker handing over to a form)
+  // waits for it: an entry pushed in between is undone by that back(), and the next Back
+  // then leaves the page instead of closing the dialog.
+  const pendingEntries = [];
+  window.addEventListener("popstate", () => {
+    ownPop = ownBacks > 0;
+    if (ownPop) ownBacks--;
+    if (!ownBacks) while (pendingEntries.length) pendingEntries.shift()();
+  });
+
+  // Mount a dialog inside a backdrop overlay: Escape / backdrop-click / Back dismiss it,
+  // Tab is trapped inside, focus returns to the opener, onClose runs once on any dismissal.
+  // `confirmClose` (optional) guards those three: return false to keep the dialog open;
+  // the returned close() is always unconditional.
   function openModal(dialog, onClose, { confirmClose } = {}) {
     const opener = document.activeElement;
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
     const overlay = stampTheme(el("div", { class: "cp-modal-overlay" }, dialog));
     let closed = false;
+    let popping = false;      // a Back is closing us, so the entry is already gone
+    let entry = false;        // our entry is pushed (a waiting push has not run yet)
+    // On a phone, Back is how one leaves anything, and leaving the page under a dialog
+    // throws away what is typed in it. This entry is what that Back consumes instead.
+    const pushEntry = () => { if (!closed) { entry = true; history.pushState(null, ""); } };
+    if (ownBacks > 0) pendingEntries.push(pushEntry); else pushEntry();
     const close = () => {
       if (closed) return;
       closed = true;
       overlay.remove();
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("popstate", onPop);
+      if (!popping && entry) { ownBacks++; history.back(); }   // take our entry back off
       if (opener && document.contains(opener)) opener.focus();
       if (onClose) onClose();
     };
     const dismiss = () => { if (!confirmClose || confirmClose()) close(); };
+    // Back reaches every open dialog, and only the top one may answer it (a lightbox can
+    // sit over a modal).
+    const isTop = () => {
+      for (let n = overlay.nextElementSibling; n; n = n.nextElementSibling) {
+        if (n.classList.contains("cp-modal-overlay")) return false;
+      }
+      return true;
+    };
+    const onPop = () => {
+      if (ownPop || !isTop()) return;              // a close() of ours, not a real Back
+      popping = true;
+      dismiss();
+      popping = false;
+      if (!closed) history.pushState(null, "");    // refused: keep an entry for the next Back
+    };
     const focusables = () => [...overlay.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     )].filter((n) => !n.disabled && n.offsetParent !== null);
@@ -126,6 +165,7 @@ window.cpDom = (function () {
     };
     overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
     document.addEventListener("keydown", onKey);
+    window.addEventListener("popstate", onPop);
     document.body.append(overlay);
     return close;
   }
