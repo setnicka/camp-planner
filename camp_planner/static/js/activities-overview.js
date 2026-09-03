@@ -148,7 +148,9 @@
     merge.addEventListener("click", () => openMerge(r));
     const del = el("button", { type: "button", class: "cp-danger cp-mini" }, "✕");
     if (slotCount(r)) {   // can't delete an activity with placed slots (the api refuses too)
-      del.disabled = true;
+      // aria-disabled, not disabled: greyed out but still tappable, so the tap shows why.
+      del.setAttribute("aria-disabled", "true");
+      del.setAttribute("data-cp-hint", "");
       del.title = "Nelze smazat – aktivita má naplánované sloty. Nejprve je odeber z timeline.";
     } else {
       del.title = "Smazat aktivitu";
@@ -452,10 +454,12 @@
     sortArrows.clear();
     const headRow = el("tr", null,
       sortHead("Název", "title"), categoryHead(), orgsHead(),
-      progressHead("Úkoly", "todosState", ["Filtr: jen s úkoly", "Filtr: jen s nedokončenými úkoly",
-        "Filtr: jen s hotovými úkoly", "Filtr: jen bez úkolů"]),
-      progressHead("Materiál", "materialsState", ["Filtr: jen s materiálem", "Filtr: jen s nedokončeným materiálem",
-        "Filtr: jen s hotovým materiálem", "Filtr: jen bez materiálu"]));
+      progressHead("Úkoly", "todosState", {
+        has: "Filtr: jen s úkoly", unfinished: "Filtr: jen s nedokončenými úkoly",
+        done: "Filtr: jen s hotovými úkoly", none: "Filtr: jen bez úkolů" }),
+      progressHead("Materiál", "materialsState", {
+        has: "Filtr: jen s materiálem", unfinished: "Filtr: jen s nedokončeným materiálem",
+        done: "Filtr: jen s hotovým materiálem", none: "Filtr: jen bez materiálu" }));
     PINNED.forEach((t) => headRow.append(tagHead(t)));
     if (!chrono) headRow.append(el("th", null, el("span", { class: "cp-th-label" }, "Sloty")));   // "Čas" replaces it
     if (mayEdit) headRow.append(el("th", { class: "cp-actions" }, ""));

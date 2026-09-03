@@ -22,6 +22,16 @@
 .cp-toast.cp-toast-show { opacity: 1; transform: none; }
 .cp-toast-error { background: var(--cp-danger-subtle); border-color: var(--cp-danger); color: var(--cp-danger-text); }
 
+/* --- anchored hint (data-cp-hint): a `title` a touch screen can read too --- */
+.cp-hint {
+  position: fixed; z-index: 1200;
+  max-width: min(20rem, calc(100vw - 1.5rem));
+  padding: 0.35rem 0.55rem; border-radius: 6px; font-size: 12px; line-height: 1.4;
+  background: var(--cp-surface); color: var(--cp-text);
+  border: 1px solid var(--cp-border); box-shadow: 0 4px 14px var(--cp-shadow-1);
+  pointer-events: none;   /* never eats the click that dismisses it */
+}
+
 /* --- modal scaffold (cpDom.openModal) ------------------------------------ */
 .cp-modal-overlay {
   position: fixed; inset: 0; z-index: 1100; background: var(--cp-scrim);
@@ -129,7 +139,8 @@
   border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text);
 }
 .cp-modal .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
-.cp-modal .cp-primary:disabled, .cp-modal .cp-cancel:disabled { opacity: .5; cursor: default; }
+.cp-modal .cp-primary:disabled, .cp-modal .cp-cancel:disabled,
+.cp-modal .cp-primary[aria-disabled="true"] { opacity: .5; cursor: default; }
 .cp-modal .cp-primary:hover:not(:disabled), .cp-modal .cp-cancel:hover:not(:disabled) { filter: brightness(1.06); }
 /* colour variants — defined AFTER .cp-primary so they win at equal specificity */
 .cp-modal .cp-warn-btn { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
@@ -170,7 +181,7 @@
 .cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
   border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text); }
 .cp-mini:not(.cp-danger):hover:not(:disabled) { background: var(--cp-surface-2); }   /* danger keeps its red (below) */
-.cp-mini:disabled { opacity: .4; cursor: not-allowed; }
+.cp-mini:disabled, .cp-mini[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 .cp-danger.cp-mini { background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
 .cp-danger.cp-mini:not(:disabled):hover { filter: brightness(1.08); }
 

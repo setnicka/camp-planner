@@ -268,6 +268,45 @@ window.cpDom = (function () {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && openPopover) { openPopover.hidden = true; openPopover = null; }
   });
+  // A `title` a touch screen can read too: an element that opts in with data-cp-hint shows
+  // its title in a bubble at itself when tapped, instead of doing whatever it would do. That
+  // is what the opt-in means, so it goes on things that cannot act anyway: an action that is
+  // unavailable and says why, or a marker whose meaning is only in its title.
+  let openHint = null;
+  let hintFor = null;
+  const dropHint = () => { if (openHint) { openHint.remove(); openHint = null; hintFor = null; } };
+  // Capture, so the tap is swallowed: it was meant for the hint, not for whatever it landed
+  // on (in a dense list that would be opening some row). A tap on the open one closes it,
+  // on another opted-in element replaces it, anywhere else closes it.
+  document.addEventListener("click", (e) => {
+    const host = e.target.closest && e.target.closest("[data-cp-hint]");
+    const text = host !== hintFor && host && host.title;
+    if (!openHint && !text) return;
+    dropHint();
+    e.stopPropagation();
+    e.preventDefault();
+    if (text) showHint(host, text);
+  }, true);
+  document.addEventListener("scroll", dropHint, { capture: true, passive: true });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") dropHint(); });
+
+  // Fixed and parented to the body, so no scrolling or clipping ancestor can cut it off.
+  function showHint(anchor, text) {
+    const tip = el("div", { class: "cp-hint", role: "tooltip" }, text);
+    document.body.append(tip);
+    const at = anchor.getBoundingClientRect();
+    const { width, height } = tip.getBoundingClientRect();
+    const gap = 6;
+    const room = document.documentElement.clientWidth;
+    tip.style.left = Math.round(Math.max(gap, Math.min(at.left + (at.width - width) / 2,
+                                                       room - width - gap))) + "px";
+    // Above the element, or below it when the top of the screen has no room.
+    const above = at.top - height - gap >= 0;
+    tip.style.top = Math.round(above ? at.top - height - gap : at.bottom + gap) + "px";
+    openHint = tip;
+    hintFor = anchor;
+  }
+
   // In-header filter slider: a .cp-pill of one-symbol positions (`states` are
   // [value, symbol, tooltip]) with a knob under the active one. No "all" position —
   // clicking the active state again clears the filter and the knob fades out. `get`/`set`
