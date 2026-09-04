@@ -209,6 +209,8 @@
 }
 
 .cp-modal-hint { font-size: 12px; color: var(--cp-warning-text); }
+/* A warning or an error as text; .cp-danger is the red button. */
+.cp-danger-text { color: var(--cp-danger-text); }
 
 /* --- selectable chips (cpDom.chipGroup) ---------------------------------- */
 .cp-cat-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -237,6 +239,8 @@
 /* colour variants — defined AFTER .cp-primary so they win at equal specificity */
 .cp-modal .cp-warn-btn { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
 .cp-modal .cp-danger-btn { background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
+/* Leading the footer, a destructive button keeps its distance from the others. */
+.cp-modal-foot > .cp-danger-btn:first-child { margin-right: auto; }
 
 /* --- modal form fields (labels + inputs in a .cp-pane) — shared by the inline-edit pages --- */
 .cp-field-label { font-size: 12px; font-weight: 600; color: var(--cp-muted); margin-top: 0.3rem; }
