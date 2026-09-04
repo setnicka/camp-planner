@@ -22,6 +22,12 @@ from camp_planner.schemas import (
     AssignmentOut,
     AuditEntryOut,
     CampOut,
+    InventoryBoxOut,
+    InventoryBoxStateOut,
+    InventoryCheckOut,
+    InventoryItemOut,
+    InventoryItemRefOut,
+    InventoryRecordOut,
     MaterialNeedOut,
     MaterialOut,
     MaterialUsageOut,
@@ -38,6 +44,12 @@ if TYPE_CHECKING:
     from camp_planner.models.audit import AuditLog
     from camp_planner.models.auth import ApiToken
     from camp_planner.models.camp import Camp
+    from camp_planner.models.inventory import (
+        InventoryBox,
+        InventoryCheck,
+        InventoryCheckRecord,
+        InventoryItem,
+    )
     from camp_planner.models.material import Material, MaterialNeed
     from camp_planner.models.slot import Slot
 
@@ -210,3 +222,41 @@ def activity(a: Activity) -> dict:
 
 def api_token(t: ApiToken) -> dict:
     return _dump(ApiTokenOut.model_validate(t))
+
+
+# --- inventory (the global warehouse) ----------------------------------------
+
+def inventory_item(i: InventoryItem) -> dict:
+    return _dump(InventoryItemOut.model_validate(i))
+
+
+def inventory_box(b: InventoryBox) -> dict:
+    return _dump(InventoryBoxOut.model_validate(b))
+
+
+def inventory_item_ref(i: InventoryItem) -> dict:
+    """A thing named and located, for the pickers (see InventoryItemRefOut)."""
+    return _dump(InventoryItemRefOut.model_validate(i))
+
+
+def inventory_record(r: InventoryCheckRecord) -> dict:
+    return _dump(InventoryRecordOut.model_validate(r))
+
+
+def inventory_check(c: InventoryCheck) -> dict:
+    return _dump(InventoryCheckOut.model_validate(c))
+
+
+def inventory_box_state(
+    box: InventoryBox, items: list[InventoryItem], records: list[InventoryCheckRecord],
+    *, checked: int, total: int, check: InventoryCheck | None,
+) -> dict:
+    """A box page's whole state: box, contents, observations, progress and the running
+    check (see InventoryBoxStateOut)."""
+    return _dump(InventoryBoxStateOut(
+        box=InventoryBoxOut.model_validate(box),
+        items=[InventoryItemOut.model_validate(i) for i in items],
+        records=[InventoryRecordOut.model_validate(r) for r in records],
+        checked=checked, total=total,
+        active_check=InventoryCheckOut.model_validate(check) if check is not None else None,
+    ))

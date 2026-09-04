@@ -16,6 +16,12 @@ from sqlalchemy.orm import selectinload
 
 from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, Todo, TodoAssignment
 from camp_planner.models.camp import Camp
+from camp_planner.models.inventory import (
+    InventoryBox,
+    InventoryCheck,
+    InventoryCheckRecord,
+    InventoryItem,
+)
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
 from camp_planner.models.slot import Slot, SlotAssignment
 
@@ -105,4 +111,29 @@ ACTIVITIES_OVERVIEW = (
         selectinload(Activity.todos),
         selectinload(Activity.material_needs),
     ),
+)
+
+
+# --- inventory (the global warehouse) ----------------------------------------
+
+INVENTORY_ITEMS = (selectinload(InventoryItem.photos),)
+
+# One box page: what is filed in the box, with photos.
+INVENTORY_BOX = (selectinload(InventoryBox.items).selectinload(InventoryItem.photos),)
+
+# Count-only readers (progress walk-lists): items without their photos.
+INVENTORY_BOX_ITEMS = (selectinload(InventoryBox.items),)
+
+# Completing a check touches every record's item and both of their boxes; without this
+# the completion loop is three lazy loads per observation.
+INVENTORY_COMPLETION = (
+    selectinload(InventoryCheckRecord.item).selectinload(InventoryItem.box),
+    selectinload(InventoryCheckRecord.box),
+)
+
+
+# A finished check's read-only detail: observations with the item they name. No photos
+# and no boxes: that page shows a name, an amount and the box it groups by.
+INVENTORY_CHECK = (
+    selectinload(InventoryCheck.records).selectinload(InventoryCheckRecord.item),
 )
