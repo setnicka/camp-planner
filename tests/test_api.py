@@ -6,6 +6,7 @@ lock, and the permission envelope (anonymous 401 / viewer 403 / editor allowed).
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import event
 
 from camp_planner.extensions import db
@@ -544,6 +545,24 @@ def test_material_need_add_by_id(client, seeded):
     # can't add the same catalog material twice to one activity
     dup = client.post(f"/api/activities/{aid}/materials", json={"material_id": material_id}, headers=ADMIN)
     assert dup.status_code == 400
+
+
+@pytest.mark.parametrize("amount", [float("inf"), float("nan"), -5])
+def test_material_need_amount_must_be_a_finite_number(client, seeded, amount):
+    """json.dumps writes inf as the bare token Infinity, which no JSON parser reads back:
+    one such need would blank every page that renders from an inlined payload."""
+    slug, aid = seeded["slug"], seeded["activity_id"]
+    material_id = _make_material(client, slug)["material"]["id"]
+    resp = client.post(f"/api/activities/{aid}/materials",
+                       json={"material_id": material_id, "amount": amount}, headers=ADMIN)
+    assert resp.status_code == 422
+
+    ok = client.post(f"/api/activities/{aid}/materials",
+                     json={"material_id": material_id, "amount": 3}, headers=ADMIN)
+    need_id = _json(ok)["need"]["id"]
+    patched = client.patch(f"/api/material-needs/{need_id}", json={"amount": amount}, headers=ADMIN)
+    assert patched.status_code == 422
+    assert _get(client, f"/api/activities/{aid}")["activity"]["material_needs"][0]["amount"] == 3
 
 
 def test_material_merge_migrates_usages_and_pins_unit(client, seeded):
