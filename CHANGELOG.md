@@ -30,6 +30,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Show title tooltips on tap (to be visible on mobile devices).
 - Embedded contract: the page navigation slot is `cp_nav` (was `header_nav`), and a
   `base_template` that omits it warns at startup like the other three.
+- Requires Flask 3.1 or newer.
+- Request bodies are capped at `MAX_UPLOAD_BYTES` (32 MB), embedded too; a larger one
+  gets 413.
 
 ### Fixed
 
