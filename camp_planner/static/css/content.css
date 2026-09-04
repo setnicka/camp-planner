@@ -79,6 +79,7 @@
   --cp-shadow-1: rgba(0, 0, 0, .15);
   --cp-shadow-2: rgba(0, 0, 0, .3);
   --cp-scrim: rgba(0, 0, 0, .4);          /* modal backdrop */
+  --cp-scrim-deep: rgba(0, 0, 0, .88);    /* photo lightbox: the dialog under it must vanish */
 
   /* — timeline chrome — */
   --cp-nowline: #ea4335;
@@ -150,6 +151,7 @@
     --cp-shadow-1: rgba(0, 0, 0, .5);
     --cp-shadow-2: rgba(0, 0, 0, .7);
     --cp-scrim: rgba(0, 0, 0, .65);
+    --cp-scrim-deep: rgba(0, 0, 0, .92);
     --cp-nowline: #ff6b5e;
     --cp-zebra: rgba(255, 255, 255, .04);
     --cp-row-hover: rgba(255, 205, 0, .12);
@@ -205,6 +207,7 @@
     --cp-shadow-1: rgba(0, 0, 0, .5);
     --cp-shadow-2: rgba(0, 0, 0, .7);
     --cp-scrim: rgba(0, 0, 0, .65);
+    --cp-scrim-deep: rgba(0, 0, 0, .92);
     --cp-nowline: #ff6b5e;
     --cp-zebra: rgba(255, 255, 255, .04);
     --cp-row-hover: rgba(255, 205, 0, .12);

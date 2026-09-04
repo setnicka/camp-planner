@@ -1,8 +1,8 @@
 // Camp Planner — shared frontend primitives.
 //
-// Tiny DOM/UI helpers reused across the inline-editing pages (settings, timeline
-// editor, activity detail). Exposed as window.cpDom; load this before any script
-// that destructures from it. No build step — plain globals.
+// Tiny DOM/UI helpers reused across the pages: element building, the api() envelope,
+// modals and pickers, toasts, hints, formatting. Exposed as window.cpDom; load this
+// before any script that destructures from it. No build step: plain globals.
 "use strict";
 
 window.cpDom = (function () {
@@ -49,17 +49,24 @@ window.cpDom = (function () {
     }
   }
 
-  // JSON call against an /api endpoint: attaches the CSRF header, JSON-encodes `body` when
-  // given, parses the {ok, …} envelope and throws Error(json.error) on failure (so callers
-  // just try/catch). Returns the parsed JSON on success. On an expired token, refresh + retry once.
+  // Call against an /api endpoint: attaches the CSRF header, JSON-encodes `body` when given
+  // (a FormData goes as it is: a file upload), parses the {ok, …} envelope and throws
+  // Error(json.error) on failure, so callers just try/catch. Returns the parsed JSON on
+  // success. On an expired token, refresh + retry once.
+  // fetch rejects with the browser's own "Failed to fetch" when the network is down;
+  // every caller shows e.message in a toast, so the translation lives here.
+  const OFFLINE = "Server neodpovídá, zkuste to znovu.";
+
   async function api(method, url, body, _retried) {
     startCsrfTimer();
     const opts = { method, headers: { "X-CSRFToken": csrf() } };
-    if (body !== undefined) {
+    if (body instanceof FormData) {
+      opts.body = body;
+    } else if (body !== undefined) {
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
-    const resp = await fetch(url, opts);
+    const resp = await fetch(url, opts).catch(() => { throw new Error(OFFLINE); });
     const json = await resp.json().catch(() => ({}));
     if (resp.status === 400 && /csrf/i.test(json.error || "") && !_retried && (await csrfRefresh())) {
       return api(method, url, body, true);
@@ -72,10 +79,24 @@ window.cpDom = (function () {
     return json;
   }
 
-  // Item-scoped api URL templates carry a `0` sentinel the client swaps for the real id.
-  const withId = (tpl, id) => tpl.replace(/\d+$/, id);
-  // Merge URLs end …/0/merge — swap the sentinel inside.
-  const mergeUrl = (tpl, id) => tpl.replace(/\/0\/merge$/, "/" + id + "/merge");
+  // Item-scoped api URL templates carry `0` sentinels the client swaps for real ids
+  // (…/items/0, …/0/merge, …/boxes/0/records/0). The ids fill the LAST as many /0 segments,
+  // in path order: an earlier segment can legitimately be "0" (a camp slug), the sentinels
+  // always hang below it.
+  const SENTINEL = /\/0(?=\/|$)/g;
+  const withId = (tpl, ...ids) => {
+    const skip = (tpl.match(SENTINEL) || []).length - ids.length;
+    let i = 0;
+    return skip < 0 ? tpl : tpl.replace(SENTINEL, (m) => (i++ < skip ? m : "/" + ids[i - 1 - skip]));
+  };
+
+  // Server timestamps of an instant (created_at and friends) are naive UTC from the DB's
+  // func.now(): mark them so. Never pass a zone-free wall-clock column (a slot's start_at).
+  const asInstant = (iso) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z");
+
+  // A pointer that hovers means a keyboard as well; on touch a focused field pops the
+  // on-screen keyboard over whatever the field is there to narrow.
+  const canHover = () => window.matchMedia("(hover: hover)").matches;
 
   // A small colored square (category color, etc.); falls back to grey when the color is unset.
   const swatch = (color) => el("span", { class: "cp-swatch", style: "background:" + (color || "var(--cp-text-dim)") });
@@ -117,6 +138,7 @@ window.cpDom = (function () {
     const opener = document.activeElement;
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
+    if (!dialog.hasAttribute("tabindex")) dialog.setAttribute("tabindex", "-1");
     const overlay = stampTheme(el("div", { class: "cp-modal-overlay" }, dialog));
     let closed = false;
     let popping = false;      // a Back is closing us, so the entry is already gone
@@ -133,11 +155,15 @@ window.cpDom = (function () {
       window.removeEventListener("popstate", onPop);
       if (!popping && entry) { ownBacks++; history.back(); }   // take our entry back off
       if (opener && document.contains(opener)) opener.focus();
+      // A redraw may have replaced the opener while the dialog was up (a save redraws the
+      // row it came from); its successor carries the same focus key.
+      else if (opener?.dataset?.focusKey) {
+        document.querySelector(`[data-focus-key="${CSS.escape(opener.dataset.focusKey)}"]`)?.focus();
+      }
       if (onClose) onClose();
     };
     const dismiss = () => { if (!confirmClose || confirmClose()) close(); };
-    // Back reaches every open dialog, and only the top one may answer it (a lightbox can
-    // sit over a modal).
+    // Only the top dialog answers to a key or to Back (a lightbox can sit over a modal).
     const isTop = () => {
       for (let n = overlay.nextElementSibling; n; n = n.nextElementSibling) {
         if (n.classList.contains("cp-modal-overlay")) return false;
@@ -155,18 +181,24 @@ window.cpDom = (function () {
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     )].filter((n) => !n.disabled && n.offsetParent !== null);
     const onKey = (e) => {
+      if ((e.key !== "Escape" && e.key !== "Tab") || !isTop()) return;
       if (e.key === "Escape") { dismiss(); return; }
-      if (e.key !== "Tab") return;
       const f = focusables();          // keep Tab cycling inside the dialog
-      if (!f.length) return;
-      const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      if (!f.length) { e.preventDefault(); return; }   // nothing to cycle: stay put
+      const at = document.activeElement;
+      // The dialog itself holds the focus right after opening: from there Shift+Tab must
+      // land on the last control, not leave for the page behind.
+      if (e.shiftKey && (at === f[0] || !f.includes(at))) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && at === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
     };
     overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
     document.addEventListener("keydown", onKey);
     window.addEventListener("popstate", onPop);
     document.body.append(overlay);
+    // Take the focus off the opener: left there, Enter would fire it again (opening a
+    // second dialog on top) and Tab would walk into the page behind the backdrop.
+    // Callers that want a particular field focus it after this returns.
+    dialog.focus();
     return close;
   }
 
@@ -181,6 +213,8 @@ window.cpDom = (function () {
 
   // Standard form dialog: title + pane + Zrušit/OK footer. Owns the submit cycle and asks
   // before an Escape / backdrop-click discards edited input; onSubmit(close) closes itself.
+  // Returns { ok, close }, for a dialog whose OK waits on something (a disabled OK ignores
+  // Enter too).
   function formModal({ title, pane, okLabel = "Uložit", onSubmit, onClose }) {
     const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
     const ok = el("button", { type: "button", class: "cp-primary" }, okLabel);
@@ -192,11 +226,21 @@ window.cpDom = (function () {
     pane.addEventListener("input", () => { dirty = true; });
     // chip toggles are buttons, not inputs — a click on one is an edit too
     pane.addEventListener("click", (e) => { if (e.target.closest(".cp-cat-chip")) dirty = true; });
+    // Enter in a single-line field submits. Textareas keep Enter for newlines, a file
+    // input keeps it for opening the picker; a field with its own Enter handling (chip
+    // inputs) preventDefaults first and is respected.
+    dialog.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.defaultPrevented) return;
+      if (!e.target.matches("input:not([type=checkbox], [type=radio], [type=file])")) return;
+      e.preventDefault();
+      ok.click();
+    });
     const close = openModal(dialog, onClose, {
       confirmClose: () => !dirty || window.confirm("Zavřít bez uložení?"),
     });
     cancel.addEventListener("click", () => close());
     ok.addEventListener("click", () => submit(ok, () => onSubmit(close)));
+    return { ok, close };
   }
 
   // Fuzzy search-and-pick modal over a list. labelOf(item) feeds the row label and the
@@ -237,7 +281,7 @@ window.cpDom = (function () {
     }
     search.addEventListener("input", rerender);
     rerender();
-    search.focus();
+    if (canHover()) search.focus();
   }
 
   // Merge-into flow on top of searchPicker: pick the target, confirm, POST {into: id},
@@ -268,6 +312,7 @@ window.cpDom = (function () {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && openPopover) { openPopover.hidden = true; openPopover = null; }
   });
+
   // A `title` a touch screen can read too: an element that opts in with data-cp-hint shows
   // its title in a bubble at itself when tapped, instead of doing whatever it would do. That
   // is what the opt-in means, so it goes on things that cannot act anyway: an action that is
@@ -476,6 +521,85 @@ window.cpDom = (function () {
   // Czech plural agreement: 1 → one, 2–4 → few, 5+/0 → many. e.g. plural(n, "změna","změny","změn").
   const plural = (n, one, few, many) => (n === 1 ? one : (n >= 2 && n <= 4 ? few : many));
 
+  // User-facing quantity: integers plain, fractions to at most 3 decimals (1.5 m, 0.125 kg).
+  const fmtNum = (n) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000));
+
+  // Full-screen photo viewer over `srcs`, opened at `index`; arrows, keys and swipes step
+  // through them. Shared by the warehouse pages and the camp pages' thumbnails.
+  function lightbox(srcs, index, alt) {
+    let i = index;
+    const img = el("img", { alt: alt || "" });
+    const counter = el("span", { class: "cp-lb-count" });
+    function show() {
+      img.src = srcs[i];
+      counter.textContent = `${i + 1} / ${srcs.length}`;
+    }
+    const step = (d) => { i = (i + d + srcs.length) % srcs.length; show(); };
+    const arrow = (d, label) => el("button",
+      { type: "button", class: "cp-lb-btn " + (d < 0 ? "cp-lb-prev" : "cp-lb-next"),
+        "aria-label": label, onclick: () => step(d) }, d < 0 ? "‹" : "›");
+    const shut = el("button", { type: "button", class: "cp-lb-btn cp-lb-close",
+                                "aria-label": "Zavřít" }, "✕");
+    const many = srcs.length > 1;
+    const box = el("div", { class: "cp-lightbox", "aria-label": "Fotka" },
+      img, shut,
+      many ? arrow(-1, "Předchozí fotka") : null,
+      many ? arrow(1, "Další fotka") : null,
+      many ? counter : null);
+    show();
+    const onKey = (e) => {
+      if (e.key === "ArrowLeft") step(-1);
+      if (e.key === "ArrowRight") step(1);
+    };
+    document.addEventListener("keydown", onKey);
+    const close = openModal(box, () => document.removeEventListener("keydown", onKey));
+    shut.addEventListener("click", () => close());
+    // Swiping is what a phone reaches for first; the arrows lie on the photo.
+    let start = null;
+    let swiped = false;
+    box.addEventListener("touchstart", (e) => {
+      start = e.touches.length === 1 ? [e.touches[0].clientX, e.touches[0].clientY] : null;
+    }, { passive: true });
+    box.addEventListener("touchend", (e) => {
+      if (!start || !many) return;
+      const dx = e.changedTouches[0].clientX - start[0];
+      const dy = e.changedTouches[0].clientY - start[1];
+      start = null;
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+      swiped = true;   // the touch still ends in a click, which must not close the viewer
+      step(dx < 0 ? 1 : -1);
+    }, { passive: true });
+    // The lightbox spans the whole overlay, so the click-outside-to-close target is
+    // the lightbox itself, anywhere off the image and the buttons.
+    box.addEventListener("click", (e) => {
+      if (swiped) { swiped = false; return; }
+      if (e.target === box) close();
+    });
+  }
+
+  // A warehouse thing's list thumbnail (the "mini" variant of its first photo), lazy so a
+  // long picker fetches only what scrolls into view. `tpl` is the photo route with
+  // sentinels; null when photos are not served. `placeholder` keeps the labels aligned
+  // where some rows have no photo. With `zoom` (the thing's name) the thumbnail opens the
+  // lightbox over all the photos (or runs `onOpen` instead): as a button, or with `inline`
+  // as the image itself swallowing the press, for a row that is already a button (a picker
+  // picks on mousedown).
+  function thumb(tpl, filenames, { placeholder = false, zoom = null, inline = false, onOpen = null } = {}) {
+    if (!tpl || !filenames.length) return placeholder ? el("span", { class: "cp-thumb cp-thumb-empty" }) : null;
+    const img = el("img", { class: "cp-thumb", src: withId(tpl, "mini", filenames[0]), alt: "", loading: "lazy" });
+    if (zoom === null) return img;
+    const open = onOpen || (() => lightbox(filenames.map((f) => withId(tpl, "full", f)), 0, zoom));
+    if (!inline) {
+      return el("button", { type: "button", class: "cp-thumb-btn", "aria-label": "Fotky: " + zoom, onclick: open }, img);
+    }
+    img.classList.add("cp-thumb-zoom");
+    img.title = "Zvětšit fotku";
+    img.cpOpen = open;   // the picker's keyboard reaches it here (keyList)
+    img.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); open(); });
+    img.addEventListener("click", (e) => e.stopPropagation());
+    return img;
+  }
+
   // Small tab↔URL-hash controller shared by the tabbed pages (camp settings, activity detail).
   // Reads the active tab from location.hash on load (validated against validKeys) and writes it
   // back on change with replaceState — shareable/reloadable links, no scroll-jump, no history
@@ -519,6 +643,10 @@ window.cpDom = (function () {
         class: "cp-seg-btn" + (icon ? " cp-seg-icon" : "") + (d.danger ? " cp-seg-danger" : "")
           + (d.cls ? " " + d.cls : "") + (d.active ? " on" : ""),
         ...(d.title ? { title: d.title } : {}),
+        ...(icon && d.title ? { "aria-label": d.title } : {}),
+        // A member that can be lit is a toggle, and says whether it is.
+        ...("active" in d ? { "aria-pressed": String(!!d.active) } : {}),
+        ...(d.focusKey ? { "data-focus-key": d.focusKey } : {}),
         ...(d.disabled ? { "aria-disabled": "true", title: d.disabled, "data-cp-hint": "" } : {}) },
       d.label);
     if (!d.disabled) button.addEventListener("click", d.onClick);   // data-cp-hint answers the rest
@@ -535,7 +663,16 @@ window.cpDom = (function () {
     return el("span", { ...(cls ? { class: cls } : {}), "data-cp-hint": "", title: name || "" }, initials);
   }
 
-  return { el, csrf, csrfRefresh, api, withId, mergeUrl, swatch, dash, openModal, submit, formModal,
+  // "4 ks" / "4" / "hodně" / "": count and unit are independent, either may be missing.
+  function amountText(count, unit) {
+    const parts = [];
+    if (count != null) parts.push(fmtNum(count));
+    if (unit) parts.push(unit);
+    return parts.join(" ");
+  }
+
+  return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText,
+           thumb, lightbox, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
            plural, tabHash, freezeColumns, segBtn, actionGroup, orgInitials };
 })();

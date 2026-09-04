@@ -5,7 +5,7 @@
 "use strict";
 
 window.cpActivityPicker = (function () {
-  const { el, api, swatch, openModal, chipGroup, keyList, toast } = window.cpDom;
+  const { el, api, canHover, swatch, openModal, chipGroup, keyList, toast } = window.cpDom;
   let cache = null;   // [{id, title, category_id}, …], lazy-loaded once per page
 
   async function fetchActivities(url) {
@@ -124,6 +124,6 @@ window.cpActivityPicker = (function () {
     const close = openModal(dialog, () => { if (picked === undefined) onCancel(); });
 
     fetchActivities(activitiesUrl).then(() => renderList("")).catch((e) => { toast(e.message, true); renderList(""); });
-    search.focus();
+    if (canHover()) search.focus();
   };
 })();
