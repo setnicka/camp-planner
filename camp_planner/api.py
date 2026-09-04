@@ -1,7 +1,8 @@
 """JSON REST API blueprint (mounted at /api).
 
-Thin transport over the service functions: resolve the entity, check the camp-scoped
-permission, hand the (already validated) request body to the matching service.
+Thin transport over the service functions: resolve the entity, check the permission
+(camp-scoped, or the warehouse's global one), hand the (already validated) request body
+to the matching service.
 
 Validation + docs: every endpoint is decorated with @spec.validate, so the request
 body is validated against its pydantic schema (see schemas.py) and the endpoint is
@@ -11,7 +12,8 @@ model on request.context.json.
 Error contract:
 - malformed body → 422 with the pydantic error list (spectree, documented automatically);
 - business rule (errors.Invalid) → 400 {ok, error};
-- optimistic-lock race (errors.Conflict) → 409 {ok, error, rev, timeline};
+- a lost race (errors.Conflict) → 409 {ok, error} plus whatever the client needs to
+  recover (the timeline's rev + timeline, nothing for the warehouse);
 - unauthenticated / forbidden / missing → 401 / 403 / 404 {ok, error} (via abort);
 - mutations require the X-CSRFToken header (CSRFProtect, same as the web forms).
 """
@@ -24,13 +26,26 @@ from flask import Blueprint, abort, current_app, g, jsonify, request, url_for
 from spectree import Response, SpecTree
 from werkzeug.exceptions import HTTPException
 
-from camp_planner.auth.permissions import can_create_camp, can_edit, can_edit_camp_meta, can_view
+from camp_planner.auth.permissions import (
+    can_create_camp,
+    can_edit,
+    can_edit_camp_meta,
+    can_edit_inventory,
+    can_view,
+    can_view_inventory,
+)
 from camp_planner.auth.token import resolve_identity as _resolve_token_identity
 from camp_planner.extensions import csrf, db, first_or_404, get_or_404
 from camp_planner.models.activity import Activity, Todo
 from camp_planner.models.audit import EntityType
 from camp_planner.models.auth import ApiToken
 from camp_planner.models.camp import Camp
+from camp_planner.models.inventory import (
+    InventoryBox,
+    InventoryCheck,
+    InventoryItem,
+    InventoryPhoto,
+)
 from camp_planner.models.material import Material, MaterialNeed
 from camp_planner.models.slot import Slot
 from camp_planner.schemas import (
@@ -64,6 +79,20 @@ from camp_planner.schemas import (
     GooglePullPreviewEnvelope,
     GoogleResyncEnvelope,
     GoogleSyncEnvelope,
+    InventoryBoxCreate,
+    InventoryBoxEnvelope,
+    InventoryBoxHistoryEnvelope,
+    InventoryBoxStateEnvelope,
+    InventoryBoxUpdateIn,
+    InventoryCheckCreate,
+    InventoryCheckEnvelope,
+    InventoryCheckPreviewEnvelope,
+    InventoryConflictOut,
+    InventoryItemCreate,
+    InventoryItemEnvelope,
+    InventoryItemRestoreIn,
+    InventoryItemUpdateIn,
+    InventoryRecordIn,
     MaterialCreate,
     MaterialEnvelope,
     MaterialListEnvelope,
@@ -100,6 +129,7 @@ from camp_planner.services import (
     api_tokens,
     audit,
     errors,
+    inventory,
     loaders,
     materials,
     serialize,
@@ -135,6 +165,8 @@ spec = SpecTree("flask", title="Camp Planner API", version=__version__,
 # adds the business-rule 400 for endpoints whose service can raise errors.Invalid.
 _AUTH = {"HTTP_401": UnauthorizedOut, "HTTP_403": ForbiddenOut, "HTTP_404": NotFoundOut}
 _AUTH_400 = {"HTTP_400": BadRequestOut, **_AUTH}
+# For writes into the running inventory check: 409 when its completion won the race.
+_AUTH_400_409 = {"HTTP_409": InventoryConflictOut, **_AUTH_400}
 
 
 # --- error envelope ----------------------------------------------------------
@@ -707,3 +739,213 @@ def _link_audit_entities(camp: Camp, entries: list[dict]) -> None:
         if e["entity_type"] != act and e["activity_id"] in titles:
             e["activity_title"] = titles[e["activity_id"]]
             e["activity_url"] = url_for("main.activity_detail", slug=camp.slug, activity_id=e["activity_id"])
+
+
+# --- inventory (the global warehouse) ----------------------------------------
+
+def _inventory_guard(*, edit: bool) -> None:
+    """The warehouse belongs to no camp, so this replaces the camp-scoped _guard. It runs
+    before the lookup, since it needs no entity: a stranger learns nothing from a 404."""
+    if not (can_edit_inventory() if edit else can_view_inventory()):
+        _forbid("Ke skladu nemáte oprávnění.")
+
+
+def _box(box_id: int, *options, edit: bool) -> InventoryBox:
+    _inventory_guard(edit=edit)
+    return first_or_404(
+        db.select(InventoryBox).filter_by(id=box_id).options(*options),
+        description="Krabice nenalezena.")
+
+
+def _item(item_id: int) -> InventoryItem:
+    """Always edit: items and photos are only ever looked up for writes."""
+    _inventory_guard(edit=True)
+    return get_or_404(InventoryItem, item_id, description="Věc nenalezena.")
+
+
+def _photo(photo_id: int) -> InventoryPhoto:
+    _inventory_guard(edit=True)
+    return first_or_404(
+        db.select(InventoryPhoto).filter_by(id=photo_id).options(*loaders.INVENTORY_PHOTO),
+        description="Fotka nenalezena.")
+
+
+def _check(check_id: int, *, edit: bool) -> InventoryCheck:
+    _inventory_guard(edit=edit)
+    return get_or_404(InventoryCheck, check_id, description="Inventura nenalezena.")
+
+
+@bp.get("/inventory/boxes/<int:box_id>/state")
+@spec.validate(resp=Response(HTTP_200=InventoryBoxStateEnvelope, **_AUTH), tags=["inventory"])
+def inventory_box_state(box_id: int):
+    """A box's current state: contents, the running check's observations and progress."""
+    box = _box(box_id, *loaders.INVENTORY_BOX, edit=False)
+    return _run(lambda: inventory.box_state(box))
+
+
+@bp.get("/inventory/boxes/<int:box_id>/history")
+@spec.validate(resp=Response(HTTP_200=InventoryBoxHistoryEnvelope, **_AUTH), tags=["inventory"])
+def inventory_box_history(box_id: int):
+    """What the finished checks said about the box's current contents."""
+    box = _box(box_id, *loaders.INVENTORY_BOX_ITEMS, edit=False)
+    return _run(lambda: inventory.box_history(box))
+
+
+@bp.post("/inventory/boxes")
+@spec.validate(json=InventoryBoxCreate,
+               resp=Response(HTTP_200=InventoryBoxEnvelope, **_AUTH_400), tags=["inventory"])
+def inventory_box_create():
+    _inventory_guard(edit=True)
+    return _run(lambda: inventory.create_box(request.context.json))
+
+
+@bp.patch("/inventory/boxes/<int:box_id>")
+@spec.validate(json=InventoryBoxUpdateIn,
+               resp=Response(HTTP_200=InventoryBoxEnvelope, **_AUTH_400), tags=["inventory"])
+def inventory_box_update(box_id: int):
+    box = _box(box_id, edit=True)
+    return _run(lambda: inventory.update_box(box, request.context.json))
+
+
+@bp.delete("/inventory/boxes/<int:box_id>")
+@spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH_400), tags=["inventory"])
+def inventory_box_delete(box_id: int):
+    """Delete an empty box; refused (400) while anything is in it."""
+    box = _box(box_id, *loaders.INVENTORY_BOX_ITEMS, edit=True)
+    return _run(lambda: inventory.delete_box(box))
+
+
+@bp.post("/inventory/items")
+@spec.validate(json=InventoryItemCreate,
+               resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_item_create():
+    """Add a thing to a box. During a check it counts as observed right away."""
+    _inventory_guard(edit=True)
+    return _run(lambda: inventory.create_item(request.context.json))
+
+
+@bp.patch("/inventory/items/<int:item_id>")
+@spec.validate(json=InventoryItemUpdateIn,
+               resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_item_update(item_id: int):
+    """Edit a thing. A new box_id is a move; count and unit are refused (400) while a
+    check runs, they are the check's to write."""
+    item = _item(item_id)
+    return _run(lambda: inventory.update_item(item, request.context.json))
+
+
+@bp.post("/inventory/items/<int:item_id>/discard")
+@spec.validate(resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_item_discard(item_id: int):
+    """Retire a thing: it leaves the boxes but keeps its history."""
+    item = _item(item_id)
+    return _run(lambda: inventory.discard_item(item))
+
+
+@bp.post("/inventory/items/<int:item_id>/restore")
+@spec.validate(json=InventoryItemRestoreIn,
+               resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_item_restore(item_id: int):
+    """Bring a retired thing back into a box."""
+    item = _item(item_id)
+    return _run(lambda: inventory.restore_item(item, request.context.json))
+
+
+@bp.delete("/inventory/items/<int:item_id>")
+@spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH), tags=["inventory"])
+def inventory_item_delete(item_id: int):
+    """Erase a thing with its photos and check history.
+
+    For mistakes; retiring it (POST …/discard) is what "we no longer have it" means.
+    """
+    item = _item(item_id)
+    return _run(lambda: inventory.delete_item(item))
+
+
+@bp.post("/inventory/items/<int:item_id>/photos")
+@spec.validate(resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH_400), tags=["inventory"])
+def inventory_item_photos(item_id: int):
+    """Upload photos: multipart/form-data, field "photos", several allowed.
+
+    The body is files, not JSON, so no schema validates it; its size is gated by the
+    blueprint hook before it is read.
+    """
+    item = _item(item_id)
+    return _run(lambda: inventory.add_photos(item, [f for f in request.files.getlist("photos") if f]))
+
+
+@bp.delete("/inventory/photos/<int:photo_id>")
+@spec.validate(resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH), tags=["inventory"])
+def inventory_photo_delete(photo_id: int):
+    """Remove a photo; answers with the item it belonged to."""
+    photo = _photo(photo_id)
+    return _run(lambda: inventory.delete_photo(photo))
+
+
+@bp.post("/inventory/photos/<int:photo_id>/title")
+@spec.validate(resp=Response(HTTP_200=InventoryItemEnvelope, **_AUTH), tags=["inventory"])
+def inventory_photo_title(photo_id: int):
+    """Make this photo the item's title photo (first in the list)."""
+    photo = _photo(photo_id)
+    return _run(lambda: inventory.set_title_photo(photo))
+
+
+@bp.post("/inventory/checks")
+@spec.validate(json=InventoryCheckCreate,
+               resp=Response(HTTP_200=InventoryCheckEnvelope, **_AUTH_400), tags=["inventory"])
+def inventory_check_start():
+    """Open an inventory check. Refused (400) while another one is running."""
+    _inventory_guard(edit=True)
+    return _run(lambda: inventory.start_check(request.context.json))
+
+
+@bp.get("/inventory/checks/<int:check_id>/preview")
+@spec.validate(resp=Response(HTTP_200=InventoryCheckPreviewEnvelope, **_AUTH_400),
+               tags=["inventory"])
+def inventory_check_preview(check_id: int):
+    """What completing the check would do right now."""
+    check = _check(check_id, edit=False)
+    return _run(lambda: inventory.preview_check(check))
+
+
+@bp.post("/inventory/checks/<int:check_id>/complete")
+@spec.validate(resp=Response(HTTP_200=InventoryCheckEnvelope, HTTP_409=InventoryConflictOut, **_AUTH),
+               tags=["inventory"])
+def inventory_check_complete(check_id: int):
+    """Write every observation into its item and freeze the check. 409 once it is."""
+    check = _check(check_id, edit=True)
+    return _run(lambda: inventory.complete_check(check))
+
+
+@bp.delete("/inventory/checks/<int:check_id>")
+@spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_check_cancel(check_id: int):
+    """Throw away a running check with all its observations.
+
+    Finished ones are history and cannot be deleted (400).
+    """
+    check = _check(check_id, edit=True)
+    return _run(lambda: inventory.cancel_check(check))
+
+
+@bp.put("/inventory/boxes/<int:box_id>/records/<int:item_id>")
+@spec.validate(json=InventoryRecordIn,
+               resp=Response(HTTP_200=InventoryBoxStateEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_record_upsert(box_id: int, item_id: int):
+    """Record what somebody sees of one item while working in this box.
+
+    The box in the URL is where the observer stands; the response is that box's whole
+    state. A different box_id in the body is a move.
+    """
+    box = _box(box_id, *loaders.INVENTORY_BOX, edit=True)
+    item = _item(item_id)
+    return _run(lambda: inventory.upsert_record(box, item, request.context.json))
+
+
+@bp.delete("/inventory/boxes/<int:box_id>/records/<int:item_id>")
+@spec.validate(resp=Response(HTTP_200=InventoryBoxStateEnvelope, **_AUTH_400_409), tags=["inventory"])
+def inventory_record_delete(box_id: int, item_id: int):
+    """Forget the observation: the item goes back to unchecked."""
+    box = _box(box_id, *loaders.INVENTORY_BOX, edit=True)
+    item = _item(item_id)
+    return _run(lambda: inventory.delete_record(box, item))

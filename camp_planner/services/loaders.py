@@ -12,7 +12,7 @@ over-fetches a relationship it won't touch.
 
 from __future__ import annotations
 
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, Todo, TodoAssignment
 from camp_planner.models.camp import Camp
@@ -21,6 +21,7 @@ from camp_planner.models.inventory import (
     InventoryCheck,
     InventoryCheckRecord,
     InventoryItem,
+    InventoryPhoto,
 )
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
 from camp_planner.models.slot import Slot, SlotAssignment
@@ -123,6 +124,9 @@ INVENTORY_BOX = (selectinload(InventoryBox.items).selectinload(InventoryItem.pho
 
 # Count-only readers (progress walk-lists): items without their photos.
 INVENTORY_BOX_ITEMS = (selectinload(InventoryBox.items),)
+
+# A photo is only ever looked up to reorder or delete it, which walks its item's photos.
+INVENTORY_PHOTO = (joinedload(InventoryPhoto.item).selectinload(InventoryItem.photos),)
 
 # Completing a check touches every record's item and both of their boxes; without this
 # the completion loop is three lazy loads per observation.

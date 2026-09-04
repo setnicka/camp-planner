@@ -345,6 +345,12 @@ class ConflictOut(ErrorOut):
     timeline: TimelinePayload
 
 
+class InventoryConflictOut(ErrorOut):
+    """409: a write into the running inventory check lost to its completion. Nothing to
+    reconcile: the check is finished, the page reloads."""
+    error: str = Field(examples=["Inventura už byla mezitím dokončena."])
+
+
 # --- activities --------------------------------------------------------------
 
 class ActivityCreate(BaseModel):
