@@ -9,10 +9,15 @@ from __future__ import annotations
 import enum
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Enum, String, func
 from sqlalchemy.orm import Mapped, mapped_column
+
+
+def naive_utcnow() -> datetime:
+    """Naive UTC, matching the DB's func.now() timestamps (created_at etc.)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def strip_diacritics(text: str) -> str:
@@ -37,6 +42,12 @@ def czech_sort_key(text: str):
     stay deterministically ordered. Not full ICU collation (e.g. 'ch' isn't one
     letter), but right for short names/initials and dependency-free."""
     return (strip_diacritics(text).casefold(), text.casefold())
+
+
+def by_name(rows):
+    """The app's standard order for named rows: Czech collation, id as the tiebreaker.
+    Not something the database can do for us."""
+    return sorted(rows, key=lambda r: (czech_sort_key(r.name), r.id))
 
 
 def portable_enum(enum_cls: type[enum.Enum], name: str) -> Enum:

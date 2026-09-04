@@ -32,6 +32,7 @@ from camp_planner.models.activity import ActivityType, OrgRole
 from camp_planner.models.material import SumStrategy
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import TagKind
+from camp_planner.models.inventory import InventoryCheckStatus
 from camp_planner.models.slot import SlotRole
 
 _TEXT_MAX = 100_000
@@ -88,27 +89,34 @@ def _unique_org_ids(org_ids: list[int]) -> list[int]:
 OrgIds = Annotated[list[int], AfterValidator(_unique_org_ids)]
 
 
-def _clean_labels(labels: list[str]) -> list[str]:
-    """Normalise acquisition labels: trim each, drop blanks, dedupe (order-preserving),
-    and bound length/count so a single Text/JSON column can't be abused."""
-    out: list[str] = []
-    for s in labels:
-        s = s.strip()
-        if not s or s in out:
-            continue
-        if len(s) > 200:
-            raise ValueError("Štítek je příliš dlouhý.")
-        out.append(s)
-    if len(out) > 50:
-        raise ValueError("Příliš mnoho štítků.")
-    return out
+def _cleaned_strings(too_long: str, too_many: str):
+    """Validator for a list of short strings kept in one JSON/Text column: trim each,
+    drop blanks, dedupe (order-preserving), and bound length and count so the column
+    can't be abused. The messages name what the list holds."""
+    def clean(values: list[str]) -> list[str]:
+        out: list[str] = []
+        for value in values:
+            value = value.strip()
+            if not value or value in out:
+                continue
+            if len(value) > 200:
+                raise ValueError(too_long)
+            out.append(value)
+        if len(out) > 50:
+            raise ValueError(too_many)
+        return out
+
+    return clean
 
 
 # acquisition-label list, cleaned/deduped (the None branch of the update field skips it)
-Labels = Annotated[list[str], AfterValidator(_clean_labels)]
-# How much of something there is. Rejects inf/nan, which pydantic allows by default and
-# which json.dumps writes as the bare token Infinity: no JSON parser reads that back, so
-# a single such row blanks every page rendered from an inlined payload.
+Labels = Annotated[list[str], AfterValidator(
+    _cleaned_strings("Štítek je příliš dlouhý.", "Příliš mnoho štítků."))]
+# an item's other names for searching, same treatment
+AltNames = Annotated[list[str], AfterValidator(
+    _cleaned_strings("Další název je příliš dlouhý.", "Příliš mnoho dalších názvů."))]
+# An item's count or a need's amount. No inf/nan: json.dumps writes a bare Infinity that
+# no JSON parser reads, blanking every page that inlines it.
 Amount = Annotated[float | None, Field(default=None, ge=0, allow_inf_nan=False)]
 
 
@@ -948,3 +956,185 @@ class GooglePullConflictOut(ErrorOut):
     the timeline's ConflictOut, the client just re-runs the pull rather than reconciling)."""
     error: str = Field(examples=["Časový plán se mezitím změnil. Načtěte změny z Google prosím znovu."])
     rev: int
+
+
+# --- inventory (the global warehouse) ----------------------------------------
+
+class InventoryBoxCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255, examples=["Krabice 12 – lana"])
+    location: str | None = Field(default=None, max_length=255, examples=["sklep, police 2"])
+    note: str | None = Field(default=None, max_length=_NOTE_MAX)
+    virtual: bool = False                        # a place, not a physical box
+
+
+class InventoryBoxUpdateIn(BaseModel):
+    """Partial update: only the fields actually present are applied."""
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    note: str | None = Field(default=None, max_length=_NOTE_MAX)
+    virtual: bool | None = None
+
+
+class InventoryItemCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255, examples=["Kladka"])
+    box_id: int                                  # every live item sits in some box
+    alt_names: AltNames = []                     # other names it's known by (search only)
+    url: str | None = Field(default=None, max_length=1024)
+    note: str | None = Field(default=None, max_length=_NOTE_MAX)
+    unit: str | None = Field(default=None, max_length=40, examples=["ks", "hodně"])
+    count: Amount = Field(default=None, examples=[4])
+    _check_url = field_validator("url")(_http_url)
+
+
+class InventoryItemUpdateIn(BaseModel):
+    """Partial update: only the fields actually present are applied. Changing box_id is
+    an ordinary move; during a running check it also drops this item's observation."""
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    box_id: int | None = None
+    alt_names: AltNames | None = None
+    url: str | None = Field(default=None, max_length=1024)
+    note: str | None = Field(default=None, max_length=_NOTE_MAX)
+    unit: str | None = Field(default=None, max_length=40)
+    count: Amount = None
+    _check_url = field_validator("url")(_http_url)
+
+
+class InventoryItemRestoreIn(BaseModel):
+    """Bring a discarded item back into the warehouse, into this box."""
+    box_id: int
+
+
+class InventoryCheckCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255, examples=["Inventura po LŠMF 2026"])
+
+
+class InventoryRecordIn(BaseModel):
+    """One observation of one item during the running check.
+
+    Only sent fields apply; absent ones are seeded from the item. A sent null is a value
+    (clearing the count is an observation). A box_id other than the item's is a move.
+    """
+    discarded: bool | None = None
+    count: Amount = None
+    unit: str | None = Field(default=None, max_length=40)
+    box_id: int | None = None
+    note: str | None = Field(default=None, max_length=_NOTE_MAX)
+
+
+class InventoryPhotoOut(BaseModel):
+    """Filename only; the page builds URLs from its photo url template."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    filename: str       # "<uuid4 hex>.jpg", the same name in every size variant
+
+
+class InventoryItemRefOut(BaseModel):
+    """Slim item for a box page's all_items (picker, duplicate-name hint)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    box_id: int | None
+    discarded_at: datetime | None
+
+
+class InventoryItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    alt_names: list[str]
+    url: str | None
+    note: str | None
+    unit: str | None
+    count: float | None
+    box_id: int | None
+    discarded_at: datetime | None
+    photos: list[InventoryPhotoOut]     # lowest sort_order first: photos[0] is the title one
+
+
+class InventoryBoxOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    location: str | None
+    note: str | None
+    virtual: bool
+
+
+class InventoryRecordOut(BaseModel):
+    """An observation as the UI reads it back."""
+    model_config = ConfigDict(from_attributes=True)
+    check_id: int
+    item_id: int
+    discarded: bool
+    count: float | None
+    unit: str | None
+    box_id: int | None
+    from_box_id: int | None    # item.box_id when the record was created; a move differs
+    note: str | None
+
+
+class InventorySummaryOut(BaseModel):
+    """What a check changed, counted per item."""
+    checked: int
+    adjusted: int
+    discarded: int
+    moved: int
+    revived: int
+
+
+class InventoryCheckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    status: InventoryCheckStatus
+    created_at: datetime
+    completed_at: datetime | None
+    summary: InventorySummaryOut | None = None   # filled in at completion
+
+
+class InventoryBoxStateOut(BaseModel):
+    """Everything one box page shows: the box, what it holds and the running check's
+    observations about it. Returned after every observation write, so concurrent
+    checking by several people converges without a reload."""
+    box: InventoryBoxOut
+    items: list[InventoryItemOut]
+    records: list[InventoryRecordOut]
+    checked: int        # observed items counted towards this box
+    total: int          # items that count as this box's work
+    active_check: InventoryCheckOut | None = None   # None once nobody is checking
+
+
+class InventoryBoxEnvelope(_Ok):
+    box: InventoryBoxOut
+
+
+class InventoryBoxHistoryEnvelope(_Ok):
+    """Finished checks' observations about a box's current contents."""
+    checks: list[InventoryCheckOut]
+    records: list[InventoryRecordOut]
+
+
+class InventoryBoxStateEnvelope(_Ok):
+    state: InventoryBoxStateOut
+
+
+class InventoryItemEnvelope(_Ok):
+    item: InventoryItemOut
+
+
+class InventoryCheckEnvelope(_Ok):
+    check: InventoryCheckOut
+
+
+class InventoryBoxProgressOut(BaseModel):
+    """One box's share of the running check."""
+    box: InventoryBoxOut
+    checked: int
+    total: int
+
+
+class InventoryCheckPreviewEnvelope(_Ok):
+    """What completing the running check would change: the summary's counters, and how
+    far the walk has got box by box (the confirm dialog lists what is still open)."""
+    summary: InventorySummaryOut
+    progress: list[InventoryBoxProgressOut]

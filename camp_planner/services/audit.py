@@ -39,7 +39,7 @@ _CAMP_LEVEL = or_(
 
 def record(
     *,
-    camp_id: int,
+    camp_id: int | None,
     entity_type: EntityType,
     entity_id: int | None,
     action: AuditAction,
@@ -50,6 +50,9 @@ def record(
 
     `changes` is a raw {field: [old, new]} diff; ORM values (enums, dates) are
     coerced JSON-safe here, so callers needn't.
+
+    camp_id None is a change to a global entity (the warehouse): no camp's feed shows
+    such a row, so it is forensics rather than history anybody reads in the app.
     """
     identity: Identity = g.identity
     db_session.add(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from flask import g
@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.auth import ApiToken
+from camp_planner.models.common import naive_utcnow as _now
 from camp_planner.services import audit, errors
 
 if TYPE_CHECKING:
@@ -31,11 +32,6 @@ _TOUCH_AFTER = timedelta(minutes=1)
 
 def _hash(secret: str) -> str:
     return hashlib.sha256(secret.encode()).hexdigest()
-
-
-def _now() -> datetime:
-    """Naive UTC, matching the DB's func.now() timestamps (created_at etc.)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _audit(token: ApiToken, action: AuditAction) -> None:
