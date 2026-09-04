@@ -34,6 +34,9 @@ class EntityType(str, enum.Enum):
     category = "category"
     org = "org"
     api_token = "api_token"             # a camp-scoped API bearer token (created / revoked)
+    inventory_box = "inventory_box"     # warehouse: a box or place
+    inventory_item = "inventory_item"   # warehouse: a thing
+    inventory_check = "inventory_check"  # warehouse: an inventory check's lifecycle
 
 
 class AuditLog(Base):
@@ -58,7 +61,10 @@ class AuditLog(Base):
     # Columns:
     id: Mapped[int] = mapped_column(primary_key=True)
     # CASCADE: deleting a whole camp removes its audit trail too (nothing left to attach it to).
-    camp_id: Mapped[int] = mapped_column(ForeignKey(fk("camps.id"), ondelete="CASCADE"), index=True)
+    # NULL for a change to a global entity, which belongs to no camp.
+    camp_id: Mapped[int | None] = mapped_column(
+        ForeignKey(fk("camps.id"), ondelete="CASCADE"), index=True
+    )
     # SET NULL, not CASCADE: the audit trail outlives a deleted activity.
     activity_id: Mapped[int | None] = mapped_column(
         ForeignKey(fk("activities.id"), ondelete="SET NULL"), index=True
