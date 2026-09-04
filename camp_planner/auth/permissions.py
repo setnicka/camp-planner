@@ -44,6 +44,15 @@ def _has_role(identity: Identity, accepted: Container[CampRole], camp_id: int) -
     )
 
 
+def _has_role_anywhere(identity: Identity, accepted: Container[CampRole]) -> bool:
+    """The role in at least one real camp: an empty scope grants nothing, because
+    unknown slugs are dropped when the grants are resolved."""
+    return any(
+        grant.role in accepted and (grant.scope is ALL or grant.scope)
+        for grant in identity.grants
+    )
+
+
 def can_view(camp: Camp | int, identity: Identity | None = None) -> bool:
     who = _identity(identity)
     # editor implies viewer, so either role grants view.
@@ -62,6 +71,18 @@ def can_edit_camp_meta(camp: Camp | int | None = None, identity: Identity | None
 
 def can_create_camp(identity: Identity | None = None) -> bool:
     return _identity(identity).is_admin
+
+
+def can_view_inventory(identity: Identity | None = None) -> bool:
+    """The warehouse is global and shared by every camp, so anyone signed in may read it."""
+    return _identity(identity).is_authenticated
+
+
+def can_edit_inventory(identity: Identity | None = None) -> bool:
+    """Editing needs the editor role somewhere: the warehouse belongs to no camp, so a
+    grant on any camp qualifies. An API token counts by its own role."""
+    who = _identity(identity)
+    return who.is_admin or _has_role_anywhere(who, (CampRole.editor,))
 
 
 def can_manage_users(identity: Identity | None = None) -> bool:
@@ -118,11 +139,20 @@ require_view = _camp_guard(can_view)
 require_edit = _camp_guard(can_edit)
 
 
-def require_admin(view: Callable) -> Callable:
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        if not g.identity.is_admin:
-            return _deny()
-        return view(*args, **kwargs)
+def _global_guard(check: Callable[[], bool]) -> Callable:
+    """Same as _camp_guard for views that operate on no camp (admin pages, the warehouse)."""
+    def decorator(view: Callable) -> Callable:
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            if not check():
+                return _deny()
+            return view(*args, **kwargs)
 
-    return wrapper
+        return wrapper
+
+    return decorator
+
+
+require_admin = _global_guard(lambda: g.identity.is_admin)
+# View only: whether the reader may edit travels to the pages as may_edit.
+require_inventory_view = _global_guard(can_view_inventory)
