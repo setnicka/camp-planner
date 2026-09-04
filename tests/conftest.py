@@ -8,7 +8,10 @@ in-memory SQLite per test (TestingConfig).
 
 from __future__ import annotations
 
+import io
+import json
 import os
+import re
 
 # Must be set before camp_planner.config is imported (read at import time). Hard
 # assignment so a developer's exported AUTH_MODE can't flip the suite.
@@ -99,3 +102,77 @@ def editor(slug: str) -> dict:
 
 def viewer(slug: str) -> dict:
     return {"X-Remote-User": "vi", "X-Remote-Roles": f"viewer:{slug}"}
+
+
+# --- the global warehouse ----------------------------------------------------
+# Shared by the warehouse tests and the camp-material link tests, so neither imports the
+# other's module (which pytest would then hold twice, once per import name).
+
+def make_box(client, name="Krabice 1", **fields) -> dict:
+    resp = client.post("/api/inventory/boxes", json={"name": name, **fields}, headers=ADMIN)
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()["box"]
+
+
+def make_item(client, box_id, name="Lano", **fields) -> dict:
+    resp = client.post("/api/inventory/items",
+                       json={"name": name, "box_id": box_id, **fields}, headers=ADMIN)
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()["item"]
+
+
+def start_check(client, name="Inventura 2026") -> dict:
+    resp = client.post("/api/inventory/checks", json={"name": name}, headers=ADMIN)
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()["check"]
+
+
+def observe(client, in_box, item_id, headers=ADMIN, **body):
+    """Record an observation of `item_id` while standing in box `in_box`. A box_id in the
+    body is where the thing actually is, so it can differ (that is a move)."""
+    return client.put(f"/api/inventory/boxes/{in_box}/records/{item_id}",
+                      json=body, headers=headers)
+
+
+def complete(client, check, headers=ADMIN):
+    return client.post(f"/api/inventory/checks/{check['id']}/complete", headers=headers)
+
+
+def discard(client, item, headers=ADMIN):
+    return client.post(f"/api/inventory/items/{item['id']}/discard", headers=headers)
+
+
+def box_state(client, box_id) -> dict:
+    return client.get(f"/api/inventory/boxes/{box_id}/state", headers=ADMIN).get_json()["state"]
+
+
+def page_data(client, url) -> dict:
+    """The JSON a page inlines for its script (no page fetches on load)."""
+    html = client.get(url, headers=ADMIN).get_data(as_text=True)
+    match = re.search(r'<script id="cp-inventory-data" type="application/json">(.*?)</script>',
+                      html, re.S)
+    assert match, f"{url} inlined no data"
+    return json.loads(match.group(1))
+
+
+def get_item(client, item_id) -> dict:
+    """Read an item back the way the pages do: there is no single-item GET."""
+    data = page_data(client, "/inventory")
+    items = [i for entry in data["boxes"] for i in entry["items"]] + data["discarded"]
+    return next(i for i in items if i["id"] == item_id)
+
+
+# --- photos ------------------------------------------------------------------
+
+def png(size=(64, 48)) -> bytes:
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", size, "green").save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def upload(client, item_id, data=None):
+    return client.post(f"/api/inventory/items/{item_id}/photos", headers=ADMIN,
+                       data={"photos": (io.BytesIO(data or png()), "foto.png")},
+                       content_type="multipart/form-data")
