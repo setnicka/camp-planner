@@ -14,6 +14,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Added
 
+- Warehouse (`/inventory`): boxes and items shared by all camps, with inventory
+  checks. Any signed-in user reads, admins and editors of any camp edit.
+  **Adds a DB migration.**
+  - Photos need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
 - The activities overview can create an activity without a slot.
 
 ### Changed
@@ -29,11 +33,14 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Phones: the header fits the screen and form fields stack.
 - The browser's/phone's Back closes an open dialog instead of leaving the page.
 - Title tooltips also show on tap, so touch screens get them.
+- Search pickers no longer autofocus on touch screens, so the keyboard doesn't
+  cover the list.
 - Other small visual improvements.
 
 ### Fixed
 
 - Material need amounts must be finite and non-negative.
+- A network failure shows a Czech message instead of "Failed to fetch".
 - Standalone login returns to the page that asked for it, not to the camp list.
 
 ## [0.3.4] - 2026-08-14

@@ -34,7 +34,12 @@ AUTH_MODE=standalone
 SECRET_KEY=<random>
 DB_BACKEND=sqlite        # or postgresql / mysql (install the [postgres] / [mysql] extra)
 CP_FORCE_THEME=          # empty → light/auto/dark switch; "light"/"dark"/"auto" forces one
+MEDIA_DIR=               # empty → no photo uploads in the warehouse; else a writable dir
 ```
+
+Warehouse photos are stored as resized JPEGs under `MEDIA_DIR` (originals are not kept);
+this needs the `camp-planner[photos]` extra (Pillow). Uploads are capped at
+`MAX_UPLOAD_BYTES` (default 32 MB).
 
 ```bash
 uv run flask --app wsgi db upgrade               # schema
@@ -67,8 +72,12 @@ register_camp_planner(
     auth_callback=current_identity,   # () -> dict | Identity | None  (None = anonymous)
     url_prefix="/planner",
     base_template="base.html",        # host template with {% block content %}; omit for a bare fragment
+    media_dir="/srv/planner-media",   # optional: enables warehouse photo uploads
 )
 ```
+
+`media_dir` is `MEDIA_DIR` (§1) for the embedded shape. The API checks the upload size
+itself; the host's `MAX_CONTENT_LENGTH` is left alone.
 
 The callback returns `None`, or a dict (so the host needn't import our internals):
 
