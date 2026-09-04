@@ -77,6 +77,9 @@ def _build_database_url(instance_path: str) -> str:
 # Dev fallback; ProductionConfig refuses to start with it (forgeable cookies/CSRF tokens).
 _INSECURE_DEFAULT_SECRET = "dev-insecure-change-me"
 
+# Ceiling on one request body (photo uploads).
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 32 * 1024 * 1024))
+
 
 class Config:
     """Base config, populated from the environment."""
@@ -104,6 +107,12 @@ class Config:
     # enables two-way Google Calendar sync. Unset → the feature is disabled and hidden,
     # and the google-api libs need not be installed. See docs/GOOGLE_CALENDAR_SETUP.md.
     GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    # Directory for uploaded warehouse photos. Unset → uploads are refused and the photo
+    # UI hides itself. Needs the camp-planner[photos] extra; embedded hosts pass
+    # register_camp_planner(media_dir=...) instead.
+    MEDIA_DIR = os.environ.get("MEDIA_DIR") or None
+    # Our own app only: an embedded host's request limit is the host's business.
+    MAX_CONTENT_LENGTH = MAX_UPLOAD_BYTES
 
     @staticmethod
     def init_app(app: Flask) -> None:
