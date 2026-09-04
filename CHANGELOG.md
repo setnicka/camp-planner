@@ -20,6 +20,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Embedded: the navigation slot is renamed `header_nav` → `cp_nav`.
   **Upgrade note:** a host `base_template` must rename the block.
+- Requires Flask 3.1 or newer.
+- Request bodies are capped at `MAX_UPLOAD_BYTES` (32 MB), embedded too;
+  a larger one gets 413.
 - In-row actions and the calendar's sync buttons are one segmented button group.
 - Materials overview: a leaner table whose expanded rows list the needs; it
   scrolls sideways on a phone.

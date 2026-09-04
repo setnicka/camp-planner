@@ -5,7 +5,7 @@ description = "Planning tool for summer camps — Flask + SQLAlchemy, supports S
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "flask>=3.0",
+    "flask>=3.1",               # per-request max_content_length (the api's upload cap)
     "flask-sqlalchemy>=3.1",
     "flask-migrate>=4.0",
     "flask-wtf>=1.2",          # CSRF protection for standalone-mode forms
@@ -30,6 +30,9 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Warehouse photo uploads (MEDIA_DIR). Imported lazily (services/media.py), so a
+# deployment that stores no photos can skip it.
+photos = ["pillow>=10"]
 # Re-shooting the documentation screenshots (scripts/shoot_docs.py). Needs a browser
 # binary too: `uv run playwright install chromium`. Pillow converts Playwright's PNG
 # output to lossless WebP (same pixels, ~3.6× smaller); Playwright itself writes only

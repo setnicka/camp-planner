@@ -17,7 +17,7 @@ import re
 import warnings
 from typing import TYPE_CHECKING, Any, Callable
 
-from flask import current_app, g
+from flask import abort, current_app, g, request
 
 import camp_planner.models  # noqa: F401  (register mappers on the shared Base)
 from camp_planner.api import api_token_auth
@@ -27,6 +27,7 @@ from camp_planner.auth.callback import CallbackProvider
 from camp_planner.auth.identity import ANONYMOUS
 from camp_planner.auth.standalone import StandaloneProvider
 from camp_planner.auth.standalone import bp as auth_bp
+from camp_planner.config import MAX_UPLOAD_BYTES
 from camp_planner.extensions import db, db_session, state
 from camp_planner.version import __version__
 from camp_planner.views import bp as main_bp
@@ -117,10 +118,20 @@ def _inject() -> dict[str, Any]:
         "can_edit_camp_meta": permissions.can_edit_camp_meta,
         "can_create_camp": permissions.can_create_camp,
         "can_manage_users": permissions.can_manage_users,
+        "can_view_inventory": permissions.can_view_inventory,
     }
 
 
 _wired: set[Blueprint] = set()
+
+
+def _check_request_size() -> None:
+    """Cap the body per request: embedded, the app-wide MAX_CONTENT_LENGTH belongs to the
+    host. The cap also stops a chunked body with no declared length while it is read; a
+    declared one is refused up front, in words."""
+    request.max_content_length = MAX_UPLOAD_BYTES
+    if request.content_length is not None and request.content_length > MAX_UPLOAD_BYTES:
+        abort(413, f"Nahrávaná data jsou příliš velká (limit {MAX_UPLOAD_BYTES // (1024 * 1024)} MB).")
 
 
 def _wire_blueprint(bp: Blueprint) -> None:
@@ -128,14 +139,16 @@ def _wire_blueprint(bp: Blueprint) -> None:
     shared across apps, so re-registering would stack duplicate hooks).
 
     Registration order is the hook order, and it is load-bearing: the contract check
-    must see the session before anything of ours queries it, and _load_identity defers
-    to the token api_token_auth resolves. Hence api.py registers no hook of its own.
+    must see the session before anything of ours queries it, the size gate must run
+    before csrf.protect() parses a whole multipart body, and _load_identity defers to
+    the token api_token_auth resolves. Hence api.py registers no hook of its own.
     """
     if bp in _wired:
         return
     _wired.add(bp)
     bp.before_request(_check_session_contract)
     if bp is api_bp:
+        bp.before_request(_check_request_size)
         bp.before_request(api_token_auth)
     bp.before_request(_load_identity)
     bp.context_processor(_inject)
@@ -150,6 +163,7 @@ def _attach(
     login_endpoint: str | None = None,
     url_prefix: str | None = None,
     force_theme: str | None = None,
+    media_dir: str | None = None,
     session: Session | Callable[[], Session] | None = None,
 ) -> None:
     # An explicit argument (embedded) wins over the CP_FORCE_THEME env var (standalone/
@@ -167,6 +181,7 @@ def _attach(
         "provider": provider,
         "base_template": base_template,
         "force_theme": force_theme or None,
+        "media_dir": media_dir or None,
         # None = ours; else a callable giving the host's, normalized once here.
         "session": session if session is None or callable(session) else lambda: session,
     }
@@ -202,6 +217,7 @@ def wire_app(app: Flask) -> None:
         provider,
         base_template=app.config["BASE_TEMPLATE"],
         login_endpoint=login_endpoint,
+        media_dir=app.config["MEDIA_DIR"],
     )
 
 
@@ -214,6 +230,7 @@ def register_camp_planner(
     session: Session | Callable[[], Session] | None = None,
     base_template: str = _BARE_TEMPLATE,
     force_theme: str | None = None,
+    media_dir: str | None = None,
 ) -> None:
     """Mount Camp Planner's blueprints on a host Flask app (embedded mode).
 
@@ -231,6 +248,9 @@ def register_camp_planner(
     is for a host page that itself follows prefers-color-scheme (we can't read your
     background, so we only follow the OS when you say so). None = the visitor chooses,
     starting light. Works with a custom base_template too. See docs/DEPLOYMENT.md §2.
+
+    media_dir is a writable directory for warehouse photo uploads (needs the
+    camp-planner[photos] extra). Omit it and the warehouse works without photos.
     """
     if session is not None and database_uri:
         raise ValueError(
@@ -249,5 +269,6 @@ def register_camp_planner(
         base_template=base_template,
         url_prefix=url_prefix,
         force_theme=force_theme,
+        media_dir=media_dir,
         session=session,
     )
