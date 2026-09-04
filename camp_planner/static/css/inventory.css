@@ -1,0 +1,722 @@
+/* Warehouse (sklad) pages: overview, box, checks, finished check.
+   Only what components.css does not already cover; every colour is a --cp-* token. */
+
+/* Links in the accent, not the browser's default blue (purple once visited), dialogs
+   included: they mount outside the page. Zero weight, hover too, so any link with a
+   class of its own styles itself. */
+:where(#cp-inventory a, .cp-modal a) { color: var(--cp-accent-text); text-decoration: none; }
+@media (hover: hover) {
+  :where(#cp-inventory a:hover, .cp-modal a:hover) { text-decoration: underline; }
+}
+
+/* --- toolbars and the check bar ------------------------------------- */
+
+.cp-inv-toolbar {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: .75rem 0;
+}
+
+/* The wrap carries a quiet magnifier inside the field. */
+.cp-inv-search-wrap { position: relative; flex: 1 1 16rem; min-width: 0; }
+.cp-inv-search-wrap::before {
+  content: "🔍";
+  position: absolute;
+  left: .55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: .9em;
+  filter: grayscale(1);
+  opacity: .55;
+  pointer-events: none;
+}
+.cp-inv-search-wrap:focus-within::before { opacity: 1; }
+/* The rule after the magnifier; its own pseudo so it is not dimmed with the glyph. */
+.cp-inv-search-wrap::after {
+  content: "";
+  position: absolute;
+  left: 2.05rem;
+  /* Full height of the field, stopping at its border. */
+  top: 1px;
+  bottom: 1px;
+  width: 1px;
+  background: var(--cp-border);
+  pointer-events: none;
+}
+/* The input recipe comes from components.css; only the magnifier needs the room. */
+.cp-inv-search { padding-left: 2.5rem; }
+
+/* The box's own search shares the item list's width cap, so both edges line up; the
+   field itself stops well short of it, a phone width being all it ever needs. */
+.cp-inv-box-filter { max-width: 60rem; }
+.cp-inv-box-filter .cp-inv-search-wrap { max-width: 22rem; }
+
+/* The running-check banner: the page's loudest state, everything else is normal
+   warehouse work. */
+.cp-inv-bar {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: .5rem .75rem;
+  border: 1px solid var(--cp-warning);
+  border-radius: 6px;
+  background: var(--cp-warning-subtle);
+  color: var(--cp-warning-text);
+}
+
+/* On the box page every block stops at 60rem; the banner is the first of them. */
+.cp-inv-bar-box { max-width: 60rem; box-sizing: border-box; }
+.cp-inv-bar-name { font-weight: 600; }
+.cp-inv-bar-name a { color: inherit; }
+.cp-inv-bar-count { white-space: nowrap; }
+/* The box page's list legend, as the banner's own second line. */
+.cp-inv-bar-hint { flex-basis: 100%; }
+
+.cp-inv-progress {
+  font-variant-numeric: tabular-nums;
+  padding: .1rem .4rem;
+  border-radius: 4px;
+  background: var(--cp-surface-3);
+  color: var(--cp-text);
+}
+.cp-inv-done { background: var(--cp-success-mark); color: var(--cp-success-text); }
+
+/* --- the overview map: boxes grouped by location as a grid of tiles --------- */
+
+.cp-inv-loc { margin: 1.25rem 0 .45rem; font-size: 1.05rem; font-weight: 600; color: var(--cp-text); }
+
+.cp-inv-tiles {
+  display: grid;
+  /* min(): a screen narrower than a tile gets one tile as wide as the screen, not overflow. */
+  grid-template-columns: repeat(auto-fill, minmax(min(21rem, 100%), 1fr));
+  gap: .5rem;
+  /* An unfolded tile must not stretch its grid-row neighbours with it. */
+  align-items: start;
+}
+
+/* A light tint separates the boxes from the page; virtual places stay on the plain
+   surface, so only real boxes read as cards. */
+.cp-inv-tile {
+  padding: .45rem .6rem;
+  border: 1px solid var(--cp-border);
+  border-radius: 6px;
+  background: var(--cp-surface-2);
+  cursor: pointer;
+}
+
+/* A virtual box is a place, not cardboard: no card tint, and a dashed frame on its own
+   full row, which gives its peek room for balanced columns instead of the five-row
+   scroll. One block, or the border here would silently override .cp-inv-tile's. */
+.cp-inv-tile-virtual {
+  grid-column: 1 / -1;
+  border: 1px dashed var(--cp-muted);
+  background: var(--cp-surface);
+}
+/* Only a folding tile (activatable sets the role) tints; a finished check's are read-only. */
+@media (hover: hover) {
+  .cp-inv-tile[role="button"]:hover { background: var(--cp-surface-3); }
+  .cp-inv-tile-virtual[role="button"]:hover { background: var(--cp-surface-2); }
+}
+/* A box the running check has finished: tinted, so the eye skips it. After the virtual
+   rule, whose dashed frame it only recolours. */
+.cp-inv-tile-done { border-color: var(--cp-success-mark); background: var(--cp-success-subtle); }
+@media (hover: hover) {
+  .cp-inv-tile-done[role="button"]:hover { background: var(--cp-success-mark); }
+}
+.cp-inv-tile-virtual .cp-inv-tile-items {
+  /* At most three columns, fewer when the row gets narrow. */
+  columns: 21rem 3;
+  column-gap: 1.25rem;
+}
+.cp-inv-tile-virtual .cp-inv-tile-items li { break-inside: avoid; }
+
+.cp-inv-virtual { display: flex; gap: .5rem; align-items: center; }
+
+.cp-inv-tile-head {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  /* Big enough to hit with a thumb in a cold storage room. */
+  min-height: 1.85rem;
+}
+
+.cp-inv-tile-name { font-weight: 600; color: var(--cp-text); text-decoration: none; }
+@media (hover: hover) {
+  .cp-inv-tile-name:hover { text-decoration: underline; }
+}
+.cp-inv-tile-meta { display: flex; gap: .5rem; align-items: center; white-space: nowrap; margin-left: auto; }
+
+/* The unfolded peek: a few rows of names and a "… a dalších N" row (inventory-overview.js
+   PEEK) that unfolds the rest. No scrolling of its own: a list scrolling inside the
+   scrolling page sticks under a thumb. */
+.cp-inv-tile-items {
+  list-style: none;
+  margin: .25rem 0 0;
+  padding: .25rem .6rem 0 1.1rem;
+  border-top: 1px solid var(--cp-border-subtle);
+  font-size: .85em;
+  line-height: 1.5;
+  cursor: auto;
+}
+
+/* A dash per thing, the amount right-aligned in its own column so it does not blend
+   into the name. Flex also keeps a wrapped name under its own text, not the dash. */
+.cp-inv-tile-items li { display: flex; gap: .5rem; align-items: baseline; }
+.cp-inv-tile-items li::before { content: "–"; color: var(--cp-text-dim); }
+.cp-inv-peek-name { flex: 1 1 auto; min-width: 0; }
+.cp-inv-tile-items li .cp-inv-amount { white-space: nowrap; }
+.cp-inv-tile-items .cp-inv-tile-more::before { content: none; }
+.cp-inv-tile-more button {
+  font: inherit;
+  padding: .3rem 0;   /* a tap-sized row, the text itself unchanged */
+  border: 0;
+  background: none;
+  color: var(--cp-accent-text);
+  cursor: pointer;
+}
+
+/* The box note opens the peek; items after it share its top rule. */
+.cp-inv-tile-note {
+  margin: .25rem 0 0;
+  padding-top: .25rem;
+  border-top: 1px solid var(--cp-border-subtle);
+  font-size: .85em;
+  white-space: pre-wrap;
+  cursor: auto;
+}
+.cp-inv-tile-note + .cp-inv-tile-items { border-top: 0; padding-top: 0; }
+
+/* --- boxes and their contents --------------------------------------------- */
+
+/* Same folding pattern as the tiles (div + role=button, links may nest inside). */
+.cp-inv-box-head {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: .6rem .75rem;
+  cursor: pointer;
+  min-height: 2.75rem;
+}
+
+@media (hover: hover) {
+  .cp-inv-box-head:hover { background: var(--cp-surface-2); }
+}
+.cp-inv-box-name { font-weight: 600; }
+.cp-inv-caret { color: var(--cp-text-dim); }
+.cp-inv-count { margin-left: auto; }
+
+.cp-inv-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 .75rem .6rem;
+}
+
+.cp-inv-row {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: .35rem 0;
+  border-top: 1px solid var(--cp-border-subtle);
+}
+
+/* Box detail reads as a table: name column, amounts aligned in their own column, compact
+   icon actions. Capped width + hover tint keep a name and its amount readable as one row.
+   The list is the grid and every row subgrids into it, so the on-demand history columns
+   (inline style widens the template) line up across rows. */
+.cp-inv-items-detail {
+  padding: 0;
+  max-width: 60rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  column-gap: .75rem;
+}
+.cp-inv-items-detail .cp-inv-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: .1rem .75rem;
+  align-items: center;
+  padding: .3rem .5rem;
+}
+.cp-inv-items-detail .cp-inv-row-main { grid-column: 1; }
+/* Counted from the end, so the history columns can slide in between name and amount. */
+.cp-inv-items-detail .cp-inv-amount { grid-column: -3; justify-self: end; font-weight: 500; }
+.cp-inv-items-detail .cp-inv-row-btns { grid-column: -2; }
+.cp-inv-items-detail .cp-inv-row-sub { grid-column: 1; }
+.cp-inv-items-detail .cp-inv-row-actions { grid-column: 1 / -1; }
+
+/* With history columns the name keeps a floor (inline template) and the list scrolls
+   sideways within itself, so a phone squeezes the columns, not the names. */
+.cp-inv-items-hist { overflow-x: auto; }
+/* The observation strip spans the whole grid, which is wider than the screen once the
+   history columns are in; sized to the visible list (--list-w, measured by
+   measureHistList) and stuck to its left edge, it stays whole while the columns scroll
+   under it. */
+.cp-inv-items-hist .cp-inv-row-actions {
+  position: sticky;
+  left: .5rem;                     /* the row's inline padding, so it lines up with the name */
+  width: calc(var(--list-w, 100%) - 1rem);
+  justify-self: start;
+  z-index: 1;   /* above the right-edge fade below: the strip does not scroll, so it must not fade */
+}
+
+/* Right-edge fade while columns hide past the edge (JS toggles cp-inv-more-right). */
+.cp-inv-hist-wrap { position: relative; max-width: 60rem; }
+.cp-inv-hist-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2rem;
+  background: linear-gradient(to left, var(--cp-bg) 15%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.cp-inv-hist-wrap.cp-inv-more-right::after { opacity: 1; }
+
+/* History columns: one symbol per finished check. */
+/* Cells stretch to the row height, so the column separators read as continuous lines. */
+.cp-inv-hist-cell {
+  justify-self: stretch;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 .5rem;
+  white-space: nowrap;
+  /* a button, so a tap stays in the cell instead of opening the row's modal; the colour
+     and size variants below override the inherited defaults */
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--cp-border-subtle);
+  /* the details live in the tooltip; a tap shows them at the cell */
+  cursor: help;
+}
+.cp-inv-hist-cell.cp-inv-hist-last,
+.cp-inv-hist-head.cp-inv-hist-last { border-right: 1px solid var(--cp-border-subtle); }
+.cp-inv-hist-ok { color: var(--cp-success-text); }
+/* The change text after the ⤳ glyph in a history cell; a text space there collapses. */
+.cp-inv-hist-cell .cp-inv-hist-adjust { margin-left: .3em; }
+.cp-inv-hist-adjust { color: var(--cp-warning-text); font-size: .85em; }
+.cp-inv-hist-gone { color: var(--cp-danger-text); }
+.cp-inv-hist-moved { color: var(--cp-muted); }
+/* The columns slide in from under the names when the history arrives, once (the class is
+   set for that redraw only), one column after another (--i is the column index). */
+.cp-inv-hist-enter .cp-inv-hist-cell,
+.cp-inv-hist-enter .cp-inv-hist-head {
+  animation: cp-inv-hist-in .3s ease-out both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@keyframes cp-inv-hist-in { from { opacity: 0; transform: translateX(-1rem); } }
+.cp-inv-hist-head {
+  /* Bottom-up without a transform, so the borders stay on their physical sides. A short
+     date, so the column stays as narrow as its cells. */
+  writing-mode: sideways-lr;
+  justify-self: stretch;
+  align-self: end;
+  text-align: left;
+  font-size: .85em;
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 0 .5rem;
+  border-left: 1px solid var(--cp-border-subtle);
+}
+.cp-inv-row-main { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+/* Notes keep their line breaks. Indented and a size down, or the note reads as the
+   next item's name rather than as this one's footnote (the .cp-todo-note recipe). */
+.cp-inv-row-sub {
+  font-size: 12px;
+  padding-left: 1rem;
+  white-space: pre-wrap;
+}
+.cp-inv-url { text-decoration: none; }
+/* Other names are an aside to the name: a size down as well as muted, so that on a narrow
+   screen, where they wrap onto a line of their own, they still read as subordinate. */
+.cp-inv-alt { font-size: .9em; }
+
+/* What is clickable in the list, said once above it instead of by a mark on every row:
+   nothing else tells a touch screen, which has no hover and no cursor. */
+.cp-inv-list-hint { max-width: 60rem; margin: 0 0 .3rem; }
+
+.cp-inv-item-name {
+  display: inline-flex;
+  gap: .4rem;
+  align-items: center;
+  font-weight: 500;   /* the row's heading, against the lighter note under it */
+  /* Long other-names lists fold under the name instead of widening the column. */
+  flex-wrap: wrap;
+  flex: 1 1 12rem;
+}
+
+.cp-inv-item-text {
+  display: inline-flex;
+  gap: 0 .4rem;   /* wrapped other names sit at line-height under the name, not a block apart */
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1 1 0;
+  min-width: 0;   /* wraps inside its column rather than dropping under the thumbnail */
+}
+
+.cp-inv-amount { font-variant-numeric: tabular-nums; }
+
+/* Outside a check the amount is also the button that fixes it. It keeps the shape of the
+   text it replaces: a framed box would read as a third action next to ⤳ and ✕, and the
+   count is an amount first, a control second. A dotted underline says it is one, on touch
+   too. */
+.cp-inv-amount-btn {
+  font: inherit;
+  color: var(--cp-text);
+  text-decoration: underline dotted var(--cp-text-dim);
+  text-underline-offset: .2em;
+  padding: .15rem .35rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  text-align: right;
+  cursor: pointer;
+}
+.cp-inv-amount-btn.cp-dim { color: var(--cp-text-dim); }
+/* No pencil of its own: the row's ✎ is the edit, and two pencils would ask which is
+   which; the legend above the list says the count is a button too. */
+@media (hover: hover) {
+  .cp-inv-amount-btn:hover { border-color: var(--cp-border); background: var(--cp-surface); }
+}
+
+.cp-inv-badge {
+  padding: .05rem .35rem;
+  border-radius: 4px;
+  background: var(--cp-surface-3);
+  color: var(--cp-muted);
+  font-size: .85em;
+}
+
+.cp-inv-photos-edit {
+  border-top: 1px solid var(--cp-border);
+  margin-top: .5rem;
+  padding-top: .7rem;
+}
+
+/* Photo controls sit on the photo itself and show on hover or focus (always where
+   there is no hover to give): ★ top-left promotes to title (the badge takes its place
+   on the title photo), the red ✕ top-right deletes. */
+.cp-inv-photo > .cp-inv-badge {
+  position: absolute;
+  top: .3rem;
+  left: .3rem;
+}
+.cp-inv-photo-btn {
+  position: absolute;
+  top: .3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;     /* a pointer hits this; a finger gets the bigger one below */
+  height: 1.75rem;
+  border: 0;
+  border-radius: 4px;
+  font-size: .95rem;
+  line-height: 1;
+  cursor: pointer;
+  background: var(--cp-surface);
+  color: var(--cp-text);
+  box-shadow: 0 1px 4px var(--cp-shadow-2);
+  opacity: 0;
+  transition: opacity .12s;
+}
+.cp-inv-photo-star { left: .3rem; }
+/* Quiet like the ✕ in the item list: a grid of red-filled squares would shout louder
+   than the photos, and on touch the buttons are always visible. It fills on hover. */
+.cp-inv-photo-del { right: .3rem; color: var(--cp-danger-text); }
+@media (hover: hover) {
+  .cp-inv-photo-del:hover {
+    background: var(--cp-danger);
+    color: var(--cp-text-inverse);
+  }
+}
+.cp-inv-photo:hover .cp-inv-photo-btn,
+.cp-inv-photo:focus-within .cp-inv-photo-btn { opacity: 1; }
+/* Touch: nothing reveals them, and a fingertip needs more than a pointer does. */
+@media (hover: none) {
+  .cp-inv-photo-btn {
+    opacity: 1;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.1rem;
+  }
+  .cp-inv-amount-btn { min-width: 2.5rem; min-height: 2rem; }
+}
+
+/* An item on its way out of this box is not this box's work anymore: dim it. */
+.cp-inv-row-moved-away { opacity: .7; }
+/* Struck through word by word: a decoration on the label would run through the badges too. */
+.cp-inv-row-discarded .cp-inv-item-text > :not(.cp-inv-badge) { text-decoration: line-through; }
+.cp-inv-discarded .cp-inv-item-name { color: var(--cp-muted); }
+/* Retired things are an appendix, not one more box: no card frame, a rule cuts them
+   off the map. */
+.cp-inv-discarded {
+  margin-top: 1.25rem;
+  padding-top: .35rem;
+  border-top: 1px solid var(--cp-border);
+}
+.cp-inv-discarded .cp-inv-box-head { padding-left: 0; border-radius: 6px; }
+.cp-inv-discarded .cp-inv-items { padding-left: 1.1rem; }
+/* The rows here are flex, not the box table's grid, so the note claims its own line
+   instead of trailing after the buttons. */
+.cp-inv-discarded .cp-inv-row-sub { flex-basis: 100%; }
+
+/* --- observation controls -------------------------------------------------- */
+
+/* Active observation states colour by meaning (solid fills), so a shelf of rows reads
+   as a status map. Only "nezkontrolováno" stays neutral: it is the absence of a record. */
+.cp-seg-btn.cp-inv-seg-off.on { background: var(--cp-surface-3); color: var(--cp-text); }
+.cp-seg-btn.cp-inv-seg-ok.on { background: var(--cp-success); color: var(--cp-text-inverse); }
+.cp-seg-btn.cp-inv-seg-adjust.on { background: var(--cp-warning); color: var(--cp-warning-on); }
+.cp-seg-btn.cp-inv-seg-gone.on { background: var(--cp-danger); color: var(--cp-text-inverse); }
+
+.cp-inv-row-actions {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: .25rem;
+}
+/* A write in flight (inventory-box.js apply): the strip dims and takes no second tap. */
+.cp-inv-row-actions.cp-inv-saving { opacity: .5; pointer-events: none; }
+
+.cp-inv-moved { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+
+/* The observation note is the segmented group's stretching last cell, so the row reads
+   as one control. The group only widens when it actually carries the note. */
+.cp-inv-row-actions .cp-seg:has(.cp-inv-note) { display: flex; width: 100%; }
+.cp-inv-note {
+  flex: 1 1 8rem;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: .25rem .7rem;
+  border: 0;
+  border-left: 1px solid var(--cp-border);
+  background: var(--cp-surface);
+  color: var(--cp-text);
+}
+/* The group's overflow:hidden clips a plain outline to slivers; an inset ring shows whole. */
+.cp-inv-note:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--cp-accent);
+}
+/* Touch, any width (a tablet has no phone grid below): the verdicts are tapped once per
+   thing on a shelf, so they get a fingertip's height; a note field under 16px makes iOS
+   zoom the page in on focus. The phone grid below sizes its own cells. */
+@media (hover: none) {
+  .cp-inv-row-actions .cp-seg-btn { min-height: 2.25rem; }
+  .cp-inv-moved .cp-mini { min-height: 2rem; }
+  .cp-inv-note { font-size: 16px; }
+}
+.cp-inv-amount-row { display: flex; gap: .75rem; flex-wrap: wrap; }
+.cp-inv-field { display: flex; flex-direction: column; gap: .2rem; }
+.cp-inv-left { margin: .25rem 0; padding-left: 1.25rem; }
+.cp-inv-row-btns { margin-left: auto; display: inline-flex; }
+/* Box detail's bottom row spans the item list: adding a new thing, and during a check
+   also moving one in, each taking half. */
+.cp-inv-add-row { display: flex; gap: .5rem; max-width: 60rem; }
+.cp-inv-add-row .cp-add { flex: 1 1 0; min-width: 0; }
+
+/* --- headers, photos, history ---------------------------------------------- */
+
+/* Same width cap as the item list, so the header and the rows share both edges. */
+.cp-inv-head { margin: .75rem 0; max-width: 60rem; }
+.cp-inv-head h1 { margin: 0 0 .25rem; }
+/* The "virtuální" badge rides in the h1 but keeps body proportions. */
+.cp-inv-head h1 .cp-inv-badge {
+  font-size: 1rem;
+  font-weight: 400;
+  vertical-align: middle;
+  margin-left: .25rem;   /* the rest of the gap is the space text node before it */
+}
+/* Breadcrumbs inside the h1: small and muted, so the box name stays the title and the
+   heading costs one line instead of two. Each crumb stays whole; the line may break at
+   the separators. */
+.cp-inv-crumbs {
+  font-size: .55em;
+  font-weight: 400;
+  color: var(--cp-muted);
+  vertical-align: middle;
+  margin-right: .4rem;
+}
+.cp-inv-crumb {
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  /* Inline, so the padding widens the hit area for a finger without moving the line;
+     the negative margin gives the horizontal share back. */
+  padding: .5rem .3rem;
+  margin: 0 -.3rem;
+}
+@media (hover: hover) {
+  .cp-inv-crumb:hover { color: var(--cp-accent-text); text-decoration: underline; }
+}
+.cp-inv-meta { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; margin: .25rem 0; }
+.cp-inv-note-text { white-space: pre-wrap; }
+
+/* The "skrýt zkontrolované" switch in the actions row: the label is the tap target. */
+.cp-inv-hide-done {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  min-height: 2rem;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.cp-inv-hide-done input { margin: 0; accent-color: var(--cp-accent); }
+/* Every box action on one row: editing, deleting and the history toggle. */
+.cp-inv-head-actions {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: .5rem;
+}
+
+.cp-inv-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: .6rem;
+}
+
+.cp-inv-photo { position: relative; }
+
+.cp-inv-photo-zoom {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.cp-inv-photo img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--cp-border);
+}
+
+
+/* The upload dropzone: a label around a hidden file input, so it takes both a click
+   (the picker, on phones the camera) and dropped files. */
+.cp-inv-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 4.5rem;
+  margin-top: .6rem;
+  padding: .75rem;
+  border: 2px dashed var(--cp-border);
+  border-radius: 8px;
+  color: var(--cp-muted);
+  text-align: center;
+  cursor: pointer;
+}
+.cp-inv-drop-over {
+  border-color: var(--cp-accent);
+  color: var(--cp-text);
+  background: var(--cp-accent-wash);
+}
+@media (hover: hover) {
+  .cp-inv-drop:hover {
+    border-color: var(--cp-accent);
+    color: var(--cp-text);
+    background: var(--cp-accent-wash);
+  }
+}
+.cp-inv-drop:focus-within { outline: 2px solid var(--cp-accent); outline-offset: 2px; }
+.cp-inv-drop-busy { opacity: .6; cursor: progress; }
+.cp-inv-drop-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Finished checks as a table: name | date | summary, the summary wrapping in its
+   own column instead of running into the date. */
+.cp-inv-checks {
+  list-style: none;
+  margin: .25rem 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) max-content minmax(0, 1fr);
+  column-gap: 1rem;
+}
+.cp-inv-checks li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding: .3rem 0;
+  border-top: 1px solid var(--cp-border-subtle);
+}
+
+/* A finished check reuses the overview tiles read-only: always unfolded, no fold
+   cursor, no row cap. */
+.cp-inv-check-tiles { margin-top: .5rem; }
+.cp-inv-check-tiles .cp-inv-tile { cursor: auto; }
+/* The rows never wrap in the overview peek, so wrap is enabled just here, where the
+   observation note drops to its own line, indented under the name. */
+.cp-inv-check-tiles .cp-inv-tile-items li { flex-wrap: wrap; }
+/* The glyph answers a tap with its origin, so give the finger something to hit. */
+.cp-inv-check-tiles .cp-inv-hist-moved { padding: 0 .35rem; cursor: help; }
+.cp-inv-rec-note { flex-basis: 100%; margin-left: .9rem; white-space: pre-wrap; }
+
+@media (max-width: 40rem) {
+  /* A long box name costs two lines of a 2em heading, which the list needs more. */
+  .cp-inv-head h1 { font-size: 1.6rem; }
+
+  /* Finished checks stack name / date / summary: three columns do not fit a phone. */
+  .cp-inv-checks, .cp-inv-checks li { grid-template-columns: minmax(0, 1fr); }
+  .cp-inv-checks li { row-gap: .1rem; }
+  .cp-inv-head h1 .cp-inv-badge { font-size: .85rem; }
+
+  /* The observation strip as a grid: the three verdicts on top, big, since "stav sedí"
+     is tapped once per thing on a shelf; the move and the reset under them, smaller; the
+     note takes the free third of that line while empty and a line of its own once it has
+     content or focus. Cell lines are the 1px gap over the border colour, so the wrapping
+     doubles no border. */
+  .cp-inv-row .cp-inv-row-actions .cp-seg {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1px;
+    background: var(--cp-border);
+    width: 100%;
+  }
+  .cp-inv-row-actions .cp-seg-btn { border: 0; min-height: 2rem; grid-column: span 2; }
+  .cp-inv-row-actions .cp-inv-seg-ok,
+  .cp-inv-row-actions .cp-inv-seg-adjust,
+  .cp-inv-row-actions .cp-inv-seg-gone { min-height: 2.5rem; font-size: 14px; }
+  .cp-inv-row-actions .cp-inv-seg-move,
+  .cp-inv-row-actions .cp-inv-seg-off { grid-column: span 3; }
+  /* A revived row offers two verdicts, not three: they split the row instead of leaving
+     a hole where "vyřadit" would have been. */
+  .cp-inv-row-actions .cp-seg:not(:has(.cp-inv-seg-gone)) .cp-inv-seg-ok,
+  .cp-inv-row-actions .cp-seg:not(:has(.cp-inv-seg-gone)) .cp-inv-seg-adjust {
+    grid-column: span 3;
+  }
+  .cp-inv-row .cp-inv-note { grid-column: 1 / -1; border: 0; }
+  .cp-inv-row .cp-seg:has(.cp-inv-note:placeholder-shown:not(:focus)) .cp-inv-seg-move,
+  .cp-inv-row .cp-seg:has(.cp-inv-note:placeholder-shown:not(:focus)) .cp-inv-seg-off,
+  .cp-inv-row .cp-inv-note:placeholder-shown:not(:focus) { grid-column: span 2; }
+}
