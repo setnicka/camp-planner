@@ -1,29 +1,43 @@
-"""User-facing blueprint — camp list, the timeline (default camp view), and the
-camp settings subpage with its taxonomy management."""
+"""User-facing blueprint: the camp pages (list, timeline, overviews, settings with its
+taxonomy management), the global warehouse pages and its photo route."""
 
 from __future__ import annotations
 
 from zoneinfo import available_timezones
 
-from flask import Blueprint, Response, abort, flash, g, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    flash,
+    g,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    url_for,
+)
 from flask_wtf.csrf import generate_csrf
 
 from camp_planner.auth.identity import CampRole
 from camp_planner.auth.permissions import (
     can_edit,
     can_edit_camp_meta,
+    can_edit_inventory,
     login_redirect,
     require_admin,
     require_edit,
+    require_inventory_view,
     require_view,
 )
 from camp_planner.extensions import db, first_or_404
 from camp_planner.models.activity import Activity
 from camp_planner.models.camp import Camp
 from camp_planner.models.common import czech_sort_key
+from camp_planner.models.inventory import InventoryBox, InventoryCheck
 from camp_planner.services import camps as camps_service
 from camp_planner.services import errors as svc_errors
-from camp_planner.services import api_tokens, ical, loaders, serialize, taxonomy
+from camp_planner.services import api_tokens, ical, inventory, loaders, media, serialize, taxonomy
 from camp_planner.services.timeline import build_timeline
 
 bp = Blueprint("main", __name__, template_folder="templates", static_folder="static")
@@ -391,3 +405,99 @@ def _render_detail(camp: Camp):
 # All taxonomy mutations (categories/orgs/tags batch save) live in the api blueprint;
 # the detail page links to them via url_for("api.*"). Copying taxonomies from another
 # camp is offered only on the create form (camp_create), never afterwards.
+
+
+# --- inventory (the global warehouse) ----------------------------------------
+
+def _photo_url() -> str | None:
+    """The photo route for the thumbnails; None while photos are not served, so a leftover
+    filename draws nothing rather than a broken image."""
+    if not media.enabled():
+        return None
+    return url_for("main.inventory_photo", variant="0", filename="0")
+
+
+def _inventory_page(data: dict) -> dict:
+    """The warehouse pages' shared envelope."""
+    urls = {
+        "overview": url_for("main.inventory_overview"),
+        "boxes": url_for("api.inventory_box_create"),
+        "boxItem": url_for("api.inventory_box_update", box_id=0),
+        "boxState": url_for("api.inventory_box_state", box_id=0),
+        "boxHistory": url_for("api.inventory_box_history", box_id=0),
+        "items": url_for("api.inventory_item_create"),
+        "itemItem": url_for("api.inventory_item_update", item_id=0),
+        "itemDiscard": url_for("api.inventory_item_discard", item_id=0),
+        "itemRestore": url_for("api.inventory_item_restore", item_id=0),
+        "itemPhotos": url_for("api.inventory_item_photos", item_id=0),
+        "photoItem": url_for("api.inventory_photo_delete", photo_id=0),
+        "photoTitle": url_for("api.inventory_photo_title", photo_id=0),
+        "checks": url_for("api.inventory_check_start"),
+        "checkComplete": url_for("api.inventory_check_complete", check_id=0),
+        "checkPreview": url_for("api.inventory_check_preview", check_id=0),
+        "checkItem": url_for("api.inventory_check_cancel", check_id=0),
+        "record": url_for("api.inventory_record_upsert", box_id=0, item_id=0),
+        "photo": _photo_url(),
+        "boxDetail": url_for("main.inventory_box", box_id=0),
+        "checkDetail": url_for("main.inventory_check", check_id=0),
+        "checksPage": url_for("main.inventory_checks"),
+    }
+    return {"may_edit": can_edit_inventory(), "photos_enabled": media.enabled(),
+            "urls": urls, **data}
+
+
+@bp.get("/inventory")
+@require_inventory_view
+def inventory_overview():
+    """The warehouse: every box with its contents, the discarded shelf, the running
+    check's progress and the finished checks."""
+    data = _inventory_page(inventory.overview_data())
+    return render_template("inventory_overview.html", data=data)
+
+
+@bp.get("/inventory/boxes/<int:box_id>")
+@require_inventory_view
+def inventory_box(box_id: int):
+    """One box: what is in it and, during a check, the place where its items are checked."""
+    box = first_or_404(
+        db.select(InventoryBox).filter_by(id=box_id).options(*loaders.INVENTORY_BOX),
+        description="Krabice nenalezena.")
+    data = _inventory_page(inventory.box_data(box))
+    return render_template("inventory_box.html", box=box, data=data)
+
+
+@bp.get("/inventory/checks")
+@require_inventory_view
+def inventory_checks():
+    """Inventory checks: start one, watch the per-box progress, finish or cancel it, and
+    browse the finished ones."""
+    data = _inventory_page(inventory.checks_data())
+    return render_template("inventory_checks.html", data=data)
+
+
+@bp.get("/inventory/checks/<int:check_id>")
+@require_inventory_view
+def inventory_check(check_id: int):
+    """A finished check, read-only: what was observed, grouped by the box it was seen in."""
+    check = first_or_404(
+        db.select(InventoryCheck)
+        .where(InventoryCheck.id == check_id, InventoryCheck.active_lock.is_(None))
+        .options(*loaders.INVENTORY_CHECK),
+        description="Inventura nenalezena.")
+    data = _inventory_page(inventory.check_data(check))
+    return render_template("inventory_check.html", check=check, data=data)
+
+
+@bp.get("/inventory/photos/<variant>/<filename>")
+@require_inventory_view
+def inventory_photo(variant: str, filename: str):
+    """Serve a stored photo: MEDIA_DIR sits outside the static tree, so this is the only
+    way in."""
+    if not media.enabled() or variant not in media.VARIANTS or not media.valid_filename(filename):
+        abort(404)
+    # Names are UUIDs, so a file never changes: cache hard, but privately (the photos are
+    # behind a login and must not land in a shared cache).
+    response = send_from_directory(media.variant_dir(variant), filename, max_age=31536000)
+    response.cache_control.public = False
+    response.cache_control.private = True
+    return response

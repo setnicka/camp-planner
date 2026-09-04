@@ -1,8 +1,13 @@
 {% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_sections, css %}
 {% block title %}Akce – Camp Planner{% endblock %}
-{# "Akce" rides in the navigation header (where camp pages show the camp name). #}
-{% block cp_nav %}<span class="cp-camp-name">Akce</span>{% endblock %}
+{# "Akce" rides in the navigation header (where camp pages show the camp name). The
+   warehouse belongs to no camp, so its link sits beside it and the body offers no second
+   way in. Loose, not in .cp-camp-links: a phone would move that box onto a row of its own. #}
+{% block cp_nav %}<span class="cp-camp-name">Akce</span>
+  {% if can_view_inventory() %}
+    <a class="cp-camp-link" href="{{ url_for('main.inventory_overview') }}">Sklad</a>
+  {% endif %}{% endblock %}
 
 {% block cp_head %}
   {{ css('css/landing.css') }}

@@ -282,9 +282,12 @@
   .cp-brand-word { display: none; }
   .cp-brand-mark { display: block; width: 20px; height: 20px; }
   /* flex-basis 0 keeps a long name from forcing a line break: it takes what is left over
-     and cuts itself short, rather than pushing the controls onto a row of their own. */
-  .cp-camp-name {
-    font-size: 1.15rem; flex: 1 1 0; min-width: 0;
+     and cuts itself short, rather than pushing the controls onto a row of their own. Only
+     the linked names (camp, warehouse) can be long; a static <span> word ("Akce") must not
+     claim the width, or a link beside it lands against the account icon. */
+  .cp-camp-name { font-size: 1.15rem; }
+  a.cp-camp-name {
+    flex: 1 1 0; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   /* order puts the box last whatever the shell around it, flex-basis breaks the row before
