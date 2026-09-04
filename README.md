@@ -5,8 +5,8 @@ Flask web app that runs on **SQLite, PostgreSQL or MySQL**.
 
 It has three layers: a relational **data model** with a service layer on top,
 a server-rendered **web UI** (vis-timeline day-grid editor, camp settings,
-activity and material pages), and a pydantic-validated **JSON REST API** under
-`/api` (Swagger at `/apidoc/swagger`).
+activity and material pages, a shared warehouse with inventory checks), and a
+pydantic-validated **JSON REST API** under `/api` (Swagger at `/apidoc/swagger`).
 
 ![The day-grid timeline editor](docs/screenshots/01-timeline.webp)
 
@@ -86,6 +86,9 @@ Camp ─┬─ Category        (per-camp palette; user-defined key / label / col
 
 User / UserCampRole   (standalone auth; present but empty under proxy/embedded)
 AuditLog              (append-only; grouped by activity_id; field-level JSON diff)
+
+InventoryBox ── InventoryItem ── InventoryPhoto     (global, not per camp; items retire via discarded_at)
+InventoryCheck ── InventoryCheckRecord              (one record per observed item; applied on completion)
 ```
 
 Slots carry real clock times (naive datetimes in the camp timezone), 24h day rows may cross
@@ -114,11 +117,11 @@ camp_planner/
   cli.py          init-db / create-user / grant-role / api-token / sync-google / seed-demo
   api.py          JSON REST API blueprint (/api)
   schemas.py      pydantic request/response models (validation + OpenAPI)
-  views.py        HTML pages (camp list, timeline, detail, settings)
+  views.py        HTML pages (camp list, timeline, detail, settings, warehouse)
   integration.py  embedding hook for a host Flask app
   auth/           identity contract, permissions, standalone/proxy/embedded providers
-  models/         camp, org, activity, slot, material, audit, auth
-  services/       business logic (activities, camps, slots, materials, taxonomy, audit, …)
+  models/         camp, org, activity, slot, material, inventory, audit, auth
+  services/       business logic (activities, camps, slots, materials, inventory, media, audit, …)
   templates/      Jinja2 templates
   static/         CSS / JS (timeline editor) / vendored vis-timeline
 migrations/       Alembic migration scripts

@@ -1,8 +1,9 @@
 # Camp Planner documentation
 
 Camp Planner plans camps made of many overlapping activities across several days: a
-day-grid timeline editor, per-activity material and todo tracking, and reviewed two-way
-Google Calendar sync. Flask + SQLAlchemy, runs on SQLite, PostgreSQL or MySQL.
+day-grid timeline editor, per-activity material and todo tracking, reviewed two-way
+Google Calendar sync, and a shared warehouse with inventory checks.
+Flask + SQLAlchemy, runs on SQLite, PostgreSQL or MySQL.
 
 ## Where to start
 

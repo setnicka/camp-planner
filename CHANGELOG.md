@@ -16,6 +16,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - The activities overview can create an activity without a slot.
 - Org initials show the full name on hover and on tap.
+- Warehouse (`/inventory`): boxes and items shared by all camps; items are retired
+  rather than deleted; inventory checks several people fill in at once. Any signed-in
+  user reads, admins and editors of any camp edit. **Adds a DB migration.**
+- Warehouse photos: need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
 
 ### Changed
 
@@ -28,6 +32,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Better responsive header and forms on small screens.
 - Back closes an open dialog instead of leaving the page.
 - Show title tooltips on tap (to be visible on mobile devices).
+- `AuditLog.camp_id` is nullable; warehouse changes belong to no camp.
+- Search pickers no longer autofocus on touch screens.
 - Embedded contract: the page navigation slot is `cp_nav` (was `header_nav`), and a
   `base_template` that omits it warns at startup like the other three.
 - Requires Flask 3.1 or newer.
@@ -37,6 +43,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Fixed
 
 - Material need amounts must be finite and non-negative.
+- Modal fields no longer shrink when the dialog is taller than the screen.
+- Hover tints no longer stick after a tap.
+- A network failure shows a Czech message instead of "Failed to fetch".
 - Standalone login returns to the page that asked for it, not to the camp list.
 
 ## [0.3.4] - 2026-08-14
