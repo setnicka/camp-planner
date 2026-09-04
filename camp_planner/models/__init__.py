@@ -14,6 +14,14 @@ from camp_planner.models.audit import AuditLog
 from camp_planner.models.auth import ApiToken, User, UserCampRole
 from camp_planner.models.camp import Camp, Category, Tag
 from camp_planner.models.google import GoogleSyncOp, SyncOpKind
+from camp_planner.models.inventory import (
+    InventoryBox,
+    InventoryCheck,
+    InventoryCheckRecord,
+    InventoryCheckStatus,
+    InventoryItem,
+    InventoryPhoto,
+)
 from camp_planner.models.material import (
     Material,
     MaterialAssignment,
@@ -31,6 +39,12 @@ __all__ = [
     "Camp",
     "Category",
     "GoogleSyncOp",
+    "InventoryBox",
+    "InventoryCheck",
+    "InventoryCheckRecord",
+    "InventoryCheckStatus",
+    "InventoryItem",
+    "InventoryPhoto",
     "Material",
     "MaterialAssignment",
     "MaterialNeed",
