@@ -106,6 +106,10 @@ def _clean_labels(labels: list[str]) -> list[str]:
 
 # acquisition-label list, cleaned/deduped (the None branch of the update field skips it)
 Labels = Annotated[list[str], AfterValidator(_clean_labels)]
+# How much of something there is. Rejects inf/nan, which pydantic allows by default and
+# which json.dumps writes as the bare token Infinity: no JSON parser reads that back, so
+# a single such row blanks every page rendered from an inlined payload.
+Amount = Annotated[float | None, Field(default=None, ge=0, allow_inf_nan=False)]
 
 
 class TodoCreate(BaseModel):
@@ -552,14 +556,14 @@ class MaterialMergeIn(BaseModel):
 
 class MaterialNeedAddIn(BaseModel):
     material_id: int
-    amount: float | None = None
+    amount: Amount = None
     unit: str | None = Field(default=None, max_length=40)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     is_ready: bool = False
 
 
 class MaterialNeedUpdateIn(BaseModel):
-    amount: float | None = None
+    amount: Amount = None
     unit: str | None = Field(default=None, max_length=40)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     is_ready: bool | None = None
