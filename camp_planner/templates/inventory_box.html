@@ -1,0 +1,4 @@
+{% extends "_layouts/inventory.html" %}
+{% set inv_active = "overview" %}   {# a box is a drill-down from the overview #}
+{% set inv_script = "inventory-box.js" %}
+{% block title %}{{ box.name }} – Sklad{% endblock %}

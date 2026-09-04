@@ -30,21 +30,36 @@
   </a>
 {% endmacro %}
 
-{# The camp heading: camp name plus the section tabs, on one compact line. The tabs sit in
-   their own .cp-camp-links box, which a phone moves onto a second row. Goes through
-   the page's `cp_nav` block — into the standalone top bar (.cp-header) on full.html, and
-   into the .cp-camp-nav band when embedded (bare.html). `active` ∈
-   timeline|materials|overview|todos|settings highlights the current one; drill-downs pick
-   their nearest section (activity detail uses "overview"); pass "" for none. #}
-{% macro camp_nav(camp, active="") %}
-  <a class="cp-camp-name" href="{{ url_for('main.camp_timeline', slug=camp.slug) }}">{{ camp.name }}</a>
+{# A section heading: the name linking home plus the section tabs, on one compact line.
+   The tabs sit in their own .cp-camp-links box, which a phone moves onto a second row.
+   Goes through the page's `cp_nav` block: into the standalone top bar (.cp-header)
+   on full.html, and into the .cp-camp-nav band when embedded (bare.html). `active` is the
+   key of the highlighted section; drill-downs pick their nearest one, "" means none. #}
+{% macro section_nav(name, home, sections, active, url_args={}) %}
+  <a class="cp-camp-name" href="{{ home }}">{{ name }}</a>
   <div class="cp-camp-links">
-  {%- for key, endpoint, label in camp_sections %}
+  {%- for key, endpoint, label in sections %}
     <a class="cp-camp-link {{ 'is-active' if active == key }}"
-       href="{{ url_for(endpoint, slug=camp.slug) }}"
+       href="{{ url_for(endpoint, **url_args) }}"
        {{ 'aria-current=page' if active == key }}>{{ label }}</a>
   {%- endfor %}
   </div>
+{% endmacro %}
+
+{# `active` ∈ timeline|materials|overview|todos|settings (activity detail uses "overview"). #}
+{% macro camp_nav(camp, active="") %}
+  {{ section_nav(camp.name, url_for('main.camp_timeline', slug=camp.slug), camp_sections, active,
+                 {"slug": camp.slug}) }}
+{% endmacro %}
+
+{% set inventory_sections = [
+  ("overview", "main.inventory_overview", "Přehled skladu"),
+  ("checks",   "main.inventory_checks",   "Inventury"),
+] %}
+
+{# `active` ∈ overview|checks; a box page and a finished check pass their section. #}
+{% macro inventory_nav(active) %}
+  {{ section_nav("Sklad", url_for('main.inventory_overview'), inventory_sections, active) }}
 {% endmacro %}
 
 {# Colour-theme switch (light / auto / dark). Renders nothing when the deployment pins the

@@ -1,0 +1,26 @@
+{# Shared shell of the four warehouse pages; they differ only in title, the active nav
+   section (inv_active) and the page script (inv_script), set by the child template. #}
+{% extends "_layouts/page.html" %}
+{% from "_macros.html" import csrf_meta, css, inventory_nav, js %}
+{% block cp_nav %}{{ inventory_nav(inv_active) }}{% endblock %}
+
+{% block cp_head %}
+  {{ css('css/components.css') }}
+  {{ css('css/inventory.css') }}
+  {{ csrf_meta() }}
+{% endblock %}
+
+{% block cp_content %}
+  {# The page script renders everything from the JSON below; editing affordances are
+     gated by data.may_edit and the api re-checks server-side. #}
+  <div id="cp-inventory"></div>
+
+  <script id="cp-inventory-data" type="application/json">{{ data | tojson }}</script>
+{% endblock %}
+
+{% block cp_scripts %}
+  {{ js('js/dom.js') }}
+  {{ js('js/fuzzy.js') }}
+  {{ js('js/inventory-common.js') }}
+  {{ js('js/' + inv_script) }}
+{% endblock %}
