@@ -9,7 +9,7 @@
   const dataEl = document.getElementById("cp-tokens-data");
   if (!root || !dataEl) return;
 
-  const { el, api, toast, flash, openModal, withId } = window.cpDom;
+  const { el, api, asInstant, toast, flash, openModal, withId } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const URLS = DATA.urls;
   const ROLE_LABEL = Object.fromEntries(DATA.roles);
@@ -20,7 +20,7 @@
   // created_at / last_used_at are naive UTC (like the audit feed) — mark them UTC so the
   // browser renders them in local time; null last_used_at → em dash.
   const fmtTs = (iso) => (iso
-    ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z").toLocaleString("cs-CZ",
+    ? asInstant(iso).toLocaleString("cs-CZ",
         { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
     : "—");
 

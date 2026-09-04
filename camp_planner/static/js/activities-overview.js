@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, swatch, dash, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup, orgInitials } = window.cpDom;
+  const { el, api, withId, swatch, dash, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup, orgInitials } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -437,7 +437,7 @@
       hint: "Úkoly, sloty a materiál se přesunou do vybrané aktivity (množství stejného materiálu " +
         "se sečtou). Štítky a orgové z „" + r.title + "“ se zahodí a aktivita se smaže.",
       items: others, labelOf: (t) => t.title, metaOf: (t) => t.category && t.category.label,
-      url: mergeUrl(U.activityMerge, r.id),
+      url: withId(U.activityMerge, r.id),
       confirmText: (t) => "Sloučit „" + r.title + "“ do „" + t.title + "“?",
       successText: (t) => "Sloučeno do „" + t.title + "“",
     });

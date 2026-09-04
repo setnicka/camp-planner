@@ -16,7 +16,7 @@
 "use strict";
 
 window.cpHistoryFeed = (function () {
-  const { el, api, toast, plural } = window.cpDom;
+  const { el, api, asInstant, toast, plural } = window.cpDom;
 
   const SLOT_ROLE = { main: "Hlavní slot", prep: "Příprava", cleanup: "Úklid" };
   const ENTITY_LABELS = {
@@ -38,13 +38,9 @@ window.cpHistoryFeed = (function () {
 
   const DT_FMT = { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" };
 
-  // Two distinct kinds of timestamp live in the feed:
-  //  • created_at is an instant — a naive UTC timestamp (DB func.now()) serialized without a
-  //    zone marker; asInstant marks it UTC so the browser shows it in the viewer's local zone
-  //    instead of reading the UTC wall-clock as already-local (one UTC-offset in the past).
-  //  • slot start_at/end_at and due_date are naive LOCAL wall-clock (the data model keeps them
-  //    zone-free on purpose) — parse them as-is, never shifted.
-  const asInstant = (iso) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z");
+  // Two kinds of timestamp live in the feed: created_at is an instant (asInstant marks the
+  // naive UTC as such), slot start_at/end_at and due_date are zone-free local wall-clock,
+  // parsed as-is and never shifted.
   const fmtInstant = (iso) => asInstant(iso).toLocaleString("cs-CZ", DT_FMT);
   const fmtWallClock = (iso) => new Date(iso).toLocaleString("cs-CZ", DT_FMT);
 

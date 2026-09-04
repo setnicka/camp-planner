@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, dash, formModal, mergePicker, orgFilterHead, chipGroup, toast, actionGroup, orgInitials } = window.cpDom;
+  const { el, api, withId, dash, fmtNum, formModal, mergePicker, orgFilterHead, chipGroup, toast, actionGroup, orgInitials } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -56,8 +56,6 @@
   // Canonical search form of a label/query: norm + drop ALL whitespace, so the box matches
   // anywhere in the whole label ignoring spaces ("alza" and "kup:alza" both match "kup: alza").
   const searchForm = (s) => norm(s).replace(/\s+/g, "");
-
-  const fmtNum = (n) => Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000);
 
   // Per-unit totals across a material's usages, grouped by effective unit (need's override or
   // the catalog default), skipping null amounts → "12 ks, 3 m" (units in first-seen order).
@@ -454,7 +452,7 @@
       title: "Sloučit „" + m.name + "“ do…",
       hint: "U všech aktivit se „" + m.name + "“ nahradí vybraným materiálem a „" + m.name + "“ z katalogu zmizí.",
       items: others, labelOf: (t) => t.name, metaOf: (t) => t.unit,
-      url: mergeUrl(U.materialMerge, m.id),
+      url: withId(U.materialMerge, m.id),
       confirmText: (t) => "Sloučit „" + m.name + "“ do „" + t.name + "“? U všech aktivit se „" + m.name + "“ nahradí „" + t.name + "“.",
       successText: (t) => "Sloučeno do „" + t.name + "“",
     });
