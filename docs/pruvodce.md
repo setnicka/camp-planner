@@ -29,6 +29,7 @@ vše včetně přiřazení organizátorů, tagů a dalších užitečných kateg
 | [Úkoly](#úkoly) | co zbývá udělat a do kdy |
 | [Nastavení akce](#nastavení-akce) | kategorie, orgové, tagy, tokeny |
 | [Google Kalendář](#google-kalendář) | obousměrné propojení s kalendářem |
+| [Sklad](#sklad) | společný majetek napříč akcemi a inventury |
 | [Světlý a tmavý režim](#světlý-a-tmavý-režim) | přepínač vzhledu |
 | [API](#api) | strojový přístup k datům |
 
@@ -46,6 +47,12 @@ vše včetně přiřazení organizátorů, tagů a dalších užitečných kateg
 | Kategorie | barevné zařazení aktivity v rozvrhu |
 | Tag | vlastní pole na aktivitě: hotovo/ne, postup, text nebo prosté označení |
 | Okno dne | hodina, kterou začíná řádek dne v rozvrhu, výchozí 04:00 |
+| Věc | kus majetku ve skladu, společný všem akcím; s počtem, jednotkou a fotkami |
+| Krabice | místo, kde věci leží; každá věc je právě v jedné |
+| Virtuální krabice | krabice, která je jen místem (například „Volně v polici A0“) |
+| Vyřadit | věc už nemáme: zmizí z krabic, ale zůstane v historii a jde vrátit do skladu |
+| Inventura | společná kontrola skladu, po dokončení se její zápisy propíší do věcí |
+| Zápis | co inventura o jedné věci zjistila (stav sedí, jiný počet, vyřazení, přesun) |
 
 ## Quickstart
 
@@ -246,6 +253,24 @@ Pokud existuje v materiálech duplicita, dá se tlačítkem napravo **sloučit**
 (pokud mají slučované materiály rozdílné jednotky, systém si postěžuje a sloučení
 nepovolí – je potřeba je nejdřív srovnat a zkusit to znovu).
 
+Materiál může být svázaný s věcí ve [skladu](#sklad). To se stane buď:
+
+* Při zakládání materiálu z aktivity, kdy vyhledávač nabízí i věci ze skladu,
+  společně s krabicí, ve které leží. Při výběru se založí materiál této akce
+  se zkopírovaným názvem, odkazem a jednotkou.
+* Existující materiál lze propojit při jeho editaci (lze vyhledat věc ve skladu,
+  se kterou se propojí).
+
+Na jednu věc ve skladu může odkazovat nejvýše jeden materiál z akce (aby se
+zabránilo divným duplicitám).
+
+Po propojení s věcí ve skladu ukazuje sloupec **Sklad** krabici a za ní v
+závorce počet ve skladu, pokud je věc počítaná (zeleně když je věci dost,
+červeně pokud ne, šedě když porovnat nejde). Odkaz na krabici ji otevře se
+zvýrazněnou propojenou věcí. Pokud má věc fotku, je u ní zobrazena také.
+Na detailu aktivity je také zobrazena fotka věci i odkaz na krabici (pokud
+existuje).
+
 ## Úkoly
 
 ![Přehled úkolů](screenshots/06-ukoly.webp)
@@ -294,6 +319,87 @@ sebe. Iniciály se v události z Googlu poznají po rozdělení podle čárek, s
 plusů nebo mezer, závorky se ignorují.
 
 Nastavení servisního účtu popisuje [google_calendar_setup.md](google_calendar_setup.md).
+
+## Sklad
+
+Sklad je společný pro všechny akce; odkaz na něj je na úvodní stránce v hlavičce.
+Vidí do něj každý přihlášený, upravovat ho může editor aspoň jedné akce.
+
+Věci bydlí v **krabicích**, každá věc právě v jedné (krabice může být i
+virtuální, například „Volně v polici A0“, „Ztracené“ a podobně). **Přehled skladu**
+je mapa krabic podle umístění: název krabice vede na její detail, klik jinam na
+dlaždici ukáže náhled obsahu. Virtuální krabice se kreslí čárkovaně přes celý řádek.
+
+V přehledu skladu se dá **fulltextově vyhledávat** v názvech věcí i krabic.
+Hledání pak zobrazí jen věci nebo krabice, jejichž název vyhovuje vyhledávanému
+výrazu. Podobné hledání je i v detailech krabic s větším počtem věcí.
+
+U **věci** se eviduje nepovinný počet a jednotka. Prázdný počet může znamenat,
+že věc existuje, ale počet neřešíme (typicky kusové věci), neurčité množství lze
+zapsat do jednotky jako „hodně“, „nekonečno“ a podobně. Každá věc může mít dále
+alternativní názvy pro hledání, odkaz (třeba na e-shop), poznámku a fotky. Věc
+nemá vlastní stránku: na detailu krabice se tlačítkem ✎ otevře dialog s editací
+(včetně přidání/odebrání fotek), kliknutím na počet s jednotkou se otevře jen
+menší editační okno pro úpravu počtu.
+
+S věcí se také dají udělat následující akce:
+
+* **Přesunout** do jiné krabice.
+* **Vyřadit** ze skladu. Vyřazená věc zmizí z krabic, zůstane ale ve složené
+  sekci „Vyřazené“ na přehledu i ve všech inventurách. Odtud ji tlačítko
+  **Vrátit do skladu** vrátí do vybrané krabice.
+* **Smazat** nenávratně s kompletní historií. V tu chvíli zmizí ze všech
+  inventur, odpojí se jakákoliv prolinkování a smažou se fotky. Typicky
+  používané jen pro omylem založené věci.
+
+### Inventura
+
+Inventura je stav skladu k nějakému datu. Během aktivní inventury se celý sklad
+přepne do speciálního módu, kdy orgové na detailech krabic u každé věci
+zapisují její stav (ve výchozím stavu je vše na „nezkontrolováno“). Inventura se
+pak tlačítkem **Dokončit inventuru** na stránce Inventury označí za dokončenou a
+v tu chvíli se všechny zápisy propíší do stavu věcí. Dokončená inventura je
+neměnná historie. Započatou inventuru lze i zrušit (**Zrušit inventuru** tamtéž),
+v tu chvíli se všechny zápisy inventury zahodí.
+
+Inventura se zahajuje na stránce **Inventury** a při zahajování lze zvolit
+i existující akci pro zobrazení pomocného sloupce **Použito na …** s tím, kolik
+které věci akce potřebovala (a tedy kolik se jich mělo vrátit nebo kolik se jich
+asi spotřebovalo).
+Nabídnou se jen akce, do kterých má zahajující přístup; číslo u věci pak vidí
+každý, kdo vidí sklad.
+
+Během inventury lze v detailu krabice o každé věci prohlásit:
+
+* **stav sedí** – potvrdí se evidovaný počet,
+* **jiný počet** – zapíše se skutečný počet (u počtu je pak vidět „15 → 12“),
+* **vyřadit** – věc už neexistuje,
+* **přesunout** – věc patří do jiné krabice,
+* **nezkontrolováno** – výchozí stav (lze se do něj vrátit přes **zrušit kontrolu**).
+
+K zápisu jde připsat poznámka, při dokončení se připojí na konec existující
+poznámky u věci. Tlačítko **↝ Přesunout existující věc z jiné krabice** hledá v
+celém skladu včetně vyřazených: nalezená věc se zobrazí v aktuální krabici
+stejně, jako by se u věci kliknulo na „Přesunout“ (u vyřazené na „Vrátit do skladu“);
+skutečně se přesune až s dokončením inventury.
+
+Naráz běží jedna inventura, zapisovat může víc lidí zároveň; každá změna se ukládá
+okamžitě. Počty, přesuny a vyřazování se během ní mění jen inventurními tlačítky,
+ostatní úpravy věci fungují dál. Přepínač **skrýt zkontrolované** nechá v krabici jen to,
+co zbývá projít. Průběh ukazuje přehled skladu: počet zkontrolovaných věcí u každé
+krabice i za celé umístění, hotové krabice jsou podbarvené zeleně.
+
+Staré inventury si lze prohlédnout jako celek, nebo lze na každé krabici použít
+tlačítko **Historie**, které přidá sloupec za každou z posledních pěti inventur
+(na telefonu tří), které o obsahu krabice něco říkají. Značky: ✓ beze změny,
+„4 → 6“ změna počtu, ⤳ přesun, ✕ vyřazení, pomlčka v té inventuře nekontrolováno.
+
+### Fotky
+
+Fotky fungují, jen když je server na ně nastavený (viz [DEPLOYMENT.md](DEPLOYMENT.md));
+jinak se ta část skladu nezobrazuje. Nahrávají se v dialogu věci, na mobilu nabídne
+prohlížeč rovnou foťák. První fotka je titulní a zobrazuje se u věci v seznamech,
+kliknutím se zvětší.
 
 ## Světlý a tmavý režim
 
