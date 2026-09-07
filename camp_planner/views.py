@@ -266,6 +266,7 @@ def camp_overview(slug: str):
             "activityItem": url_for("api.activity_delete", activity_id=0),
             "activityMerge": url_for("api.activity_merge", source_id=0),
             "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
+            "activityCreate": url_for("api.activity_create", slug=camp.slug),
         },
     }
     return render_template("activities_overview.html", camp=camp, data=data)

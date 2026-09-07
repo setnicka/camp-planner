@@ -25,6 +25,7 @@
 /* sort-mode segmented control (shared .cp-seg): margin-right:auto pushes it left
    while the count + reset stay right-aligned. */
 .cp-ov-toolbar .cp-seg { margin-right: auto; }
+.cp-ov-toolbar .cp-add { margin-top: 0; }   /* the toolbar's own gap spaces it */
 /* hint below the table, styled like the timeline's .cp-tl-help */
 .cp-ov-hint { margin: 0.4rem 0 0; font-size: 12px; color: var(--cp-muted); line-height: 1.35; }
 

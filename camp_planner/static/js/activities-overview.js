@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, swatch, dash, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup } = window.cpDom;
+  const { el, api, withId, mergeUrl, swatch, dash, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -475,7 +475,11 @@
     countLabel = el("span", { class: "cp-muted cp-ov-count" });
     const hint = el("p", { class: "cp-ov-hint" }, el("small", null,
       "Další sloupce mohou být přidány jako tagy v nastavení akce (zobrazeny jen připnuté tagy)."));
-    const toolbar = el("div", { class: "cp-ov-toolbar" }, seg, countLabel, reset);
+    // An activity without a slot (material, todos and notes still hang off it) starts here;
+    // the timeline only creates activities together with their first slot.
+    const add = mayEdit ? el("button", { type: "button", class: "cp-add" }, "+ Nová aktivita") : null;
+    if (add) add.addEventListener("click", openCreate);
+    const toolbar = el("div", { class: "cp-ov-toolbar" }, seg, add, countLabel, reset);
 
     tbody = el("tbody");
     const table = el("table", { class: "cp-table cp-ov-table cp-sticky-head" }, el("thead", null, headRow), tbody);
@@ -487,6 +491,33 @@
     tbody.replaceChildren(...measureRows());
     freezeColumns(table, headRow);
     renderTableBody();
+  }
+
+  // "Nová aktivita": name and category, then straight to the new activity's detail, where
+  // the material and todos it was made for get added.
+  function openCreate() {
+    const name = el("input", { type: "text", class: "cp-modal-name", placeholder: "Název aktivity" });
+    const noCats = CATEGORIES.length === 0;
+    const cats = chipGroup(CATEGORIES.map((c) => [c.id, swatch(c.color), c.label]),
+      { selected: noCats ? null : CATEGORIES[0].id });
+    formModal({
+      title: "Nová aktivita",
+      okLabel: "Vytvořit",
+      pane: el("div", { class: "cp-pane" },
+        el("label", { class: "cp-field-label" }, "Název"), name,
+        el("label", { class: "cp-field-label" }, "Kategorie"), cats.node,
+        noCats ? el("div", { class: "cp-field-hint" }, "Akce nemá žádnou kategorii – nejdřív ji přidej v nastavení akce.") : null,
+        el("div", { class: "cp-field-hint" }, "Aktivita vznikne bez slotu; do rozvrhu ji lze zařadit později z timeline.")),
+      onSubmit: async (close) => {
+        const title = name.value.trim();
+        if (!title) { name.focus(); return; }
+        if (cats.get() == null) { toast("Vyberte kategorii.", true); return; }
+        const j = await api("POST", U.activityCreate, { title, category_id: cats.get() });
+        close();
+        location.href = withId(U.activityDetail, j.activity.id);
+      },
+    });
+    name.focus();
   }
 
   // External links / back button: re-read the hash and rebuild (our own writeHash uses
