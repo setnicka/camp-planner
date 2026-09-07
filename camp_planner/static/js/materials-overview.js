@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, dash, formModal, mergePicker, orgFilterHead, chipGroup, toast, actionGroup } = window.cpDom;
+  const { el, api, withId, mergeUrl, dash, formModal, mergePicker, orgFilterHead, chipGroup, toast, actionGroup, orgInitials } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -218,8 +218,7 @@
     const wrap = el("span");
     orgs.forEach((o, i) => {
       if (i) wrap.append(", ");
-      // initials only: data-cp-hint puts the full name within reach of a tap as well
-      wrap.append(el("span", { "data-cp-hint": "", title: orgName.get(o.org_id) || "" }, o.initials));
+      wrap.append(orgInitials(o.initials, orgName.get(o.org_id)));
     });
     return wrap;
   }

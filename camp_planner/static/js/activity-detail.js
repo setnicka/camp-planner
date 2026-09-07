@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup } = window.cpDom;
+  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup, orgInitials } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
   const DATA = JSON.parse(dataEl.textContent);
@@ -47,7 +47,8 @@
       el("span", { class: "cp-tagchip-text" },
         el("span", { class: "cp-slot-day" }, day), " " + hhmm(s.start_at) + " – " + hhmm(s.end_at)));
     if (s.override_name) main.append(el("span", { class: "cp-slot-name" }, s.override_name));
-    if (s.orgs.length) main.append(el("span", { class: "cp-slot-orgs" }, s.orgs.map((o) => o.initials).join(", ")));
+    // one inline run inside the flex chip, so the ", " between the initials keeps its space
+    if (s.orgs.length) main.append(el("span", { class: "cp-slot-orgs" }, el("span", null, ...initialsList(s.orgs))));
     const chip = el("span", { class: "cp-tagchip cp-slotchip" }, main);
     if (mayEdit) {   // inline ✎ segment (a button can't live inside the <a>, so it's a sibling)
       const edit = el("button", { type: "button", class: "cp-slot-edit", title: "Upravit slot (název, orgy)" }, "✎");
@@ -142,12 +143,18 @@
     headerHost.replaceChildren(bar);
   }
 
+  // "Á, L", each naming its org (inside the slot chip a tap on the initials then shows the
+  // name instead of leaving for the timeline, which the rest of the chip still does).
+  const orgFullName = new Map(DATA.orgs.map((o) => [o.id, o.name]));
+  function initialsList(orgs) {
+    return orgs.flatMap((o, i) => [i ? ", " : null, orgInitials(o.initials, orgFullName.get(o.org_id))]).filter(Boolean);
+  }
   function orgsLine() {
     const part = (label, role) => {
       const list = A.orgs.filter((o) => o.role === role);
       if (!list.length) return null;
       return el("span", { class: "cp-org-part" },
-        el("span", { class: "cp-org-role" }, label), list.map((o) => o.initials).join(", "));
+        el("span", { class: "cp-org-role" }, label), ...initialsList(list));
     };
     const g = part("Garant", "garant"), h = part("Pomocník", "helper");
     if (!g && !h) return el("span", { class: "cp-muted" }, "—");

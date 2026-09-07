@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, swatch, dash, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup } = window.cpDom;
+  const { el, api, withId, mergeUrl, swatch, dash, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup, orgInitials } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -108,11 +108,13 @@
     return s;
   }
 
+  const orgName = new Map(ORGS.map((o) => [o.initials, o.name]));
+  const orgSpan = (cls, initials) => orgInitials(initials, orgName.get(initials), cls);
   function orgCell(r) {
     if (!r.garants.length && !r.helpers.length) return el("td", null, dash());
     const td = el("td", { class: "cp-ov-orgs" });
-    const parts = r.garants.map((i) => el("span", { class: "cp-ov-garant" }, i))
-      .concat(r.helpers.map((i) => el("span", { class: "cp-ov-helper" }, i)));
+    const parts = r.garants.map((i) => orgSpan("cp-ov-garant", i))
+      .concat(r.helpers.map((i) => orgSpan("cp-ov-helper", i)));
     parts.forEach((p, i) => { if (i) td.append(", "); td.append(p); });
     return td;
   }
