@@ -336,11 +336,12 @@ window.cpDom = (function () {
     return group;
   }
 
-  function orgFilterHead({ orgs, selected, extra, onChange }) {
+  // `label` names the column and the button ("Garant (2) ▾"); the roster is orgs either way.
+  function orgFilterHead({ orgs, selected, extra, onChange, label = "Orgové" }) {
     const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
     let extraCb = null;
     const count = () => selected.size + (extra?.countInLabel && extraCb?.checked ? 1 : 0);
-    const setLabel = (n = count()) => { btn.textContent = n ? "Orgové (" + n + ") ▾" : "Vše ▾"; };
+    const setLabel = (n = count()) => { btn.textContent = n ? label + " (" + n + ") ▾" : "Vše ▾"; };
     const panel = el("div", { class: "cp-th-pop", hidden: true });
     panel.addEventListener("click", (e) => e.stopPropagation());   // keep clicks inside from closing it
     if (extra) {
@@ -367,7 +368,7 @@ window.cpDom = (function () {
       openPopover = show ? panel : null;
     });
     setLabel();
-    const th = el("th", null, el("span", { class: "cp-th-label" }, "Orgové"), el("div", { class: "cp-th-dd" }, btn, panel));
+    const th = el("th", null, el("span", { class: "cp-th-label" }, label), el("div", { class: "cp-th-dd" }, btn, panel));
     return { th, setLabel };
   }
 

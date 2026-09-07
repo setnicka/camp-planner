@@ -235,8 +235,9 @@ Způsob sčítání určuje strategie:
   stačí jeden.
 
 Štítky pořízení ve tvaru `koupit: papírnictví` nebo `půjčit: Klára` říkají, odkud se věc
-vezme, a u položky můžou být orgové, kteří ji zajišťují. Sloupec **Hotovo** počítá,
-u kolika aktivit je materiál odbavený; zeleně, když u všech.
+vezme, a u položky může být **garant**, který ji zajišťuje. Sloupec **Aktivity** počítá,
+u kolika aktivit je materiál odbavený; zeleně, když u všech. Kliknutí na řádek ho rozbalí:
+každá aktivita má vlastní řádek s množstvím pod součtem a zaškrtávátkem hotovo pod odznakem.
 
 Pokud existuje v materiálech duplicita, dá se tlačítkem napravo **sloučit**
 (pokud mají slučované materiály rozdílné jednotky, systém si postěžuje a sloučení

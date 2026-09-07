@@ -17,6 +17,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Embedded: the navigation slot is renamed `header_nav` → `cp_nav`.
   **Upgrade note:** a host `base_template` must rename the block.
 - In-row actions and the calendar's sync buttons are one segmented button group.
+- Materials overview: a leaner table whose expanded rows list the needs; it
+  scrolls sideways on a phone.
 - Phones: the header fits the screen and form fields stack.
 - The browser's/phone's Back closes an open dialog instead of leaving the page.
 - Title tooltips also show on tap, so touch screens get them.
