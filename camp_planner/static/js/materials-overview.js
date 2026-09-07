@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, dash, formModal, mergePicker, orgFilterHead, chipGroup, toast } = window.cpDom;
+  const { el, api, withId, mergeUrl, dash, formModal, mergePicker, orgFilterHead, chipGroup, toast, actionGroup } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -247,15 +247,11 @@
       el("td", { class: "cp-mat-orgs" }, orgsCell(m)),
       el("td", null, String(total)),
       el("td", { class: "cp-mat-hotovo" }, readyBadge(ready, total)));
-    if (mayEdit) {
-      const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
-      edit.addEventListener("click", () => openMaterialEdit(m));
-      const merge = el("button", { type: "button", class: "cp-mini", title: "Sloučit s jiným" }, "⤳");
-      merge.addEventListener("click", () => openMaterialMerge(m));
-      const del = el("button", { type: "button", class: "cp-danger cp-mini", title: "Smazat" }, "✕");
-      del.addEventListener("click", () => deleteMaterial(m, del));
-      tr.append(el("td", { class: "cp-actions" }, edit, merge, del));
-    }
+    if (mayEdit) tr.append(el("td", { class: "cp-actions" }, actionGroup([
+      { label: "✎", title: "Upravit", onClick: () => openMaterialEdit(m) },
+      { label: "⤳", title: "Sloučit s jiným", onClick: () => openMaterialMerge(m) },
+      { label: "✕", title: "Smazat", danger: true, onClick: (e) => deleteMaterial(m, e.currentTarget) },
+    ])));
     // toggle expand on a row click — but not when clicking the name link or an action button
     tr.addEventListener("click", (e) => {
       if (e.target.closest("a, button")) return;
@@ -296,17 +292,14 @@
     const line = el("div", { class: "cp-usage-line" },
       el("a", { href: withId(U.activityDetail, u.activity_id) + "#materials", class: "cp-usage-act" }, u.activity_title),
       el("span", { class: "cp-muted cp-usage-qty" }, qty));
-    if (mayEdit) {
-      const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
-      edit.addEventListener("click", () => openUsageEdit(m, u));
-      const del = el("button", { type: "button", class: "cp-danger cp-mini", title: "Odebrat z aktivity" }, "✕");
-      del.addEventListener("click", async () => {
+    if (mayEdit) line.append(actionGroup([
+      { label: "✎", title: "Upravit", onClick: () => openUsageEdit(m, u) },
+      { label: "✕", title: "Odebrat z aktivity", danger: true, onClick: async () => {
         if (!confirm("Odebrat „" + m.name + "“ z aktivity „" + u.activity_title + "“?")) return;
         try { await api("DELETE", withId(U.needItem, u.need_id)); m.usages = m.usages.filter((x) => x.need_id !== u.need_id); refreshRow(m); toast("Odebráno"); }
         catch (e) { toast(e.message, true); }
-      });
-      line.append(edit, del);
-    }
+      } },
+    ]));
     const main = el("div", { class: "cp-usage-main" }, line);
     if (u.note) main.append(el("div", { class: "cp-muted cp-usage-note" }, u.note));
     return el("div", { class: "cp-usage-row" + (u.is_ready ? " is-ready" : "") }, cb, main);

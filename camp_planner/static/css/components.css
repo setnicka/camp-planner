@@ -154,13 +154,25 @@
 .cp-num { width: 6rem; }
 .cp-need-unit { width: 8rem; }
 
-/* --- segmented control (pill toggle) — sort modes, history modes, import choice --- */
+/* --- segmented control: sort modes, history modes, import choice, and the action groups
+   in rows and bars (✎ ⤳ ✕, "Synchronizovat | Odpojit") --- */
 .cp-seg { display: inline-flex; border: 1px solid var(--cp-border); border-radius: 6px; overflow: hidden; }
 .cp-seg-btn { font: inherit; font-size: 12px; padding: 0.25rem 0.7rem; border: 0; background: var(--cp-surface); color: var(--cp-text); cursor: pointer; }
 .cp-seg-btn + .cp-seg-btn { border-left: 1px solid var(--cp-border); }
-.cp-seg-btn:hover:not(.on):not(:disabled) { background: var(--cp-surface-2); }
+.cp-seg-btn:hover:not(.on):not(:disabled):not([aria-disabled="true"]) { background: var(--cp-surface-2); }
 .cp-seg-btn.on { background: var(--cp-accent); color: var(--cp-text-inverse); font-weight: 600; }
-.cp-seg-btn:disabled { opacity: .45; cursor: not-allowed; }
+.cp-seg-btn:disabled, .cp-seg-btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+/* a destructive member of a group: red text, not a red fill, so the group stays calm (its
+   own class: the generic .cp-danger button chrome would round and tint it) */
+.cp-seg-btn.cp-seg-danger { color: var(--cp-danger-text); }
+/* icon members (✎ ⤳ ✕) need less side padding than words */
+.cp-seg-icon { padding: .2rem .55rem; }
+/* Touch: a fingertip needs more than a pointer, but only sideways. Above and below are
+   other rows, and every row the buttons make taller is a row off the screen. */
+@media (hover: none) {
+  .cp-seg-icon { display: inline-flex; align-items: center; justify-content: center;
+    min-width: 2.5rem; min-height: 2rem; font-size: 1rem; }
+}
 
 /* --- loading spinner (history feed, google review, …) --- */
 .cp-spinner {
@@ -177,13 +189,12 @@
 .cp-add:hover { background: var(--cp-accent-wash); }
 .cp-edit-actions .cp-add { margin-top: 0; }   /* the row's own margin spaces it */
 
-/* --- compact in-row action buttons (✎ / ✕ / ⤳) — shared by the inline-edit + overview pages --- */
+/* --- compact standalone buttons ("Zrušit filtry", "Načíst starší", "Kopírovat"); grouped row
+   actions are a .cp-seg instead --- */
 .cp-mini { font: inherit; font-size: 12px; padding: 0.15rem 0.5rem; border-radius: 5px; cursor: pointer;
   border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text); }
-.cp-mini:not(.cp-danger):hover:not(:disabled) { background: var(--cp-surface-2); }   /* danger keeps its red (below) */
+.cp-mini:hover:not(:disabled) { background: var(--cp-surface-2); }
 .cp-mini:disabled, .cp-mini[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
-.cp-danger.cp-mini { background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
-.cp-danger.cp-mini:not(:disabled):hover { filter: brightness(1.08); }
 
 /* --- in-header sort + filter controls — shared by the overview tables (activities, todos) --- */
 /* Long tables opt in (.cp-sticky-head on the table) to keeping the header — labels and

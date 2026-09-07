@@ -66,4 +66,4 @@
 .cp-ov-bar-num { position: relative; font-size: 11px; font-variant-numeric: tabular-nums;
   color: var(--cp-text-inverse); text-shadow: 0 1px 1px var(--cp-shadow-2); }
 .cp-ov-empty { text-align: center; padding: 1rem; }
-/* .cp-mini / .cp-danger.cp-mini live in components.css (shared with the detail + materials pages) */
+/* .cp-seg in-row action groups live in components.css (shared with the detail + materials pages) */

@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash } = window.cpDom;
+  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
   const DATA = JSON.parse(dataEl.textContent);
@@ -385,17 +385,14 @@
     const line = el("div", { class: "cp-need-line" },
       nameCell,
       el("span", { class: "cp-muted cp-need-qty" }, qty));
-    if (mayEdit) {
-      const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
-      edit.addEventListener("click", () => openNeedEdit(n));
-      const del = el("button", { type: "button", class: "cp-danger cp-mini", title: "Odebrat" }, "✕");
-      del.addEventListener("click", async () => {
+    if (mayEdit) line.append(actionGroup([
+      { label: "✎", title: "Upravit", onClick: () => openNeedEdit(n) },
+      { label: "✕", title: "Odebrat", danger: true, onClick: async () => {
         if (!confirm("Odebrat materiál?")) return;
         try { await api("DELETE", withId(U.needItem, n.id)); A.material_needs = A.material_needs.filter((x) => x.id !== n.id); refreshMaterials(); toast("Odebráno"); }
         catch (e) { toast(e.message, true); }
-      });
-      line.append(edit, del);
-    }
+      } },
+    ]));
     const main = el("div", { class: "cp-need-main" }, line);
     if (n.note) main.append(el("div", { class: "cp-muted cp-need-note" }, n.note));   // note on its own line
     return el("div", { class: "cp-need-row" }, cb, main);

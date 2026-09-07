@@ -12,7 +12,7 @@
 "use strict";
 
 window.cpTodoList = function (opts) {
-  const { el, api, withId, dash, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns } = window.cpDom;
+  const { el, api, withId, dash, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns, actionGroup } = window.cpDom;
   const mount = opts.mount;
   const TODOS = opts.todos;                 // mutated in place (push/splice/assign)
   const ORGS = opts.orgs || [];             // [{id, initials, name}] — filter + edit picker
@@ -85,20 +85,20 @@ window.cpTodoList = function (opts) {
   }
 
   function actionsCell(t) {
-    const edit = el("button", { type: "button", class: "cp-mini", title: "Upravit" }, "✎");
-    edit.addEventListener("click", () => openForm(t));
-    const del = el("button", { type: "button", class: "cp-danger cp-mini", title: "Smazat" }, "✕");
-    del.addEventListener("click", async () => {
-      if (!confirm("Smazat úkol „" + t.title + "“?")) return;
-      del.disabled = true;
-      try {
-        await api("DELETE", withId(U.item, t.id));
-        const i = TODOS.findIndex((x) => x.id === t.id);
-        if (i >= 0) TODOS.splice(i, 1);
-        refresh(); toast("Smazáno");
-      } catch (e) { del.disabled = false; toast(e.message, true); }
-    });
-    return el("td", { class: "cp-actions" }, edit, del);
+    return el("td", { class: "cp-actions" }, actionGroup([
+      { label: "✎", title: "Upravit", onClick: () => openForm(t) },
+      { label: "✕", title: "Smazat", danger: true, onClick: async (e) => {
+        if (!confirm("Smazat úkol „" + t.title + "“?")) return;
+        const del = e.currentTarget;
+        del.disabled = true;
+        try {
+          await api("DELETE", withId(U.item, t.id));
+          const i = TODOS.findIndex((x) => x.id === t.id);
+          if (i >= 0) TODOS.splice(i, 1);
+          refresh(); toast("Smazáno");
+        } catch (err) { del.disabled = false; toast(err.message, true); }
+      } },
+    ]));
   }
 
   // Returns the task row, plus a full-width second row carrying the note when present (a

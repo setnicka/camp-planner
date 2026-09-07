@@ -85,4 +85,4 @@
 .cp-chip-suggest-row { padding: 0.3rem 0.6rem; cursor: pointer; font-size: 13px; }
 .cp-chip-suggest-row:hover, .cp-chip-suggest-row.cp-active { background: var(--cp-accent-subtle); }
 
-/* .cp-mini in-row action buttons + modal form fields come from components.css */
+/* .cp-seg in-row action groups + modal form fields come from components.css */
