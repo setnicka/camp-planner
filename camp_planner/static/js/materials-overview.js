@@ -18,17 +18,20 @@
   const MATS = DATA.materials;              // catalog materials with usages; mutated in place
   const ORGS = DATA.orgs || [];            // camp roster [{id, initials, name}] — edit picker
   const orgName = new Map(ORGS.map((o) => [o.id, o.name]));
-  const COLS = mayEdit ? 8 : 7;             // table columns (for the sub-row colspan)
+  // Fixed column widths so the layout doesn't reflow ("jump") as filtering changes which rows
+  // (and thus which widest cell) are visible. Order matches the header; last width = actions col.
+  const WIDTHS = ["32%", "12%", "28%", "12%", "8%"];
+  if (mayEdit) WIDTHS.push("8%");   // three icon segments
 
   // Filters: label = free-text query matched against the acquisition label(s) ("" = none);
   // orgIds/noOrg = responsible-org filter (any selected = OR, noOrg = unassigned).
   const filter = { label: "", orgIds: new Set(), noOrg: false };
 
   const expanded = new Set();               // material ids whose usages are shown (survives row re-render)
-  const rowEls = new Map();                 // material id -> { tr, sub, cell } for per-row refresh
-  let tbody;                                // stable table body
+  const rowEls = new Map();                 // material id -> its <tbody> (summary row + needs) for per-row refresh
+  let table;                                // stable table; each material owns one <tbody> under it
   let countLabel;                           // "Zobrazeno X z Y" toolbar label
-  let labelInput;                           // the "Pořízení" header label search <input>
+  let labelInput;                           // the "Štítky" header label search <input>
 
   // --- small helpers ---------------------------------------------------------
   // Split an acquisition label into a scoped "prefix: value" pair (on the first colon, both
@@ -72,12 +75,14 @@
     return order.map((unit) => fmtNum(sums.get(unit)) + (unit ? " " + unit : "")).join(", ");
   }
   const readiness = (m) => ({ ready: m.usages.filter((u) => u.is_ready).length, total: m.usages.length });
-  // "Hotovo" cell: a filled badge — green when every usage is ready, red while some remain;
-  // a dim dash when the material isn't used anywhere yet.
+  // "Aktivity" cell: ready/total as a filled badge, green when every usage is ready, red
+  // while some remain; a dim 0 when the material isn't used anywhere yet.
   function readyBadge(ready, total) {
-    if (!total) return dash();
+    if (!total) return el("span", { class: "cp-muted" }, "0");
     const done = ready === total;
-    return el("span", { class: "cp-mat-ready " + (done ? "done" : "todo") },
+    // A title only: a tap hint would swallow the click that expands the row.
+    return el("span", { class: "cp-mat-ready " + (done ? "done" : "todo"),
+                        title: "hotovo u " + ready + " z " + total + " aktivit" },
       (done ? "✓ " : "") + ready + "/" + total);
   }
   // map a MaterialNeedOut back onto our flatter usage shape (keep need_id/activity_*)
@@ -89,27 +94,24 @@
       mount.replaceChildren(el("p", { class: "cp-muted" }, "Zatím žádný materiál — přidej ho z detailu aktivity."));
       return;
     }
+    // The unit rides along in Množství and the badge in Aktivity carries the activity count,
+    // so neither gets a column of its own.
     const headRow = el("tr", null,
-      el("th", null, "Materiál"), el("th", null, "Jednotka"), el("th", null, "Množství"),
-      acqHead(), orgsHead(),
-      el("th", null, "Aktivit"), el("th", null, "Hotovo"));
+      el("th", null, "Materiál"), el("th", null, "Množství"),
+      acqHead(), orgsHead(), el("th", null, "Aktivity"));
     if (mayEdit) headRow.append(el("th", { class: "cp-actions" }, ""));
-    tbody = el("tbody");
-    // Fixed column widths so the layout doesn't reflow ("jump") as filtering changes which rows
-    // (and thus which widest cell) are visible. Order matches the header; last width = actions col.
-    const widths = ["22%", "7%", "9%", "28%", "12%", "7%", "8%"];
-    if (mayEdit) widths.push("7%");
-    const colgroup = el("colgroup", null, ...widths.map((w) => el("col", { style: "width:" + w })));
+    const colgroup = el("colgroup", null, ...WIDTHS.map((w) => el("col", { style: "width:" + w })));
     countLabel = el("span", { class: "cp-muted cp-todo-count" });   // margin-left:auto hugs it right
     const reset = el("button", { type: "button", class: "cp-mini" }, "Zrušit filtry");
     reset.addEventListener("click", resetFilters);
     mount.replaceChildren(
       el("div", { class: "cp-todo-toolbar" }, countLabel, reset),
-      el("table", { class: "cp-table cp-mat-table cp-sticky-head" }, colgroup, el("thead", null, headRow), tbody));
+      el("div", { class: "cp-mat-scroll" },
+        table = el("table", { class: "cp-table cp-mat-table cp-sticky-head" }, colgroup, el("thead", null, headRow))));
     renderTable();
   }
 
-  // "Pořízení" header: a free-text box that filters by the acquisition label.
+  // "Štítky" header: a free-text box that filters by the acquisition label.
   function acqHead() {
     labelInput = el("input", { type: "search", class: "cp-th-filter", placeholder: "Štítek, např. kup:mefisto…" });
     labelInput.value = filter.label;
@@ -117,17 +119,17 @@
       filter.label = labelInput.value;
       writeHash(); renderTable();
     });
-    return el("th", null, el("span", { class: "cp-th-label" }, "Pořízení"), labelInput);
+    return el("th", null, el("span", { class: "cp-th-label" }, "Štítky"), labelInput);
   }
 
   const onFilterChange = () => { writeHash(); renderTable(); };
 
   // Orgs filter — the shared header dropdown (checkbox list, any selected = OR;
-  // "bez orgů" matches materials with no responsible org).
+  // "bez garanta" matches materials with no responsible org).
   function orgsHead() {
     return orgFilterHead({
-      orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange,
-      extra: { label: "bez orgů", checked: filter.noOrg, set: (v) => { filter.noOrg = v; }, countInLabel: true },
+      orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange, label: "Garant",
+      extra: { label: "bez garanta", checked: filter.noOrg, set: (v) => { filter.noOrg = v; }, countInLabel: true },
     }).th;
   }
 
@@ -169,14 +171,14 @@
   }
 
   function renderTable() {
-    tbody.replaceChildren();
+    table.querySelectorAll("tbody").forEach((b) => b.remove());
     rowEls.clear();
     const visible = visibleMaterials().slice().sort((a, b) => a.name.localeCompare(b.name, "cs"));
     countLabel.textContent = "Zobrazeno " + visible.length + " z " + MATS.length;
     visible.forEach((m) => {
-      const r = renderMaterialRow(m);
-      rowEls.set(m.id, r);
-      tbody.append(r.tr, r.sub);
+      const group = renderMaterialRow(m);
+      rowEls.set(m.id, group);
+      table.append(group);
     });
   }
 
@@ -222,13 +224,11 @@
     return wrap;
   }
 
-  // Rebuild one material's summary row + usages sub-row in place (totals/readiness recompute).
+  // Rebuild one material's <tbody> (summary row + needs) in place (totals/readiness recompute).
   // Open/closed state lives in `expanded`, so it survives the swap.
   function refreshRow(m) {
-    const old = rowEls.get(m.id);
     const next = renderMaterialRow(m);
-    old.tr.replaceWith(next.tr);
-    old.sub.replaceWith(next.sub);
+    rowEls.get(m.id).replaceWith(next);
     rowEls.set(m.id, next);
   }
 
@@ -236,8 +236,10 @@
     const { ready, total } = readiness(m);
     const open = expanded.has(m.id);
     const tr = el("tr", { class: "cp-mat-row" },
-      el("td", null, el("span", { class: "cp-mat-caret" }, open ? "▾" : "▸"), " ", m.name),
-      el("td", null, m.unit || dash()),
+      // A flex row, so a wrapping name stays in its own column beside the caret.
+      el("td", null, el("span", { class: "cp-mat-name" },
+        el("span", { class: "cp-mat-caret" }, open ? "▾" : "▸"),
+        el("span", null, m.name))),
       el("td", null, unitTotals(m) || dash(),
         m.sum_strategy === "max"
           ? el("span", { class: "cp-muted cp-mat-agg", "data-cp-hint": "",
@@ -245,12 +247,15 @@
           : null),
       el("td", { class: "cp-mat-acq" }, acqCell(m)),
       el("td", { class: "cp-mat-orgs" }, orgsCell(m)),
-      el("td", null, String(total)),
       el("td", { class: "cp-mat-hotovo" }, readyBadge(ready, total)));
     if (mayEdit) tr.append(el("td", { class: "cp-actions" }, actionGroup([
       { label: "✎", title: "Upravit", onClick: () => openMaterialEdit(m) },
       { label: "⤳", title: "Sloučit s jiným", onClick: () => openMaterialMerge(m) },
-      { label: "✕", title: "Smazat", danger: true, onClick: (e) => deleteMaterial(m, e.currentTarget) },
+      // Greyed while activities use it, saying why (the server refuses the same way).
+      m.usages.length
+        ? { label: "✕", title: "Smazat", danger: true,
+            disabled: "Používají ho aktivity – nejdřív ho slučte s jiným, nebo ho z aktivit odeberte." }
+        : { label: "✕", title: "Smazat", danger: true, onClick: (e) => deleteMaterial(m, e.currentTarget) },
     ])));
     // toggle expand on a row click — but not when clicking the name link or an action button
     tr.addEventListener("click", (e) => {
@@ -258,30 +263,26 @@
       if (expanded.has(m.id)) expanded.delete(m.id); else expanded.add(m.id);
       refreshRow(m);
     });
-    const cell = el("td", { colspan: String(COLS) });
-    const sub = el("tr", { class: "cp-mat-sub" }, cell);
-    sub.hidden = !open;
-    if (open) renderUsages(m, cell);
-    return { tr, sub, cell };
+    const group = el("tbody", { class: "cp-mat-group" }, tr);
+    if (open) group.append(...[infoRow(m), ...m.usages.map((u) => usageRow(m, u))].filter(Boolean));
+    return group;
   }
 
-  function renderUsages(m, cell) {
-    const wrap = el("div");
-    if (m.url) wrap.append(el("div", { class: "cp-mat-note cp-muted" },
-      "URL: ", el("a", { href: m.url, target: "_blank", rel: "noopener" }, m.url)));   // catalog url, atop the note
-    if (m.note) wrap.append(el("div", { class: "cp-mat-note cp-muted" }, m.note));   // catalog note
-    if (!m.usages.length) {
-      wrap.append(el("div", { class: "cp-usage-empty cp-muted" }, "Zatím nikde nepoužito."));
-    } else {
-      const list = el("div", { class: "cp-usage-list" });
-      m.usages.forEach((u) => list.append(usageRow(m, u)));
-      wrap.append(list);
-    }
-    cell.replaceChildren(wrap);
+  // The material's url and note, or "nepoužito": one full-width row ahead of the needs;
+  // null when there is nothing to say.
+  function infoRow(m) {
+    const bits = [];
+    if (m.url) bits.push(el("div", { class: "cp-mat-note cp-muted" },
+      "URL: ", el("a", { href: m.url, target: "_blank", rel: "noopener" }, m.url)));
+    if (m.note) bits.push(el("div", { class: "cp-mat-note cp-muted" }, m.note));
+    if (!m.usages.length) bits.push(el("div", { class: "cp-usage-empty cp-muted" }, "Zatím nikde nepoužito."));
+    return bits.length ? el("tr", { class: "cp-mat-sub" }, el("td", { colspan: String(WIDTHS.length) }, ...bits)) : null;
   }
 
+  // One need as a table row under its material: the activity in the name column, its amount
+  // under the sum, the ready checkbox under the badge it counts into.
   function usageRow(m, u) {
-    const cb = el("input", { type: "checkbox" });
+    const cb = el("input", { type: "checkbox", title: "Hotovo" });
     cb.checked = u.is_ready;
     cb.disabled = !mayEdit;
     if (mayEdit) cb.addEventListener("change", async () => {
@@ -289,20 +290,22 @@
       catch (e) { cb.checked = !cb.checked; toast(e.message, true); }
     });
     const qty = ((u.amount != null ? u.amount : "") + " " + (u.unit || m.unit || "")).trim();
-    const line = el("div", { class: "cp-usage-line" },
-      el("a", { href: withId(U.activityDetail, u.activity_id) + "#materials", class: "cp-usage-act" }, u.activity_title),
-      el("span", { class: "cp-muted cp-usage-qty" }, qty));
-    if (mayEdit) line.append(actionGroup([
+    const tr = el("tr", { class: "cp-mat-usage" + (u.is_ready ? " is-ready" : "") },
+      el("td", { class: "cp-mat-usage-name" },
+        el("a", { href: withId(U.activityDetail, u.activity_id) + "#materials", class: "cp-usage-act" }, u.activity_title),
+        u.note ? el("div", { class: "cp-muted cp-usage-note" }, u.note) : null),
+      el("td", null, qty || dash()),
+      el("td"), el("td"),
+      el("td", { class: "cp-mat-hotovo" }, cb));
+    if (mayEdit) tr.append(el("td", { class: "cp-actions" }, actionGroup([
       { label: "✎", title: "Upravit", onClick: () => openUsageEdit(m, u) },
       { label: "✕", title: "Odebrat z aktivity", danger: true, onClick: async () => {
         if (!confirm("Odebrat „" + m.name + "“ z aktivity „" + u.activity_title + "“?")) return;
         try { await api("DELETE", withId(U.needItem, u.need_id)); m.usages = m.usages.filter((x) => x.need_id !== u.need_id); refreshRow(m); toast("Odebráno"); }
         catch (e) { toast(e.message, true); }
       } },
-    ]));
-    const main = el("div", { class: "cp-usage-main" }, line);
-    if (u.note) main.append(el("div", { class: "cp-muted cp-usage-note" }, u.note));
-    return el("div", { class: "cp-usage-row" + (u.is_ready ? " is-ready" : "") }, cb, main);
+    ])));
+    return tr;
   }
 
   // --- edits -----------------------------------------------------------------
@@ -403,7 +406,7 @@
         el("div", { class: "cp-field-hint" },
           "Enter, Tab nebo čárka přidá štítek. Backspace vrátí hotový štítek k editaci. " +
           "Tvar „prefix:hodnota“ se zobrazí jako barevný štítek (např. kup:mefisto)."),
-        el("label", { class: "cp-field-label" }, "Odpovědní orgové"), orgGroup.node,
+        el("label", { class: "cp-field-label" }, "Garant"), orgGroup.node,
         el("label", { class: "cp-field-label" }, "Poznámka"), note,
         el("label", { class: "cp-field-label" }, "Odkaz"), url),
       onSubmit: async (close) => {
@@ -450,10 +453,10 @@
     if (!others.length) { toast("Není do čeho slučovat — v katalogu je jen tento materiál.", true); return; }
     mergePicker({
       title: "Sloučit „" + m.name + "“ do…",
-      hint: "Použití se přesunou do vybraného materiálu a tento se smaže.",
+      hint: "U všech aktivit se „" + m.name + "“ nahradí vybraným materiálem a „" + m.name + "“ z katalogu zmizí.",
       items: others, labelOf: (t) => t.name, metaOf: (t) => t.unit,
       url: mergeUrl(U.materialMerge, m.id),
-      confirmText: (t) => "Sloučit „" + m.name + "“ do „" + t.name + "“? (všechny výskyty „" + m.name + "“ budou změněny na „" + t.name + "“)",
+      confirmText: (t) => "Sloučit „" + m.name + "“ do „" + t.name + "“? U všech aktivit se „" + m.name + "“ nahradí „" + t.name + "“.",
       successText: (t) => "Sloučeno do „" + t.name + "“",
     });
   }
@@ -476,11 +479,11 @@
   buildShell();
 
   if (hashId != null) {
-    const r = rowEls.get(hashId);
-    if (r) {
-      r.tr.scrollIntoView({ block: "center" });
-      r.tr.classList.add("cp-mat-hl");
-      setTimeout(() => r.tr.classList.remove("cp-mat-hl"), 2000);
+    const tr = rowEls.get(hashId)?.firstElementChild;
+    if (tr) {
+      tr.scrollIntoView({ block: "center" });
+      tr.classList.add("cp-mat-hl");
+      setTimeout(() => tr.classList.remove("cp-mat-hl"), 2000);
     }
   }
 })();

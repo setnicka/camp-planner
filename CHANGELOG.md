@@ -16,6 +16,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - In-row actions (edit, merge, delete) and the calendar's sync buttons are one segmented
   button group; a destructive member is red text, not a red button.
+- Materials overview: the Jednotka and Aktivit columns are gone (the unit rides along in
+  Množství, the Aktivity badge carries the count); an expanded material lists its needs as
+  table rows under the matching columns; columns read Štítky and Garant; deleting a material
+  still in use is greyed out with the reason; the table scrolls sideways on a phone.
 - Better responsive header and forms on small screens.
 - Back closes an open dialog instead of leaving the page.
 - Show title tooltips on tap (to be visible on mobile devices).

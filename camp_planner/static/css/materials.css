@@ -6,6 +6,12 @@
 /* Fixed layout + a <colgroup> (set in JS) keep column widths stable as filtering changes which
    rows are visible — otherwise auto-layout reflows ("jumps") to the widest visible cell. */
 .cp-mat-table { max-width: 78rem; table-layout: fixed; }
+/* Phone: five columns don't fit 360px, so the table scrolls sideways inside its wrapper (only
+   there: a scroll container would end the sticky head on the desktop). */
+@media (max-width: 40rem) {
+  .cp-mat-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+  .cp-mat-table { min-width: 52rem; }   /* the narrowest header (Množství) still fits its 12 % */
+}
 .cp-mat-table td:first-child { overflow-wrap: anywhere; }   /* long names wrap instead of widening */
 .cp-mat-table .cp-th-filter { box-sizing: border-box; width: 100%; }   /* label search fills the header */
 
@@ -17,10 +23,11 @@
 /* flash a row arrived-at via #material-<id> (fades in, then out when the class is removed) */
 .cp-mat-row > td { transition: background 1.2s ease; }
 .cp-mat-row.cp-mat-hl > td { background: var(--cp-warning-mark); }
-.cp-mat-caret { display: inline-block; width: 1em; color: var(--cp-muted); }
+.cp-mat-caret { display: inline-block; flex: none; width: 1em; color: var(--cp-muted); }
+.cp-mat-name { display: flex; align-items: center; gap: 0.4rem; }
 
-/* "Hotovo" status badge: green = all usages ready, red = some still outstanding, so the
-   completed vs unfinished materials read at a glance down the column. */
+/* "Aktivity": the ready/total badge, green = all usages ready, red = some still outstanding,
+   so the completed vs unfinished materials read at a glance down the column. */
 .cp-mat-hotovo { white-space: nowrap; }
 .cp-mat-ready {
   display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
@@ -29,22 +36,23 @@
 .cp-mat-ready.done { background: var(--cp-success); }
 .cp-mat-ready.todo { background: var(--cp-danger); }
 
-/* usages sub-row: a flush full-width panel under its material */
-.cp-mat-sub > td { padding: 0; background: var(--cp-surface-2); border-bottom: 1px solid var(--cp-border); }
-.cp-mat-note { padding: 0.4rem 0.75rem 0.4rem 2rem; white-space: pre-wrap; font-size: 13px; }
-.cp-usage-list { display: flex; flex-direction: column; }
-.cp-usage-empty { padding: 0.5rem 0.75rem 0.5rem 2rem; }
-.cp-usage-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0.75rem 0.3rem 2rem; }
-.cp-usage-row + .cp-usage-row { border-top: 1px solid var(--cp-border-subtle); }
-/* a ready usage reads as done: green activity name (the checkbox already shows the state) */
-.cp-usage-row.is-ready .cp-usage-act { color: var(--cp-success-text); }
-.cp-usage-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.cp-usage-line { display: flex; align-items: center; gap: 0.5rem; }
-.cp-usage-act { flex: 1; }
-.cp-usage-qty { white-space: nowrap; }
+/* Expanded material: its needs are rows of their own, so a need's amount stands under the
+   summed Množství and its checkbox under the Aktivity badge it counts into. The material
+   and its needs share a <tbody>, swapped as one on refresh. */
+.cp-mat-usage > td, .cp-mat-sub > td { background: var(--cp-surface-2); }
+.cp-mat-usage > td { font-size: 13px; border-bottom: 1px solid var(--cp-border-subtle); }
+.cp-mat-group > tr:last-child > td { border-bottom: 1px solid var(--cp-border); }
+/* indented past the caret, under the material's name (the .cp-table cell padding rule outranks a bare class) */
+.cp-mat-table .cp-mat-usage-name { padding-left: 2.2rem; }
+/* a ready need reads as done: green activity name (the checkbox already shows the state) */
+.cp-mat-usage.is-ready .cp-usage-act { color: var(--cp-success-text); }
 .cp-usage-note { font-size: 12px; white-space: pre-wrap; }
+/* the material's url and note, or "nepoužito": one flush row before the needs */
+.cp-mat-sub > td { padding: 0; }
+.cp-mat-note { padding: 0.4rem 0.75rem 0.4rem 2rem; white-space: pre-wrap; font-size: 13px; }
+.cp-usage-empty { padding: 0.5rem 0.75rem 0.5rem 2rem; }
 
-/* "Pořízení" column: one or more comma-separated acquisition labels, wrapping if tight. */
+/* "Štítky" column: one or more comma-separated acquisition labels, wrapping if tight. */
 .cp-mat-acq { white-space: normal; }
 .cp-acq-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 
