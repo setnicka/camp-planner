@@ -12,7 +12,7 @@
 "use strict";
 
 window.cpTodoList = function (opts) {
-  const { el, api, withId, dash, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns, actionGroup } = window.cpDom;
+  const { el, api, withId, dash, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns, actionGroup, orgInitials } = window.cpDom;
   const mount = opts.mount;
   const TODOS = opts.todos;                 // mutated in place (push/splice/assign)
   const ORGS = opts.orgs || [];             // [{id, initials, name}] — filter + edit picker
@@ -79,7 +79,7 @@ window.cpTodoList = function (opts) {
     const td = el("td", { class: "cp-todo-orgs" });
     t.orgs.forEach((o, i) => {
       if (i) td.append(", ");
-      td.append(el("span", { title: orgName.get(o.org_id) || "" }, o.initials));
+      td.append(orgInitials(o.initials, orgName.get(o.org_id)));
     });
     return td;
   }

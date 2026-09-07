@@ -530,7 +530,12 @@ window.cpDom = (function () {
     return el("div", { class: "cp-seg" }, ...defs.filter(Boolean).map(segBtn), ...extras);
   }
 
+  // Org initials titled with the full name, tappable (data-cp-hint).
+  function orgInitials(initials, name, cls) {
+    return el("span", { ...(cls ? { class: cls } : {}), "data-cp-hint": "", title: name || "" }, initials);
+  }
+
   return { el, csrf, csrfRefresh, api, withId, mergeUrl, swatch, dash, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
-           plural, tabHash, freezeColumns, segBtn, actionGroup };
+           plural, tabHash, freezeColumns, segBtn, actionGroup, orgInitials };
 })();

@@ -15,6 +15,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Added
 
 - The activities overview can create an activity without a slot.
+- Org initials show the full name on hover and on tap.
 
 ### Changed
 
