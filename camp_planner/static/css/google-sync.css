@@ -36,6 +36,7 @@
 }
 .cp-google-steps li { margin: 0.2rem 0; }
 
+.cp-google-row .cp-seg { flex-wrap: wrap; }   /* four verbs do not fit a phone in one line */
 .cp-google-row {
   display: flex;
   gap: 0.5rem;

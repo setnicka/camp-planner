@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, mergeUrl, swatch, dash, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns } = window.cpDom;
+  const { el, api, withId, mergeUrl, swatch, dash, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -144,19 +144,15 @@
   }
 
   function actionCell(r) {
-    const merge = el("button", { type: "button", class: "cp-mini", title: "Sloučit s jinou aktivitou" }, "⤳");
-    merge.addEventListener("click", () => openMerge(r));
-    const del = el("button", { type: "button", class: "cp-danger cp-mini" }, "✕");
-    if (slotCount(r)) {   // can't delete an activity with placed slots (the api refuses too)
-      // aria-disabled, not disabled: greyed out but still tappable, so the tap shows why.
-      del.setAttribute("aria-disabled", "true");
-      del.setAttribute("data-cp-hint", "");
-      del.title = "Nelze smazat – aktivita má naplánované sloty. Nejprve je odeber z timeline.";
-    } else {
-      del.title = "Smazat aktivitu";
-      del.addEventListener("click", () => deleteActivity(r, del));
-    }
-    return el("td", { class: "cp-actions" }, merge, del);
+    return el("td", { class: "cp-actions" }, actionGroup([
+      { label: "⤳", title: "Sloučit s jinou aktivitou", onClick: () => openMerge(r) },
+      // An activity with placed slots cannot go (the api refuses too): greyed, saying why on
+      // hover or tap.
+      slotCount(r)
+        ? { label: "✕", title: "Smazat aktivitu", danger: true,
+            disabled: "Nelze smazat – aktivita má naplánované sloty. Nejprve je odeber z timeline." }
+        : { label: "✕", title: "Smazat aktivitu", danger: true, onClick: (e) => deleteActivity(r, e.currentTarget) },
+    ]));
   }
 
   // Cells shared by both row layouts, from category through the actions column.

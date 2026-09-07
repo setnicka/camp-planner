@@ -14,6 +14,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Changed
 
+- In-row actions (edit, merge, delete) and the calendar's sync buttons are one segmented
+  button group; a destructive member is red text, not a red button.
 - Better responsive header and forms on small screens.
 - Back closes an open dialog instead of leaving the page.
 - Show title tooltips on tap (to be visible on mobile devices).

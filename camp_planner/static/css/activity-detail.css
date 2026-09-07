@@ -1,6 +1,6 @@
 /* Activity detail page. Shared primitives (modal, chips) come from components.css;
  * generic .cp-section/.cp-muted/.cp-edit-toggle/.cp-danger from content.css and
- * .cp-add/.cp-mini from components.css. */
+ * .cp-add/.cp-seg from components.css. */
 
 .cp-act-title { margin: 0 0 0.75rem; }
 .cp-act-title .cp-edit-toggle { font-size: 0.6em; vertical-align: middle; }
@@ -162,7 +162,7 @@
 .cp-ext-link { font-size: 0.85em; color: var(--cp-muted); text-decoration: none; }   /* external catalog url */
 .cp-need-qty { white-space: nowrap; }
 
-/* .cp-mini / .cp-danger.cp-mini in-row action buttons live in components.css (shared) */
+/* .cp-seg in-row action groups live in components.css (shared) */
 /* change-history feed (.cp-hist-*) is shared — see components.css */
 
 /* --- vendored CodeMirror: theme its chrome from the palette -----------------

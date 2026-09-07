@@ -73,7 +73,7 @@
   function applySyncState() {
     if (!syncBtn) return;
     const has = !!status.pending_ops;
-    syncBtn.toggleAttribute("aria-disabled", !has);
+    if (has) syncBtn.removeAttribute("aria-disabled"); else syncBtn.setAttribute("aria-disabled", "true");
     syncBtn.toggleAttribute("data-cp-hint", !has);
     syncBtn.title = has ? "" : "Žádné změny k odeslání.";
   }
@@ -125,7 +125,7 @@
   }
 
   function connectedView() {
-    const sync = el("button", { type: "button", class: "cp-mini" }, "Synchronizovat nyní");
+    const sync = el("button", { type: "button", class: "cp-seg-btn" }, "Synchronizovat nyní");
     sync.addEventListener("click", async () => {
       const json = await call(sync, "POST", URLS.sync);
       if (json) {
@@ -135,7 +135,7 @@
     });
     syncBtn = sync;
 
-    const resync = el("button", { type: "button", class: "cp-mini" }, "Znovu synchronizovat vše");
+    const resync = el("button", { type: "button", class: "cp-seg-btn" }, "Znovu synchronizovat vše");
     resync.title = "Zařadí všechny sloty k odeslání do Google — oprava, když se kalendář rozejde.";
     resync.addEventListener("click", async () => {
       if (!window.confirm("Zařadit všechny sloty k opětovnému odeslání do Google?")) return;
@@ -147,10 +147,10 @@
     });
 
     const review = el("div", { class: "cp-google-review" });
-    const pull = el("button", { type: "button", class: "cp-mini" }, "Načíst změny z Google");
+    const pull = el("button", { type: "button", class: "cp-seg-btn" }, "Načíst změny z Google");
     pull.addEventListener("click", () => loadReview(review, pull));
 
-    const disconnect = el("button", { type: "button", class: "cp-mini cp-danger" }, "Odpojit");
+    const disconnect = el("button", { type: "button", class: "cp-seg-btn cp-seg-danger" }, "Odpojit");
     disconnect.addEventListener("click", () => {
       if (!window.confirm("Odpojit kalendář? Události už v Google zůstanou, jen se přestanou synchronizovat.")) return;
       call(disconnect, "DELETE", URLS.base);
@@ -166,7 +166,8 @@
               `Naposledy načteno z Google: ${day(status.last_pull_at)} ${hm(status.last_pull_at)}`)
           : null,
         statusInfoEl,
-        el("div", { class: "cp-google-row" }, sync, resync, pull, disconnect)),
+        // the calendar's actions as one segmented group, the destructive one last
+        el("div", { class: "cp-google-row" }, el("div", { class: "cp-seg" }, sync, resync, pull, disconnect))),
       review);
   }
 

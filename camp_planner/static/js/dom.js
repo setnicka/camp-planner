@@ -508,7 +508,28 @@ window.cpDom = (function () {
     table.style.width = Math.round(widths.reduce((a, b) => a + b, 0)) + "px";
   }
 
+  // One member of a segmented group (.cp-seg): {label, onClick, title?, danger?, active?, cls?,
+  // disabled?: why}. A one-glyph label is an icon and gets the tighter icon padding (its
+  // title spells it out); `disabled` keeps the button but says why on hover/tap.
+  function segBtn(d) {
+    const icon = typeof d.label === "string" && [...d.label.trim()].length === 1;
+    const button = el("button",
+      { type: "button",
+        class: "cp-seg-btn" + (icon ? " cp-seg-icon" : "") + (d.danger ? " cp-seg-danger" : "")
+          + (d.cls ? " " + d.cls : "") + (d.active ? " on" : ""),
+        ...(d.title ? { title: d.title } : {}),
+        ...(d.disabled ? { "aria-disabled": "true", title: d.disabled, "data-cp-hint": "" } : {}) },
+      d.label);
+    if (!d.disabled) button.addEventListener("click", d.onClick);   // data-cp-hint answers the rest
+    return button;
+  }
+  // A row's or a bar's actions as one segmented group; falsy defs are skipped, extras are
+  // appended as further members (an input, say).
+  function actionGroup(defs, ...extras) {
+    return el("div", { class: "cp-seg" }, ...defs.filter(Boolean).map(segBtn), ...extras);
+  }
+
   return { el, csrf, csrfRefresh, api, withId, mergeUrl, swatch, dash, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
-           plural, tabHash, freezeColumns };
+           plural, tabHash, freezeColumns, segBtn, actionGroup };
 })();
