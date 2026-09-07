@@ -219,6 +219,9 @@ poslat dál nebo si ho uložit mezi záložky.
 Přepínač nahoře nabízí druhý pohled, **Chronologicky**: tytéž aktivity seřazené podle času
 konání a rozdělené po dnech.
 
+Tlačítko **Nová aktivita** založí aktivitu bez slotu. Do rozvrhu ji lze později zařadit
+z timeline.
+
 ![Seznam her chronologicky](screenshots/04b-seznam-her-chronologicky.webp)
 
 ## Materiál

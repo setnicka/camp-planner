@@ -12,6 +12,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- The activities overview can create an activity without a slot.
+
 ### Changed
 
 - Embedded: the navigation slot is renamed `header_nav` → `cp_nav`.
