@@ -11,9 +11,10 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup, orgInitials } = window.cpDom;
+  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup, orgInitials, amountText, byName } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
+  const stock = window.cpStock;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -364,6 +365,9 @@
   function renderMaterialsPane() {
     const list = el("div", { class: "cp-need-list" });
     if (!A.material_needs.length) list.append(el("p", { class: "cp-muted" }, "Žádný materiál."));
+    // By name as the server lists them, so a need just added lands in its place, not at the end.
+    const byMaterial = byName((n) => n.material.name);
+    A.material_needs.sort((a, b) => byMaterial(a, b) || a.id - b.id);
     A.material_needs.forEach((n) => list.append(needRow(n)));
     if (mayEdit) {
       const add = el("button", { type: "button", class: "cp-add cp-need-add" }, "+ Přidat materiál");
@@ -383,16 +387,19 @@
       catch (e) { cb.checked = !cb.checked; toast(e.message, true); }
     });
     // name → this material in the camp-wide overview (highlighted there); keep the external
-    // catalog url as a small ↗ alongside it when present.
-    const nameCell = el("span", { class: "cp-need-name" },
+    // catalog url as a small ↗ alongside it when present. The thing's photo first, with no
+    // placeholder (see the materials overview).
+    const nameCell = el("span", { class: "cp-need-name cp-thumb-row" },
+      stock.photo(U, n.material.inventory_item),
       el("a", { href: U.materialsOverview + "#material-" + n.material.id }, n.material.name));
     if (n.material.url)
       nameCell.append(" ", el("a", { href: n.material.url, target: "_blank", rel: "noopener", class: "cp-ext-link", title: "Externí odkaz" }, "↗"));
-    const qty = ((n.amount != null ? n.amount : "") + " " + (n.unit || n.material.unit || "")).trim();
-    const line = el("div", { class: "cp-need-line" },
-      nameCell,
-      el("span", { class: "cp-muted cp-need-qty" }, qty));
-    if (mayEdit) line.append(actionGroup([
+    const qty = amountText(n.amount, n.unit || n.material.unit);
+    // No count comparison: one thing serves several activities; the overview compares.
+    const cells = [cb, nameCell,
+      el("span", { class: "cp-need-place" }, stock.place(U, n.material.inventory_item, n.material.name)),
+      el("span", { class: "cp-muted cp-need-qty" }, qty)];
+    if (mayEdit) cells.push(actionGroup([
       { label: "✎", title: "Upravit", onClick: () => openNeedEdit(n) },
       { label: "✕", title: "Odebrat", danger: true, onClick: async () => {
         if (!confirm("Odebrat materiál?")) return;
@@ -400,9 +407,8 @@
         catch (e) { toast(e.message, true); }
       } },
     ]));
-    const main = el("div", { class: "cp-need-main" }, line);
-    if (n.note) main.append(el("div", { class: "cp-muted cp-need-note" }, n.note));   // note on its own line
-    return el("div", { class: "cp-need-row" }, cb, main);
+    if (n.note) cells.push(el("div", { class: "cp-muted cp-need-note" }, n.note));   // note on its own line
+    return el("div", { class: "cp-need-row" }, ...cells);
   }
 
   function openNeedEdit(n) {
@@ -433,7 +439,7 @@
         if (!nm) { name.focus(); return; }
         const j = await api("POST", U.materialCreate,
           { name: nm, unit: unit.value || null, note: note.value || null, url: url.value || null });
-        if (catalogCache) catalogCache.unshift(j.material);
+        cacheMaterial(j.material);
         close();
         onCreated(j.material);
       },
@@ -453,25 +459,92 @@
     });
   }
 
-  // step 1 of adding: pick an existing catalog material (fuzzy) or create a new one
+  // A material the server just returned, wherever it came from: into the catalog cache, and
+  // into the needs, which each hold their own copy of it (a fresh link shows on the row).
+  // Returns true when the material was already cached, i.e. is not a new one.
+  function cacheMaterial(m) {
+    A.material_needs.forEach((n) => { if (n.material.id === m.id) Object.assign(n.material, m); });
+    if (!catalogCache) return false;
+    const at = catalogCache.findIndex((x) => x.id === m.id);
+    if (at < 0) catalogCache.unshift(m);
+    else catalogCache[at] = m;
+    return at >= 0;
+  }
+
+  // A material made from a warehouse thing: the server copies the name, unit and url and
+  // links them, or hands back the same-named catalog material it linked instead. Either
+  // way the next step is the amount, as for a picked material.
+  function openMaterialFromItem(item, close) {
+    return api("POST", U.materialCreate, { inventory_item_id: item.id })
+      .then((j) => {
+        close();
+        // An existing material came back: say so, the amount dialog would not.
+        if (cacheMaterial(j.material)) toast("Materiál „" + j.material.name + "“ propojen se skladem.");
+        // That material may already be a need here (its name matched the thing's), and a
+        // second one is refused; the link is done, which is what the pick was for.
+        if (A.material_needs.some((n) => n.material.id === j.material.id)) refreshMaterials();
+        else openNeedAdd(j.material);
+      })
+      .catch((e) => toast(e.message, true));   // the picker stays open, the pick is not lost
+  }
+
+  // step 1 of adding: pick an existing catalog material (fuzzy), a warehouse thing the
+  // catalog does not stand for yet, or create a new material. One list: the catalog
+  // first, the warehouse after it, each in match order. What the activity already has
+  // stays out: the server would refuse it anyway.
   let catalogCache = null;
   function openMaterialPicker() {
-    const open = () => searchPicker({
-      title: "Přidat materiál",
-      placeholder: "Hledat materiál…",
-      items: catalogCache || [],
-      labelOf: (m) => m.name,
-      metaOf: (m) => m.unit,
-      onPick: (m, close) => { close(); openNeedAdd(m); },
-      // the "+ Vytvořit" row is just another entry, offered unless the query exactly exists
-      extraEntry: (q) => q && !(catalogCache || []).some((m) => m.name.toLowerCase() === q.toLowerCase())
-        ? { label: el("b", null, "+ Vytvořit „" + q + "“"),
-            pick: (close) => { close(); openMaterialCreate(q, openNeedAdd); } }
-        : null,
-      empty: "Katalog je prázdný — napiš název a vytvoř.",
-    });
-    const load = catalogCache ? Promise.resolve() : api("GET", U.materialList).then((j) => { catalogCache = j.materials || []; });
-    load.then(open).catch((e) => { toast(e.message, true); catalogCache = catalogCache || []; open(); });
+    const open = () => {
+      const stockCache = stock.items() || [];
+      const used = new Set(A.material_needs.map((n) => n.material.id));
+      const linked = new Set(catalogCache.map((m) => m.inventory_item?.id).filter(Boolean));
+      // A thing the catalog already knows by name is offered as the thing, not twice: picking
+      // it links that very material (the server does), which is the better of the two rows.
+      const asThing = new Set(stockCache.filter((it) => !linked.has(it.id)).map((it) => stock.normName(it.name)));
+      const entries = [
+        ...catalogCache.filter((m) => !used.has(m.id) && !asThing.has(stock.normName(m.name)))
+          .map((m) => ({ material: m })),
+        ...stockCache.filter((it) => !linked.has(it.id)).map((it) => ({ item: it })),
+      ];
+      const nameOf = (e) => (e.material || e.item).name;
+      const thingOf = (e) => e.item || e.material.inventory_item;
+      // What a typed name would collide with, by the server's own name rule: any catalog
+      // material (the already-added ones too, since the server would refuse them) and any
+      // thing this dialog offers. Normalised once, since the query changes, the names do not.
+      const knownNames = new Set([...catalogCache.map((m) => m.name), ...entries.map(nameOf)]
+        .map(stock.normName));
+      const known = (q) => knownNames.has(stock.normName(q));
+      const alreadyOn = (q) => A.material_needs.some((n) => stock.sameName(n.material.name, q));
+      const things = stock.rows(U, entries.map(thingOf));
+      searchPicker({
+        title: "Přidat materiál",
+        placeholder: "Hledat materiál…",
+        items: entries,
+        labelOf: nameOf,
+        // A material linked to a thing answers to the thing's other names too, like the
+        // warehouse rows below it.
+        searchOf: (e) => [nameOf(e), ...(thingOf(e)?.alt_names || [])].join(" "),
+        groupOf: (e) => (e.item ? 1 : 0),
+        groupLabels: ["Existující materiál akce", "Ze skladu"],
+        iconOf: (e) => things.iconOf(thingOf(e)),
+        // Where the thing stands; the group divider already says which side it is from.
+        metaOf: (e) => things.metaOf(thingOf(e)),
+        onPick: (e, close) => {
+          if (e.item) openMaterialFromItem(e.item, close);   // closes once the server agrees
+          else { close(); openNeedAdd(e.material); }
+        },
+        // the "+ Vytvořit" row is just another entry, offered unless the query exactly exists
+        extraEntry: (q) => q && !known(q)
+          ? { label: el("b", null, "+ Vytvořit „" + q + "“"),
+              pick: (close) => { close(); openMaterialCreate(q, openNeedAdd); } }
+          : null,
+        empty: (q) => (alreadyOn(q) ? "Tento materiál už aktivita má." : "Nic nenalezeno."),
+      });
+    };
+    Promise.all([
+      catalogCache ? null : api("GET", U.materialList).then((j) => { catalogCache = j.materials || []; }),
+      stock.load(U),
+    ]).then(open).catch((e) => { toast(e.message, true); catalogCache = catalogCache || []; open(); });
   }
 
   // --- change history ("Historie změn") --------------------------------------

@@ -280,6 +280,12 @@
     min-width: 2.5rem; min-height: 2rem; font-size: 1rem; }
 }
 
+/* Where a warehouse thing lies (cpStock.place), beside what and how much: an aside next
+   to the name, on every page that shows it. */
+.cp-stock-place { font-size: 12px; }
+a.cp-stock-place { color: var(--cp-accent-text); text-decoration: none; }
+@media (hover: hover) { a.cp-stock-place:hover { text-decoration: underline; } }
+
 /* A row arrived at by a #…-<id> link (cpDom.reveal): marked, then faded out. Tables animate
    the cells instead, since the row paints no background of its own. */
 @keyframes cp-arrive {

@@ -11,7 +11,8 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, dash, fmtNum, formModal, mergePicker, orgFilterHead, chipGroup, toast, actionGroup, orgInitials } = window.cpDom;
+  const { el, api, withId, dash, actionGroup, formModal, mergePicker, searchPicker, orgFilterHead, chipGroup, toast, orgInitials, amountText, czechKey, segBtn, reveal } = window.cpDom;
+  const stock = window.cpStock;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -20,7 +21,7 @@
   const orgName = new Map(ORGS.map((o) => [o.id, o.name]));
   // Fixed column widths so the layout doesn't reflow ("jump") as filtering changes which rows
   // (and thus which widest cell) are visible. Order matches the header; last width = actions col.
-  const WIDTHS = ["32%", "12%", "28%", "12%", "8%"];
+  const WIDTHS = ["25%", "10%", "20%", "20%", "10%", "7%"];
   if (mayEdit) WIDTHS.push("8%");   // three icon segments
 
   // Filters: label = free-text query matched against the acquisition label(s) ("" = none);
@@ -51,15 +52,14 @@
     return h;
   }
 
-  // Fold case + diacritics for accent-insensitive search ("sklad" matches "Sklad").
-  const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  // Canonical search form of a label/query: norm + drop ALL whitespace, so the box matches
-  // anywhere in the whole label ignoring spaces ("alza" and "kup:alza" both match "kup: alza").
-  const searchForm = (s) => norm(s).replace(/\s+/g, "");
+  // Canonical search form of a label/query: the shared fold + drop ALL whitespace, so the
+  // box matches anywhere in the whole label ignoring spaces ("alza" and "kup:alza" both
+  // match "kup: alza").
+  const searchForm = (s) => czechKey(s).replace(/\s+/g, "");
 
   // Per-unit totals across a material's usages, grouped by effective unit (need's override or
-  // the catalog default), skipping null amounts → "12 ks, 3 m" (units in first-seen order).
-  function unitTotals(m) {
+  // the catalog default), skipping null amounts → [{unit, amount}] (units in first-seen order).
+  function unitSums(m) {
     const order = [], sums = new Map();
     // `max` materials (shared/reusable, e.g. projectors) take the largest single need; the
     // default `sum` adds them up (consumables). Amounts are non-negative, so init 0 fits both.
@@ -70,7 +70,43 @@
       if (!sums.has(unit)) { sums.set(unit, 0); order.push(unit); }
       sums.set(unit, combine(sums.get(unit), u.amount));
     }
-    return order.map((unit) => fmtNum(sums.get(unit)) + (unit ? " " + unit : "")).join(", ");
+    return order.map((unit) => ({ unit, amount: sums.get(unit) }));
+  }
+  const unitTotals = (sums) => sums.map((s) => amountText(s.amount, s.unit)).join(", ");
+
+  // Units compare after trimming and case-folding; an empty unit is pieces, like "ks".
+  const unitKey = (u) => (u || "").trim().toLowerCase() || "ks";
+  // Amounts compare as they are shown (fmtNum rounds to 3 decimals), so 0.1 + 0.2 covers
+  // 0.3 instead of falling a float's hair short of it.
+  const shown = (n) => Math.round(n * 1000) / 1000;
+
+  // The box (a link) or the retired shelf, then the count (countEl).
+  function stockCell(m, sums) {
+    const it = m.inventory_item;
+    if (!it) return el("td", { class: "cp-mat-stock" }, dash());
+    // The photo ahead of the box. No placeholder: an empty slot reads as a stray indent.
+    return el("td", { class: "cp-mat-stock" }, el("span", { class: "cp-mat-place cp-thumb-row" },
+      stock.photo(U, it), el("span", null, stock.place(U, it, m.name), countEl(it, sums))));
+  }
+
+  // The thing's count in parentheses, coloured against the summed needs: green covers them,
+  // red falls short, grey when the two cannot be compared (units differ, needs in several
+  // units). Nothing when nobody counted it.
+  function countEl(it, sums) {
+    if (it.count == null) return null;
+    let cls = "cp-muted", why = "nelze porovnat", mark = "";
+    if (stock.retired(it)) {
+      why = "věc je vyřazená";
+    } else if (!sums.length) {
+      why = "žádná potřeba neuvádí množství";
+    } else if (sums.length === 1 && unitKey(sums[0].unit) === unitKey(it.unit)) {
+      const enough = shown(it.count) >= shown(sums[0].amount);
+      cls = enough ? "cp-mat-stock-ok" : "cp-mat-stock-short";
+      if (enough) mark = "✓ ";
+      why = (enough ? "pokrývá potřebu " : "chybí do potřeby ") + amountText(sums[0].amount, sums[0].unit);
+    }
+    return el("span", { class: "cp-mat-stock-n " + cls, "data-cp-hint": "", title: why },
+      " (" + mark + amountText(it.count, it.unit) + ")");
   }
   const readiness = (m) => ({ ready: m.usages.filter((u) => u.is_ready).length, total: m.usages.length });
   // "Aktivity" cell: ready/total as a filled badge, green when every usage is ready, red
@@ -95,7 +131,7 @@
     // The unit rides along in Množství and the badge in Aktivity carries the activity count,
     // so neither gets a column of its own.
     const headRow = el("tr", null,
-      el("th", null, "Materiál"), el("th", null, "Množství"),
+      el("th", null, "Materiál"), el("th", null, "Množství"), el("th", null, "Sklad"),
       acqHead(), orgsHead(), el("th", null, "Aktivity"));
     if (mayEdit) headRow.append(el("th", { class: "cp-actions" }, ""));
     const colgroup = el("colgroup", null, ...WIDTHS.map((w) => el("col", { style: "width:" + w })));
@@ -232,16 +268,18 @@
   function renderMaterialRow(m) {
     const { ready, total } = readiness(m);
     const open = expanded.has(m.id);
+    const sums = unitSums(m);            // the Množství cell and the stock compare share them
     const tr = el("tr", { class: "cp-mat-row" },
       // A flex row, so a wrapping name stays in its own column beside the caret.
-      el("td", null, el("span", { class: "cp-mat-name" },
+      el("td", null, el("span", { class: "cp-thumb-row" },
         el("span", { class: "cp-mat-caret" }, open ? "▾" : "▸"),
         el("span", null, m.name))),
-      el("td", null, unitTotals(m) || dash(),
+      el("td", null, unitTotals(sums) || dash(),
         m.sum_strategy === "max"
           ? el("span", { class: "cp-muted cp-mat-agg", "data-cp-hint": "",
                           title: "Maximum napříč aktivitami" }, " (max)")
           : null),
+      stockCell(m, sums),
       el("td", { class: "cp-mat-acq" }, acqCell(m)),
       el("td", { class: "cp-mat-orgs" }, orgsCell(m)),
       el("td", { class: "cp-mat-hotovo" }, readyBadge(ready, total)));
@@ -286,13 +324,13 @@
       try { const j = await api("PATCH", withId(U.needItem, u.need_id), { is_ready: cb.checked }); assignNeed(u, j.need); refreshRow(m); }
       catch (e) { cb.checked = !cb.checked; toast(e.message, true); }
     });
-    const qty = ((u.amount != null ? u.amount : "") + " " + (u.unit || m.unit || "")).trim();
     const tr = el("tr", { class: "cp-mat-usage" + (u.is_ready ? " is-ready" : "") },
       el("td", { class: "cp-mat-usage-name" },
         el("a", { href: withId(U.activityDetail, u.activity_id) + "#materials", class: "cp-usage-act" }, u.activity_title),
         u.note ? el("div", { class: "cp-muted cp-usage-note" }, u.note) : null),
-      el("td", null, qty || dash()),
-      el("td"), el("td"),
+      el("td", null, amountText(u.amount, u.unit || m.unit) || dash()),
+      // Sklad, Štítky and Garant belong to the material, not to one activity's need.
+      el("td", { colspan: "3" }),
       el("td", { class: "cp-mat-hotovo" }, cb));
     if (mayEdit) tr.append(el("td", { class: "cp-actions" }, actionGroup([
       { label: "✎", title: "Upravit", onClick: () => openUsageEdit(m, u) },
@@ -377,6 +415,41 @@
     return { node: box, get: () => labels.slice() };
   }
 
+  // The material's warehouse thing, chosen in the edit dialog and saved with the rest of
+  // it: the current thing by name and box, "Vybrat" over the live things no other material
+  // of the camp stands for, "Odpojit" to let go. Nothing is copied from the thing here.
+  function linkField(m) {
+    let chosen = m.inventory_item || null;
+    const text = el("span");
+    const pick = segBtn({ label: "Vybrat", onClick: () => openPicker() });
+    const drop = segBtn({ label: "Odpojit", onClick: () => { chosen = null; paint(); } });
+    const gone = el("div", { class: "cp-field-hint" }, "Věc je vyřazená: je potřeba propojit jinou, nebo odpojit.");
+    const paint = () => {
+      text.replaceChildren(chosen ? el("span", null, chosen.name + " · " + stock.boxName(chosen)) : dash());
+      drop.hidden = !chosen;
+      gone.hidden = !(chosen && stock.retired(chosen));
+    };
+    const open = () => {
+      const all = stock.items() || [];
+      const taken = new Set(MATS.filter((x) => x.id !== m.id).map((x) => x.inventory_item?.id).filter(Boolean));
+      searchPicker({
+        title: "Věc ve skladu",
+        placeholder: "Hledat věc…",
+        items: all.filter((it) => !taken.has(it.id)),
+        ...stock.rows(U, all),
+        onPick: (it, close) => { close(); chosen = it; paint(); },
+        empty: (q) => (q ? "Nic nenalezeno."
+          : "Ve skladu není žádná volná věc – na každou odkazuje nejvýš jeden materiál akce."),
+      });
+    };
+    const openPicker = () => stock.load(U).then(open).catch((e) => toast(e.message, true));
+    paint();
+    return {
+      node: el("div", null, el("div", { class: "cp-thumb-row cp-mat-link-row" }, text, actionGroup([], pick, drop)), gone),
+      get: () => (chosen ? chosen.id : null),   // null lets go; an unchanged id is a no-op server-side
+    };
+  }
+
   function openMaterialEdit(m) {
     const name = el("input", { type: "text", class: "cp-modal-name", value: m.name });
     const unit = el("input", { type: "text", class: "cp-modal-name", value: m.unit || "" });
@@ -392,6 +465,7 @@
     const orgGroup = chipGroup(ORGS.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
       { multi: true, selected: (m.orgs || []).map((o) => o.org_id) });
     if (!ORGS.length) orgGroup.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
+    const link = linkField(m);
 
     formModal({
       title: "Upravit materiál",
@@ -405,13 +479,15 @@
           "Tvar „prefix:hodnota“ se zobrazí jako barevný štítek (např. kup:mefisto)."),
         el("label", { class: "cp-field-label" }, "Garant"), orgGroup.node,
         el("label", { class: "cp-field-label" }, "Poznámka"), note,
-        el("label", { class: "cp-field-label" }, "Odkaz"), url),
+        el("label", { class: "cp-field-label" }, "Odkaz"), url,
+        el("label", { class: "cp-field-label" }, "Věc ve skladu"), link.node),
       onSubmit: async (close) => {
         const nm = name.value.trim();
         if (!nm) { name.focus(); return; }
         const j = await api("PATCH", withId(U.materialItem, m.id),
           { name: nm, unit: unit.value || null, note: note.value || null, url: url.value || null,
-            acquisition_labels: acq.get(), sum_strategy: strat.value, org_ids: orgGroup.get() });
+            acquisition_labels: acq.get(), sum_strategy: strat.value, org_ids: orgGroup.get(),
+            inventory_item_id: link.get() });
         Object.assign(m, j.material);   // envelope carries no `usages` → m.usages preserved
         close(); renderTable(); toast("Uloženo");   // renderTable re-sorts (name may have changed)
       },
@@ -476,11 +552,6 @@
   buildShell();
 
   if (hashId != null) {
-    const tr = rowEls.get(hashId)?.firstElementChild;
-    if (tr) {
-      tr.scrollIntoView({ block: "center" });
-      tr.classList.add("cp-mat-hl");
-      setTimeout(() => tr.classList.remove("cp-mat-hl"), 2000);
-    }
+    reveal(rowEls.get(hashId)?.firstElementChild);
   }
 })();

@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-inventory-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, formModal, searchPicker, toast, toastNext, withId } = window.cpDom;
+  const { el, api, formModal, searchPicker, toast, toastNext, withId, reveal } = window.cpDom;
   const inv = window.cpInventory;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
@@ -624,4 +624,8 @@
   }
 
   render();
+
+  // Arriving from a camp's material (#item-<id>): scroll to the thing and flash it.
+  const hashItem = /^#item-(\d+)$/.exec(location.hash);
+  if (hashItem) reveal(mount.querySelector(`[data-item="${hashItem[1]}"]`));
 })();

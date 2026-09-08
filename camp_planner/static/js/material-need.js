@@ -1,6 +1,4 @@
-// Camp Planner — shared material-need dialog (amount / unit / note).
-//
-// Shared material-need modal (activity detail + materials overview).
+// Camp Planner: shared material-need modal (activity detail + materials overview).
 // Edit mode (default) PATCHes `url`; create mode (method: "POST") posts the fields
 // plus `extraBody` (e.g. {material_id}). Calls onSaved(); toasts success / failure.
 // Exposed as window.cpMaterialNeedEdit; load after dom.js.
@@ -21,7 +19,9 @@ window.cpMaterialNeedEdit = function ({ title, need = {}, defaultUnit, url, meth
     pane: el("div", { class: "cp-pane" },
       el("label", { class: "cp-field-label" }, "Množství a jednotka"),
       el("div", { class: "cp-need-amount-row" }, amount, unit),
-      el("div", { class: "cp-field-hint" }, "Jednotku zadej jen pokud se liší od výchozí."),
+      el("div", { class: "cp-field-hint" }, defaultUnit
+        ? "Výchozí jednotka je „" + defaultUnit + "“, zadej jen jinou."
+        : "Materiál nemá výchozí jednotku, prázdná znamená kusy."),
       el("label", { class: "cp-field-label" }, "Poznámka"), note),
     onSubmit: async (close) => {
       const body = {

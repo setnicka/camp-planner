@@ -20,6 +20,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   rather than deleted; inventory checks several people fill in at once. Any signed-in
   user reads, admins and editors of any camp edit. **Adds a DB migration.**
 - Warehouse photos: need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
+- A camp material can be linked with a warehouse thing: camp pages then show its box,
+  photo and how much of it is in stock.
 
 ### Changed
 
