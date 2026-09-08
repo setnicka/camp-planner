@@ -6,11 +6,11 @@
 /* Fixed layout + a <colgroup> (set in JS) keep column widths stable as filtering changes which
    rows are visible — otherwise auto-layout reflows ("jumps") to the widest visible cell. */
 .cp-mat-table { max-width: 78rem; table-layout: fixed; }
-/* Phone: five columns don't fit 360px, so the table scrolls sideways inside its wrapper (only
+/* Phone: six columns don't fit 360px, so the table scrolls sideways inside its wrapper (only
    there: a scroll container would end the sticky head on the desktop). */
 @media (max-width: 40rem) {
   .cp-mat-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
-  .cp-mat-table { min-width: 52rem; }   /* the narrowest header (Množství) still fits its 12 % */
+  .cp-mat-table { min-width: 58rem; }   /* the narrowest header (Množství) still fits its 10 % */
 }
 .cp-mat-table td:first-child { overflow-wrap: anywhere; }   /* long names wrap instead of widening */
 .cp-mat-table .cp-th-filter { box-sizing: border-box; width: 100%; }   /* label search fills the header */
@@ -20,15 +20,18 @@
    matches the TODO/activities overviews. */
 
 .cp-mat-row { cursor: pointer; }
-/* flash a row arrived-at via #material-<id> (fades in, then out when the class is removed) */
-.cp-mat-row > td { transition: background 1.2s ease; }
-.cp-mat-row.cp-mat-hl > td { background: var(--cp-warning-mark); }
 .cp-mat-caret { display: inline-block; flex: none; width: 1em; color: var(--cp-muted); }
-.cp-mat-name { display: flex; align-items: center; gap: 0.4rem; }
 
 /* "Aktivity": the ready/total badge, green = all usages ready, red = some still outstanding,
    so the completed vs unfinished materials read at a glance down the column. */
 .cp-mat-hotovo { white-space: nowrap; }
+
+/* "Sklad": the count keeps its unit on one line; box and count are one text run beside the
+   thumbnail, wrapping there rather than under it. */
+.cp-mat-stock-n { white-space: nowrap; }
+.cp-mat-stock-ok { color: var(--cp-success-text); }
+.cp-mat-stock-short { color: var(--cp-danger-text); }
+.cp-mat-link-row { flex-wrap: wrap; }   /* .cp-thumb-row, but a narrow dialog may wrap it */
 .cp-mat-ready {
   display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
   font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--cp-text-inverse);

@@ -18,6 +18,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   checks. Any signed-in user reads, admins and editors of any camp edit.
   **Adds a DB migration.**
   - Photos need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
+  - A camp material can be linked with a warehouse item: camp pages then show
+    its box, photo and how much of it is in stock.
 - The activities overview can create an activity without a slot.
 
 ### Changed

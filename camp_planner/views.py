@@ -215,6 +215,7 @@ def activity_detail(slug: str, activity_id: int):
             "needCreate": url_for("api.material_need_add", activity_id=aid),
             "needItem": url_for("api.material_need_update", need_id=0),
             "materialsOverview": url_for("main.camp_materials", slug=camp.slug),
+            **_stock_urls(),
             "timeline": url_for("main.camp_timeline", slug=camp.slug),
             "slot": url_for("api.update_slot", slot_id=0),
             "audit": url_for("api.audit_list", slug=camp.slug),
@@ -242,6 +243,7 @@ def camp_materials(slug: str):
             "materialItem": url_for("api.material_update", slug=camp.slug, material_id=0),
             "materialMerge": url_for("api.material_merge", slug=camp.slug, source_id=0),
             "needItem": url_for("api.material_need_update", need_id=0),
+            **_stock_urls(),
             "activityDetail": url_for("main.activity_detail", slug=camp.slug, activity_id=0),
         },
     }
@@ -415,6 +417,15 @@ def _photo_url() -> str | None:
     if not media.enabled():
         return None
     return url_for("main.inventory_photo", variant="0", filename="0")
+
+
+def _stock_urls() -> dict[str, str | None]:
+    """What a camp page needs to reach the warehouse: the pickable things, a box, a photo."""
+    return {
+        "inventoryItems": url_for("api.inventory_item_list"),
+        "inventoryBox": url_for("main.inventory_box", box_id=0),
+        "inventoryPhoto": _photo_url(),
+    }
 
 
 def _inventory_page(data: dict) -> dict:

@@ -152,15 +152,30 @@
 
 /* materials list (the TODO tab now uses the shared cp-todo-table component, styled in
    components.css). */
-.cp-need-list { display: flex; flex-direction: column; gap: 0.3rem; max-width: 44rem; }
-.cp-need-row { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--cp-border-subtle); }
-.cp-need-main { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
-.cp-need-line { display: flex; align-items: center; gap: 0.5rem; }
-.cp-need-note { font-size: 12px; }
+/* The list is a grid (checkbox, name, box, amount, actions) and every row subgrids into it,
+   so the boxes and the amounts line up down the list; a column nobody fills collapses. */
+.cp-need-list {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content max-content;
+  column-gap: 0.5rem; max-width: 44rem;
+}
+.cp-need-list > p, .cp-need-list > .cp-need-add { grid-column: 1 / -1; }
+.cp-need-row {
+  display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center;
+  padding: 0.3rem 0; border-bottom: 1px solid var(--cp-border-subtle);
+}
+.cp-need-note { grid-column: 2 / -1; font-size: 12px; }
 .cp-need-add { margin-top: 0.6rem; }
-.cp-need-name { flex: 1; }
 .cp-ext-link { font-size: 0.85em; color: var(--cp-muted); text-decoration: none; }   /* external catalog url */
-.cp-need-qty { white-space: nowrap; }
+.cp-need-qty { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+/* Phone: the box goes under the name instead of squeezing it. */
+@media (max-width: 40rem) {
+  .cp-need-list { grid-template-columns: max-content minmax(0, 1fr) max-content max-content; }
+  .cp-need-place { grid-column: 2; grid-row: 2; }
+  .cp-need-place:empty { display: none; }
+  .cp-need-qty { grid-column: 3; grid-row: 1; }
+  .cp-need-row > .cp-seg { grid-column: 4; grid-row: 1; }
+  .cp-need-row > input { grid-row: 1; }
+}
 
 /* .cp-seg in-row action groups live in components.css (shared) */
 /* change-history feed (.cp-hist-*) is shared — see components.css */
