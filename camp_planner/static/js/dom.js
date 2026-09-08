@@ -716,6 +716,9 @@ window.cpDom = (function () {
     return parts.join(" ");
   }
 
+  // Several amounts of one thing as one text ("3 ks, 2 balení"), in the order given.
+  const amountList = (list) => list.map((a) => amountText(a.amount, a.unit)).join(", ");
+
   // Fold case and diacritics, so á sorts next to a. The app's one fold rule: fuzzy.js
   // matches on it and byName orders by it.
   const czechKey = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
@@ -741,7 +744,8 @@ window.cpDom = (function () {
     node.addEventListener("animationend", () => node.classList.remove("cp-arrive"), { once: true });
   }
 
-  return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText, czechKey, byName, reveal,
+  return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText, amountList,
+           czechKey, byName, reveal,
            thumb, lightbox, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
            plural, tabHash, freezeColumns, segBtn, actionGroup, orgInitials };

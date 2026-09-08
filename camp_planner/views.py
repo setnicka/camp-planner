@@ -24,6 +24,7 @@ from camp_planner.auth.permissions import (
     can_edit,
     can_edit_camp_meta,
     can_edit_inventory,
+    can_view,
     login_redirect,
     require_admin,
     require_edit,
@@ -474,6 +475,11 @@ def inventory_box(box_id: int):
         db.select(InventoryBox).filter_by(id=box_id).options(*loaders.INVENTORY_BOX),
         description="Krabice nenalezena.")
     data = _inventory_page(inventory.box_data(box))
+    # The camp column's head links to that camp's materials, for whoever may view the camp.
+    camp = (check := inventory.active_check()) and check.camp
+    data["camp_materials"] = (
+        {"camp_id": camp.id, "url": url_for("main.camp_materials", slug=camp.slug)}
+        if camp and can_view(camp) else None)
     return render_template("inventory_box.html", box=box, data=data)
 
 

@@ -100,6 +100,9 @@ MATERIALS_OVERVIEW = (
     ),
 )
 
+# What a check's camp took of a thing: the linked material's needs.
+MATERIAL_NEEDS = (selectinload(Material.needs),)
+
 # GET /camps/<slug>/todos (+ web todos overview) — every activity's todos with their
 # responsible orgs (each todo's .activity is its already loaded parent, so activity_title
 # needs no further option), plus the camp roster used as filter metadata.
@@ -139,6 +142,9 @@ INVENTORY_BOX = (selectinload(InventoryBox.items).selectinload(InventoryItem.pho
 # Count-only readers (progress walk-lists): items without their photos.
 INVENTORY_BOX_ITEMS = (selectinload(InventoryBox.items),)
 
+# A check names the camp it follows up on wherever it is listed.
+INVENTORY_CHECK_CAMP = (selectinload(InventoryCheck.camp),)
+
 # A photo is only ever looked up to reorder or delete it, which walks its item's photos.
 INVENTORY_PHOTO = (joinedload(InventoryPhoto.item).selectinload(InventoryItem.photos),)
 
@@ -154,4 +160,5 @@ INVENTORY_COMPLETION = (
 # and no boxes: that page shows a name, an amount and the box it groups by.
 INVENTORY_CHECK = (
     selectinload(InventoryCheck.records).selectinload(InventoryCheckRecord.item),
+    *INVENTORY_CHECK_CAMP,
 )

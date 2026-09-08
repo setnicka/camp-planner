@@ -39,8 +39,10 @@ def upgrade():
     sa.Column('active_lock', sa.Integer(), nullable=True),
     sa.Column('author', sa.String(length=255), nullable=False),
     sa.Column('summary', sa.JSON(), nullable=True),
+    sa.Column('camp_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('completed_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['camp_id'], [_fk('camps.id')], name='fk_inventory_check_camp', ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id'),
     # 1 = active, NULL = finished. Repeated NULLs are allowed on every backend, so this
     # is a portable "at most one active check".

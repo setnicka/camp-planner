@@ -579,17 +579,24 @@ class MaterialMergeIn(BaseModel):
 
 # Need (MaterialNeed): how much of a catalog material an activity needs.
 
+# A blank unit is no unit: the client sends what a cleared field holds. For a need that
+# falls back to the material's own unit (see Material.unit_totals), for a warehouse thing
+# it means pieces.
+Unit = Annotated[str | None, Field(max_length=40),
+                 AfterValidator(lambda v: (v or "").strip() or None)]
+
+
 class MaterialNeedAddIn(BaseModel):
     material_id: int
     amount: Amount = None
-    unit: str | None = Field(default=None, max_length=40)
+    unit: Unit = None
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     is_ready: bool = False
 
 
 class MaterialNeedUpdateIn(BaseModel):
     amount: Amount = None
-    unit: str | None = Field(default=None, max_length=40)
+    unit: Unit = None
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     is_ready: bool | None = None
 
@@ -998,7 +1005,7 @@ class InventoryItemCreate(BaseModel):
     alt_names: AltNames = []                     # other names it's known by (search only)
     url: str | None = Field(default=None, max_length=1024)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
-    unit: str | None = Field(default=None, max_length=40, examples=["ks", "hodně"])
+    unit: Unit = Field(default=None, examples=["ks", "hodně"])
     count: Amount = Field(default=None, examples=[4])
     _check_url = field_validator("url")(_http_url)
 
@@ -1011,7 +1018,7 @@ class InventoryItemUpdateIn(BaseModel):
     alt_names: AltNames | None = None
     url: str | None = Field(default=None, max_length=1024)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
-    unit: str | None = Field(default=None, max_length=40)
+    unit: Unit = None
     count: Amount = None
     _check_url = field_validator("url")(_http_url)
 
@@ -1023,6 +1030,7 @@ class InventoryItemRestoreIn(BaseModel):
 
 class InventoryCheckCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255, examples=["Inventura po LŠMF 2026"])
+    camp_id: int | None = None    # the camp the check follows up on, if any
 
 
 class InventoryRecordIn(BaseModel):
@@ -1033,7 +1041,7 @@ class InventoryRecordIn(BaseModel):
     """
     discarded: bool | None = None
     count: Amount = None
-    unit: str | None = Field(default=None, max_length=40)
+    unit: Unit = None
     box_id: int | None = None
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
 
@@ -1097,6 +1105,13 @@ class InventoryRecordOut(BaseModel):
     note: str | None
 
 
+class CampRefOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    slug: str
+
+
 class InventorySummaryOut(BaseModel):
     """What a check changed, counted per item."""
     checked: int
@@ -1111,9 +1126,23 @@ class InventoryCheckOut(BaseModel):
     id: int
     name: str
     status: InventoryCheckStatus
+    camp: CampRefOut | None = None    # the camp it follows up on
     created_at: datetime
     completed_at: datetime | None
     summary: InventorySummaryOut | None = None   # filled in at completion
+
+
+class AmountOut(BaseModel):
+    amount: float
+    unit: str | None
+
+
+class InventoryTakenOut(BaseModel):
+    """What the check's camp took of one warehouse thing: its material's needs summed per
+    unit (by the material's sum strategy), and how many activities asked for it."""
+    item_id: int
+    totals: list[AmountOut]
+    activities: int
 
 
 class InventoryBoxStateOut(BaseModel):
@@ -1126,6 +1155,7 @@ class InventoryBoxStateOut(BaseModel):
     checked: int        # observed items counted towards this box
     total: int          # items that count as this box's work
     active_check: InventoryCheckOut | None = None   # None once nobody is checking
+    taken: list[InventoryTakenOut] = []   # only with a check that has a camp
 
 
 class InventoryBoxEnvelope(_Ok):

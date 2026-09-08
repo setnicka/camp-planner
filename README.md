@@ -89,6 +89,7 @@ AuditLog              (append-only; grouped by activity_id; field-level JSON dif
 
 InventoryBox ── InventoryItem ── InventoryPhoto     (global, not per camp; items retire via discarded_at)
 InventoryCheck ── InventoryCheckRecord              (one record per observed item; applied on completion)
+                                                    (a check may name the Camp it follows up on)
 ```
 
 Slots carry real clock times (naive datetimes in the camp timezone), 24h day rows may cross

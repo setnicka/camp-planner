@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, dash, actionGroup, formModal, mergePicker, searchPicker, orgFilterHead, chipGroup, toast, orgInitials, amountText, czechKey, segBtn, reveal } = window.cpDom;
+  const { el, api, withId, dash, actionGroup, formModal, mergePicker, searchPicker, orgFilterHead, chipGroup, toast, orgInitials, amountText, amountList, fmtNum, czechKey, segBtn, reveal } = window.cpDom;
   const stock = window.cpStock;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
@@ -72,13 +72,12 @@
     }
     return order.map((unit) => ({ unit, amount: sums.get(unit) }));
   }
-  const unitTotals = (sums) => sums.map((s) => amountText(s.amount, s.unit)).join(", ");
 
   // Units compare after trimming and case-folding; an empty unit is pieces, like "ks".
   const unitKey = (u) => (u || "").trim().toLowerCase() || "ks";
-  // Amounts compare as they are shown (fmtNum rounds to 3 decimals), so 0.1 + 0.2 covers
-  // 0.3 instead of falling a float's hair short of it.
-  const shown = (n) => Math.round(n * 1000) / 1000;
+  // Amounts compare as they are shown, so 0.1 + 0.2 covers 0.3 instead of falling a
+  // float's hair short of it.
+  const shown = (n) => Number(fmtNum(n));
 
   // The box (a link) or the retired shelf, then the count (countEl).
   function stockCell(m, sums) {
@@ -274,7 +273,7 @@
       el("td", null, el("span", { class: "cp-thumb-row" },
         el("span", { class: "cp-mat-caret" }, open ? "▾" : "▸"),
         el("span", null, m.name))),
-      el("td", null, unitTotals(sums) || dash(),
+      el("td", null, amountList(sums) || dash(),
         m.sum_strategy === "max"
           ? el("span", { class: "cp-muted cp-mat-agg", "data-cp-hint": "",
                           title: "Maximum napříč aktivitami" }, " (max)")

@@ -867,3 +867,13 @@ def test_pages_render_with_the_data_their_scripts_read(client, box):
         assert re.search(r"/0(/|$)", url), url
     assert urls["record"].count("/0") == 2      # the observation url names box and item
 
+
+def test_a_blank_unit_is_no_unit(client, box):
+    """What a cleared field holds, from a client that does not tidy it up itself."""
+    item = make_item(client, box["id"], unit="  ")
+    assert item["unit"] is None
+    check = start_check(client)
+    resp = observe(client, box["id"], item["id"], unit="")
+    assert resp.status_code == 200, resp.get_json()
+    record = db_session.get(InventoryCheckRecord, {"check_id": check["id"], "item_id": item["id"]})
+    assert record.unit is None

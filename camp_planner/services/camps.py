@@ -86,6 +86,12 @@ def viewable(*, newest_first: bool = False) -> list[Camp]:
     return [c for c in camps if can_view(c)]
 
 
+def viewable_by_id(camp_id: int) -> Camp | None:
+    """A camp the user may view, by id; None when there is no such camp or it is not theirs."""
+    camp = db_session.get(Camp, camp_id)
+    return camp if camp is not None and can_view(camp) else None
+
+
 def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=None) -> Camp:
     """Create a camp + audit, in one transaction. A blank slug defaults to
     slugify(name); copy_from_slug copies the chosen taxonomy parts from that camp.
