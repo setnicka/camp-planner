@@ -1,4 +1,4 @@
-"""Camp create / settings-save and slug handling."""
+"""Camp listing, create / settings-save and slug handling."""
 
 from __future__ import annotations
 
@@ -75,6 +75,15 @@ def validate_camp_form(form, *, require_meta: bool = True) -> tuple[dict, list[s
                 problems.append(message)
         return {}, problems
     return parsed.model_dump(exclude_unset=True), []
+
+
+def viewable(*, newest_first: bool = False) -> list[Camp]:
+    """The camps the user may view, oldest start date first unless newest_first. Every
+    listing of several camps goes through here, so no page spells the permission filter
+    out for itself."""
+    order = Camp.start_date.desc() if newest_first else Camp.start_date
+    camps = db_session.scalars(db.select(Camp).order_by(order)).all()
+    return [c for c in camps if can_view(c)]
 
 
 def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=None) -> Camp:

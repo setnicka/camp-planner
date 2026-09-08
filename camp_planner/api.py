@@ -26,7 +26,7 @@ from werkzeug.exceptions import HTTPException
 
 from camp_planner.auth.permissions import can_create_camp, can_edit, can_edit_camp_meta, can_view
 from camp_planner.auth.token import resolve_identity as _resolve_token_identity
-from camp_planner.extensions import csrf, db, db_session, first_or_404, get_or_404
+from camp_planner.extensions import csrf, db, first_or_404, get_or_404
 from camp_planner.models.activity import Activity, Todo
 from camp_planner.models.audit import EntityType
 from camp_planner.models.auth import ApiToken
@@ -233,9 +233,7 @@ def _material(camp: Camp, material_id: int) -> Material:
 @bp.get("/camps")
 @spec.validate(resp=Response(HTTP_200=CampListEnvelope), tags=["camps"])
 def camp_list():
-    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
-    visible = [c for c in camps if can_view(c)]
-    return _run(lambda: {"camps": [serialize.camp(c) for c in visible]})
+    return _run(lambda: {"camps": [serialize.camp(c) for c in camps_service.viewable()]})
 
 
 @bp.get("/camps/<slug>")

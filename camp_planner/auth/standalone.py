@@ -20,6 +20,7 @@ from camp_planner.auth.permissions import require_admin
 from camp_planner.extensions import db, db_session, get_or_404
 from camp_planner.models.auth import User, UserCampRole
 from camp_planner.models.camp import Camp
+from camp_planner.services import camps as camps_service
 
 # A throwaway hash compared against when a username is unknown, so a failed login
 # costs the same whether or not the user exists (defeats username enumeration by timing).
@@ -141,7 +142,7 @@ def delete_user(user_id: int):
 @require_admin
 def user_detail(user_id: int):
     user = get_or_404(User, user_id)
-    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
+    camps = camps_service.viewable()
     return render_template(
         "auth/user_detail.html",
         user=user,
