@@ -433,6 +433,7 @@ class MaterialOut(BaseModel):
     acquisition_labels: list[str] = []       # free "how/where to obtain" tokens ("prefix: value" → scoped tag)
     sum_strategy: SumStrategy                 # how per-activity needs aggregate (sum vs max)
     orgs: list[OrgRefOut] = []               # responsible orgs (czech-sorted by initials)
+    inventory_item: InventoryLinkOut | None = None   # the warehouse thing it stands for, if linked
 
 
 class MaterialNeedOut(BaseModel):
@@ -508,13 +509,22 @@ def _http_url(value: str | None) -> str | None:
 
 
 class MaterialCreate(BaseModel):
-    """Create a catalog material (registry). Deduplicated by normalized name per camp."""
-    name: str = Field(min_length=1, max_length=255, examples=["A4 papír"])
+    """Create a catalog material (registry). Deduplicated by normalized name per camp.
+    With inventory_item_id the material stands for that warehouse thing: name, unit and
+    url default to the thing's, and the link is set."""
+    name: str | None = Field(default=None, min_length=1, max_length=255, examples=["A4 papír"])
     unit: str | None = Field(default=None, max_length=40, examples=["ks"])
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     url: str | None = Field(default=None, max_length=1024, examples=["https://example.com/a4"])
+    inventory_item_id: int | None = None
 
     _check_url = field_validator("url")(_http_url)
+
+    @model_validator(mode="after")
+    def _named(self):
+        if self.name is None and self.inventory_item_id is None:
+            raise ValueError("Název je povinný.")
+        return self
 
 
 class MaterialUpdateIn(BaseModel):
@@ -528,6 +538,7 @@ class MaterialUpdateIn(BaseModel):
     acquisition_labels: Labels | None = None
     sum_strategy: SumStrategy | None = None
     org_ids: OrgIds | None = None
+    inventory_item_id: int | None = None    # absent → unchanged, null → unlink
 
     _check_url = field_validator("url")(_http_url)
 
@@ -1066,6 +1077,13 @@ class InventoryBoxOut(BaseModel):
     virtual: bool
 
 
+class InventoryLinkOut(InventoryItemOut):
+    """A warehouse thing as a camp page sees it: the thing, plus the box named (a camp page
+    has no box list to look an id up in). Serves both the thing a material stands for and the
+    list its pickers offer."""
+    box: InventoryBoxOut | None    # None once discarded
+
+
 class InventoryRecordOut(BaseModel):
     """An observation as the UI reads it back."""
     model_config = ConfigDict(from_attributes=True)
@@ -1126,6 +1144,10 @@ class InventoryBoxStateEnvelope(_Ok):
 
 class InventoryItemEnvelope(_Ok):
     item: InventoryItemOut
+
+
+class InventoryItemListEnvelope(_Ok):
+    items: list[InventoryLinkOut]
 
 
 class InventoryCheckEnvelope(_Ok):

@@ -261,6 +261,28 @@ def box_data(box: InventoryBox) -> dict:
     }
 
 
+def live_item(item_id: int) -> InventoryItem:
+    """The thing under that id, if it is still in the warehouse: what a camp material may
+    stand for."""
+    item = db_session.get(InventoryItem, item_id)
+    if item is None:
+        raise errors.Invalid("Věc už ve skladu není – stránka je zastaralá.")
+    if item.discarded_at is not None:
+        raise errors.Invalid(f"Věc „{item.name}“ je vyřazená, nelze ji propojit.")
+    return item
+
+
+def pick_items() -> dict:
+    """The live things, for the camp pages' material picker: a link goes to a thing
+    that is still there."""
+    items = db_session.scalars(
+        db.select(InventoryItem)
+        .where(InventoryItem.discarded_at.is_(None))
+        .options(*loaders.INVENTORY_ITEM_BOX)
+    ).all()
+    return {"items": [serialize.inventory_link(i) for i in by_name(items)]}
+
+
 def box_history(box: InventoryBox) -> dict:
     """What the finished checks said about the things this box now lists, oldest check
     first. Backs the box page's on-demand "načíst inventury" matrix."""

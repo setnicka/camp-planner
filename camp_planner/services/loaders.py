@@ -27,6 +27,15 @@ from camp_planner.models.material import Material, MaterialAssignment, MaterialN
 from camp_planner.models.slot import Slot, SlotAssignment
 
 
+# A warehouse thing's box and photos: what naming and placing one costs (the material
+# picker's list, and the link on a material).
+INVENTORY_ITEM_BOX = (selectinload(InventoryItem.box), selectinload(InventoryItem.photos))
+
+# The warehouse thing a material stands for, with its box: every material serializer
+# names and places it. joinedload: many-to-one, one row at most.
+_MATERIAL_LINK = (joinedload(Material.inventory_item).options(*INVENTORY_ITEM_BOX),)
+
+
 def _activity_graph() -> tuple:
     """The graph serialize.activity() walks (slots+attendees, org roles, tag links,
     todos+their orgs, needs+catalog), as loader options rooted at Activity. A fresh tuple
@@ -36,7 +45,8 @@ def _activity_graph() -> tuple:
         selectinload(Activity.assignments).selectinload(ActivityAssignment.org),
         selectinload(Activity.tags).selectinload(ActivityTag.tag),
         selectinload(Activity.todos).selectinload(Todo.assignments).selectinload(TodoAssignment.org),
-        selectinload(Activity.material_needs).selectinload(MaterialNeed.material),
+        selectinload(Activity.material_needs).selectinload(MaterialNeed.material)
+        .options(*_MATERIAL_LINK),
     )
 
 
@@ -72,7 +82,10 @@ ICAL = (selectinload(Camp.activities).options(*_calendar_graph()),)
 # GET /camps/<slug>/materials — the catalog list; serialize.material walks each material's
 # responsible orgs (the activity-detail picker reads it).
 MATERIALS = (
-    selectinload(Camp.materials).selectinload(Material.assignments).selectinload(MaterialAssignment.org),
+    selectinload(Camp.materials).options(
+        selectinload(Material.assignments).selectinload(MaterialAssignment.org),
+        *_MATERIAL_LINK,
+    ),
 )
 
 # GET /camps/<slug>/materials/overview — each catalog material with its responsible orgs and
@@ -83,6 +96,7 @@ MATERIALS_OVERVIEW = (
     selectinload(Camp.materials).options(
         selectinload(Material.assignments).selectinload(MaterialAssignment.org),
         selectinload(Material.needs).selectinload(MaterialNeed.activity),
+        *_MATERIAL_LINK,
     ),
 )
 

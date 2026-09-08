@@ -16,6 +16,7 @@ from camp_planner.models.common import portable_enum, strip_diacritics
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity
     from camp_planner.models.camp import Camp
+    from camp_planner.models.inventory import InventoryItem
     from camp_planner.models.org import Org
 
 _TOKEN_SPLIT = re.compile(r"[^0-9a-z]+")
@@ -41,6 +42,9 @@ class Material(Base):
     __tablename__ = table_name("materials")
     __table_args__ = (
         UniqueConstraint("camp_id", "normalized_name", name="uq_material_camp_norm"),
+        # One material per thing within a camp; NULLs repeat, so unlinked rows are free.
+        # The thing leads, so the index also serves its foreign key.
+        UniqueConstraint("inventory_item_id", "camp_id", name="uq_material_camp_item"),
     )
 
     # Columns:
@@ -62,6 +66,12 @@ class Material(Base):
         portable_enum(SumStrategy, "sum_strategy"), default=SumStrategy.sum
     )
 
+    # Optional link to the thing in the warehouse. SET NULL: erasing the thing leaves the
+    # material as a historical reference; a discarded thing keeps the link.
+    inventory_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey(fk("inventory_items.id"), ondelete="SET NULL", name="fk_material_inventory_item")
+    )
+
     # Relationships:
     camp: Mapped[Camp] = relationship(back_populates="materials")
     needs: Mapped[list[MaterialNeed]] = relationship(
@@ -70,6 +80,7 @@ class Material(Base):
     assignments: Mapped[list[MaterialAssignment]] = relationship(
         back_populates="material", cascade="all, delete-orphan"
     )
+    inventory_item: Mapped[InventoryItem | None] = relationship()
 
     @staticmethod
     def normalize_name(name: str) -> str:

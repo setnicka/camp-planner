@@ -98,6 +98,12 @@ def upgrade():
     with op.batch_alter_table(table_name('inventory_photos'), schema=None) as batch_op:
         batch_op.create_index(batch_op.f(_ix('ix_inventory_photos_item_id')), ['item_id'], unique=False)
 
+    with op.batch_alter_table(table_name('materials'), schema=None) as batch_op:
+        batch_op.add_column(sa.Column('inventory_item_id', sa.Integer(), nullable=True))
+        batch_op.create_foreign_key('fk_material_inventory_item', table_name('inventory_items'),
+                                    ['inventory_item_id'], ['id'], ondelete='SET NULL')
+        batch_op.create_unique_constraint('uq_material_camp_item', ['inventory_item_id', 'camp_id'])
+
     with op.batch_alter_table(table_name('audit_logs'), schema=None) as batch_op:
         batch_op.alter_column('camp_id',
                existing_type=sa.INTEGER(),
@@ -113,6 +119,12 @@ def downgrade():
         batch_op.alter_column('camp_id',
                existing_type=sa.INTEGER(),
                nullable=False)
+
+    with op.batch_alter_table(table_name('materials'), schema=None) as batch_op:
+        # The foreign key first: MySQL refuses to drop the index it uses.
+        batch_op.drop_constraint('fk_material_inventory_item', type_='foreignkey')
+        batch_op.drop_constraint('uq_material_camp_item', type_='unique')
+        batch_op.drop_column('inventory_item_id')
 
     with op.batch_alter_table(table_name('inventory_photos'), schema=None) as batch_op:
         batch_op.drop_index(batch_op.f(_ix('ix_inventory_photos_item_id')))

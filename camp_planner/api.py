@@ -90,6 +90,7 @@ from camp_planner.schemas import (
     InventoryConflictOut,
     InventoryItemCreate,
     InventoryItemEnvelope,
+    InventoryItemListEnvelope,
     InventoryItemRestoreIn,
     InventoryItemUpdateIn,
     InventoryRecordIn,
@@ -789,6 +790,14 @@ def inventory_box_history(box_id: int):
     """What the finished checks said about the box's current contents."""
     box = _box(box_id, *loaders.INVENTORY_BOX_ITEMS, edit=False)
     return _run(lambda: inventory.box_history(box))
+
+
+@bp.get("/inventory/items")
+@spec.validate(resp=Response(HTTP_200=InventoryItemListEnvelope, **_AUTH), tags=["inventory"])
+def inventory_item_list():
+    """The things a camp material can stand for: every live item, with its box."""
+    _inventory_guard(edit=False)
+    return _run(inventory.pick_items)
 
 
 @bp.post("/inventory/boxes")
