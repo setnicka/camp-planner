@@ -8,11 +8,8 @@
 "use strict";
 
 (function () {
-  const COMBINING = /[̀-ͯ]/g; // diacritical marks left by NFD decomposition
-
-  function fold(s) {
-    return String(s).normalize("NFD").replace(COMBINING, "").toLowerCase();
-  }
+  // The app's fold rule lives in dom.js, which every page loads ahead of this one.
+  const fold = (s) => window.cpDom.czechKey(s);
 
   // Score `text` against `query`: higher is better, -1 means no match. Empty query
   // scores 0 (matches everything). A contiguous substring beats a scattered subsequence.

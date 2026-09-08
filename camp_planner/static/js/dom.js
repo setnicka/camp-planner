@@ -224,8 +224,10 @@ window.cpDom = (function () {
       el("div", { class: "cp-modal-foot" }, cancel, ok));
     let dirty = false;
     pane.addEventListener("input", () => { dirty = true; });
-    // chip toggles are buttons, not inputs — a click on one is an edit too
-    pane.addEventListener("click", (e) => { if (e.target.closest(".cp-cat-chip")) dirty = true; });
+    // chips and segmented buttons are buttons, not inputs, a click on one is an edit too
+    pane.addEventListener("click", (e) => {
+      if (e.target.closest(".cp-cat-chip, .cp-seg-btn")) dirty = true;
+    });
     // Enter in a single-line field submits. Textareas keep Enter for newlines, a file
     // input keeps it for opening the picker; a field with its own Enter handling (chip
     // inputs) preventDefaults first and is respected.
@@ -244,11 +246,18 @@ window.cpDom = (function () {
   }
 
   // Fuzzy search-and-pick modal over a list. labelOf(item) feeds the row label and the
-  // filter; metaOf (optional) adds a right-side hint. onPick(item, close) decides itself
-  // when to close (merge only closes after its confirm + api call succeeds). extraEntry(q)
-  // (optional) may return { label, pick } appended as a synthetic "+ Vytvořit …" row.
-  function searchPicker({ title, hint, placeholder = "Hledat…", items, labelOf, metaOf,
-                          onPick, extraEntry, empty = "Nic nenalezeno." }) {
+  // filter; searchOf (optional) is matched instead of the label (a thing's other names too);
+  // metaOf (optional) adds a right-side hint, iconOf (optional) a node before the label
+  // (a thumbnail). onPick(item, close) decides itself when to close (merge only closes after
+  // its confirm + api call succeeds). extraEntry(q) (optional) may return { label, pick }
+  // appended as a synthetic "+ Vytvořit …" row; empty(q) is the text for no rows at all.
+  // groupOf (optional) sorts the matches into groups by its number and groupLabels names
+  // them, one divider per group. Each group is built up to `cap` rows, the rest counted in
+  // one line: a thousand-row list costs a visible pause to render and is typed into anyway,
+  // not read to the end.
+  function searchPicker({ title, hint, placeholder = "Hledat…", items, labelOf, metaOf, searchOf,
+                          groupOf, groupLabels, iconOf, onPick, extraEntry,
+                          empty = () => "Nic nenalezeno.", cap = 60 }) {
     const search = el("input", { type: "text", class: "cp-modal-search", placeholder });
     const list = el("div", { class: "cp-modal-list" });
     const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
@@ -259,24 +268,53 @@ window.cpDom = (function () {
     const close = openModal(dialog);
     cancel.addEventListener("click", () => close());
     const setRows = keyList(search);
+    // The match text of every item, built once: the box is typed into, and folding a few
+    // thousand keys (a thing's other names among them) again per keystroke shows on a phone.
+    // The list cannot change while the dialog is open.
+    const keyOf = searchOf || labelOf;
+    const keys = new Map(items.map((it) => [it, keyOf(it)]));
     function rerender() {
       const q = search.value.trim();
-      const matches = q && window.cpFuzzy ? window.cpFuzzy.filter(q, items, labelOf) : items;
-      const entries = matches.map((it) => {
-        const meta = metaOf && metaOf(it);
-        return {
-          el: el("button", { type: "button", class: "cp-modal-item" },
-            el("span", null, labelOf(it)), meta ? el("span", { class: "cp-modal-recent" }, meta) : null),
-          pick: () => onPick(it, close),
-        };
-      });
+      const matches = q && window.cpFuzzy
+        ? window.cpFuzzy.filter(q, items, (it) => keys.get(it))
+        : items;
+      // Every group gets its own row budget, filled in match order: over a shared cap the
+      // first group could take the whole list and the rest would drop out without a word.
+      const runs = new Map();
+      for (const it of matches) {
+        const g = groupOf ? groupOf(it) : 0;
+        let run = runs.get(g);
+        if (!run) runs.set(g, run = []);
+        if (run.length < cap) run.push(it);
+      }
+      // Dividers ride in the DOM only: the keyboard walks the pickable rows.
+      const nodes = [];
+      const entries = [];
+      const addRow = (children, pick) => {
+        const row = { el: el("button", { type: "button", class: "cp-modal-item" }, ...children), pick };
+        nodes.push(row.el);
+        entries.push(row);
+        return row;
+      };
+      for (const g of [...runs.keys()].sort((a, b) => a - b)) {
+        const label = groupLabels && groupLabels[g];
+        if (label) nodes.push(el("div", { class: "cp-modal-group" }, label));
+        for (const it of runs.get(g)) {
+          const icon = iconOf && iconOf(it);
+          const meta = metaOf && metaOf(it);
+          const row = addRow([icon, el("span", null, labelOf(it)),
+                              meta ? el("span", { class: "cp-modal-recent" }, meta) : null],
+                             () => onPick(it, close));
+          row.open = icon?.cpOpen;   // the keyboard opens the row's photo through this
+        }
+      }
+      const hidden = matches.length - entries.length;
       const extra = extraEntry && extraEntry(q);
-      if (extra) entries.push({
-        el: el("button", { type: "button", class: "cp-modal-item" }, extra.label),
-        pick: () => extra.pick(close),
-      });
-      list.replaceChildren(...entries.map((e) => e.el));
-      if (!entries.length) list.append(el("div", { class: "cp-muted" }, empty));
+      if (extra) addRow([extra.label], () => extra.pick(close));
+      if (hidden) nodes.push(el("div", { class: "cp-modal-more cp-muted" },
+        "… a další " + hidden + ", zužte hledáním"));
+      list.replaceChildren(...nodes);
+      if (!entries.length) list.append(el("div", { class: "cp-muted" }, empty(q)));
       setRows(entries);
     }
     search.addEventListener("input", rerender);
@@ -457,6 +495,13 @@ window.cpDom = (function () {
       if (e.key === "ArrowDown") { e.preventDefault(); setActive(active + 1); }
       else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1); }
       else if (e.key === "Enter" && rows[active]) { e.preventDefault(); rows[active].pick(); }
+      // → past the end of the query opens the active row's photo, where it has one; inside
+      // the text it keeps moving the caret. stopPropagation: the lightbox binds its own
+      // arrow keys while opening, and this very keydown would otherwise step it on.
+      else if (e.key === "ArrowRight" && rows[active]?.open
+               && search.selectionStart === search.value.length) {
+        e.preventDefault(); e.stopPropagation(); rows[active].open();
+      }
     });
     return function setRows(entries) {
       rows = entries;
@@ -594,7 +639,7 @@ window.cpDom = (function () {
     }
     img.classList.add("cp-thumb-zoom");
     img.title = "Zvětšit fotku";
-    img.cpOpen = open;   // the picker's keyboard reaches it here (keyList)
+    img.cpOpen = open;   // searchPicker hands this to the row, for the keyboard
     img.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); open(); });
     img.addEventListener("click", (e) => e.stopPropagation());
     return img;
@@ -671,7 +716,32 @@ window.cpDom = (function () {
     return parts.join(" ");
   }
 
-  return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText,
+  // Fold case and diacritics, so á sorts next to a. The app's one fold rule: fuzzy.js
+  // matches on it and byName orders by it.
+  const czechKey = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+
+  // Order names the way the server does (models.common.czech_sort_key): the folded key,
+  // then the plain name so a and á keep one order; the caller adds the id after it, as
+  // models.common.by_name does. Not localeCompare("cs"): a list the client re-sorts after
+  // an edit has to come out in the same order the server sends it in.
+  const byName = (nameOf) => (a, b) => {
+    const na = nameOf(a) || "", nb = nameOf(b) || "";
+    const ka = czechKey(na), kb = czechKey(nb);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  };
+
+  // A row arrived at by a #…-<id> link: scroll it into view and flash it, so the eye finds
+  // the one row in a long list. The flash itself is one animation (components.css); the
+  // class comes off when it ends, so the timing lives in one place.
+  function reveal(node) {
+    if (!node) return;
+    node.scrollIntoView({ block: "center" });
+    node.classList.add("cp-arrive");
+    node.addEventListener("animationend", () => node.classList.remove("cp-arrive"), { once: true });
+  }
+
+  return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText, czechKey, byName, reveal,
            thumb, lightbox, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
            plural, tabHash, freezeColumns, segBtn, actionGroup, orgInitials };

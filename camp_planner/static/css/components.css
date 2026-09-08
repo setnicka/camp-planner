@@ -137,7 +137,11 @@
 @media (hover: hover) {
   .cp-modal-item:hover { background: var(--cp-accent-subtle); }
 }
-.cp-modal-recent { margin-left: auto; font-size: 11px; color: var(--cp-muted); }
+.cp-modal-recent { margin-left: auto; flex: none; max-width: 40%; text-align: right; font-size: 11px; color: var(--cp-muted); }
+/* A run of rows from one source, named once above it (searchPicker groupLabels), and the
+   line counting the rows the cap left out. */
+.cp-modal-group { padding: 0.6rem 0.5rem 0.2rem; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cp-muted); }
+.cp-modal-more { padding: 0.4rem 0.5rem; font-size: 11px; }
 
 /* A warehouse thing's thumbnail in a list or picker row (cpDom.thumb); the empty variant
    holds the place where other rows have one. */
@@ -148,8 +152,11 @@
 .cp-thumb-empty { border-color: transparent; }
 /* Touch: a fingertip needs more than a pointer does. */
 @media (hover: none) { .cp-thumb { width: 2.5rem; height: 2.5rem; } }
+/* A thumbnail and the text beside it on one line, the text wrapping in its own column. */
+.cp-thumb-row { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .cp-thumb-btn { display: inline-flex; padding: 0; border: 0; background: none; vertical-align: middle; }
 .cp-thumb-btn, .cp-thumb-zoom { cursor: zoom-in; }
+
 /* The lightbox fills the whole overlay, so the photo is bounded by the screen, not by
    a dialog width. The side strips (only with several photos) are full-height targets.
    Its overlay is near-opaque: opened over a dialog (the warehouse's photos dialog), the
@@ -272,6 +279,14 @@
   .cp-seg-icon { display: inline-flex; align-items: center; justify-content: center;
     min-width: 2.5rem; min-height: 2rem; font-size: 1rem; }
 }
+
+/* A row arrived at by a #…-<id> link (cpDom.reveal): marked, then faded out. Tables animate
+   the cells instead, since the row paints no background of its own. */
+@keyframes cp-arrive {
+  0%, 50% { background: var(--cp-warning-mark); }
+  100% { background: transparent; }
+}
+.cp-arrive, .cp-arrive > td { animation: cp-arrive 2s ease; }
 
 /* --- loading spinner (history feed, google review, …) --- */
 .cp-spinner {
