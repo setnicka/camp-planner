@@ -142,13 +142,25 @@ def discard(client, item, headers=ADMIN):
     return client.post(f"/api/inventory/items/{item['id']}/discard", headers=headers)
 
 
-def box_state(client, box_id) -> dict:
-    return client.get(f"/api/inventory/boxes/{box_id}/state", headers=ADMIN).get_json()["state"]
+@pytest.fixture
+def box(client):
+    return make_box(client)
 
 
-def page_data(client, url) -> dict:
+@pytest.fixture
+def media_dir(app, tmp_path):
+    """Photos switched on, storing into a scratch directory."""
+    app.extensions["camp_planner"]["media_dir"] = str(tmp_path)
+    return tmp_path
+
+
+def box_state(client, box_id, headers=ADMIN) -> dict:
+    return client.get(f"/api/inventory/boxes/{box_id}/state", headers=headers).get_json()["state"]
+
+
+def page_data(client, url, headers=ADMIN) -> dict:
     """The JSON a page inlines for its script (no page fetches on load)."""
-    html = client.get(url, headers=ADMIN).get_data(as_text=True)
+    html = client.get(url, headers=headers).get_data(as_text=True)
     match = re.search(r'<script id="cp-inventory-data" type="application/json">(.*?)</script>',
                       html, re.S)
     assert match, f"{url} inlined no data"
