@@ -11,15 +11,16 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import IntegrityError
 
-from camp_planner.extensions import db_session
+from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import by_name
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
-from camp_planner.services import audit, errors, orgs, serialize
+from camp_planner.services import audit, errors, inventory, orgs, serialize
 
 if TYPE_CHECKING:
     from camp_planner.models.activity import Activity
     from camp_planner.models.camp import Camp
+    from camp_planner.models.inventory import InventoryItem
     from camp_planner.schemas import (
         MaterialCreate,
         MaterialNeedAddIn,
@@ -40,20 +41,77 @@ def list_materials_overview(camp: Camp) -> dict:
     return {"materials": [serialize.material_overview(m) for m in by_name(camp.materials)]}
 
 
+# --- the warehouse link ------------------------------------------------------
+
+def _refuse_taken(camp_id: int, item: InventoryItem, material: Material | None = None) -> None:
+    """One material per thing within a camp (uq_material_camp_item), said in words."""
+    other = db_session.scalar(
+        db.select(Material).filter_by(camp_id=camp_id, inventory_item_id=item.id))
+    if other is not None and other is not material:
+        raise errors.Invalid(f"Na věc „{item.name}“ už odkazuje materiál „{other.name}“.")
+
+
+def _commit_or_refuse(message: str) -> None:
+    """Commit, or say in words what the unique constraint refused: _refuse_taken only sees
+    what this session knows, two people linking one thing race past it."""
+    try:
+        db_session.commit()
+    except IntegrityError:
+        db_session.rollback()
+        raise errors.Invalid(message) from None
+
+
+def _relink(material: Material, item_id: int | None) -> dict[str, list]:
+    """Point the material at another thing, or at none. The diff names the things."""
+    if item_id == material.inventory_item_id:
+        return {}
+    item = inventory.live_item(item_id) if item_id is not None else None
+    if item is not None:
+        _refuse_taken(material.camp_id, item, material)
+    old = material.inventory_item.name if material.inventory_item else None
+    material.inventory_item = item   # the object, so the response carries the new link
+    return {"inventory_item": [old, item.name if item else None]}
+
+
 def create_material(camp: Camp, payload: MaterialCreate) -> dict:
     """Create a catalog material; the uq_material_camp_norm constraint rejects a
-    normalized-name duplicate within the camp (name's @validates keeps it in sync)."""
-    name = payload.name.strip()
-    material = Material(camp_id=camp.id, name=name, unit=payload.unit,
-                        note=payload.note, url=payload.url)
+    normalized-name duplicate within the camp (name's @validates keeps it in sync).
+
+    With inventory_item_id the material is made from a warehouse thing: its name, unit and
+    url stand in for what the caller did not send. A same-named unlinked material is linked
+    instead of duplicated, otherwise unchanged."""
+    item = inventory.live_item(payload.inventory_item_id) if payload.inventory_item_id is not None else None
+    name = (payload.name or "").strip() or (item.name.strip() if item is not None else "")
+    if not name:
+        raise errors.Invalid("Název je povinný.")
+    if item is not None:
+        existing = db_session.scalar(db.select(Material).filter_by(
+            camp_id=camp.id, normalized_name=Material.normalize_name(name)))
+        if existing is not None:
+            if existing.inventory_item_id not in (None, item.id):
+                raise errors.Invalid(
+                    f"Materiál „{existing.name}“ už existuje a odkazuje na jinou věc ve skladu.")
+            if changes := _relink(existing, item.id):
+                audit.record(camp_id=camp.id, entity_type=EntityType.material,
+                             entity_id=existing.id, action=AuditAction.update, changes=changes)
+                _commit_or_refuse(f"Na věc „{item.name}“ už odkazuje jiný materiál.")
+            return {"material": serialize.material(existing)}
+        _refuse_taken(camp.id, item)
+    material = Material(camp_id=camp.id, name=name, note=payload.note,
+                        unit=payload.unit if item is None else payload.unit or item.unit,
+                        url=payload.url if item is None else payload.url or item.url,
+                        inventory_item=item)
     db_session.add(material)
     try:
         db_session.flush()  # assign id; a duplicate normalized_name raises here
     except IntegrityError:
         db_session.rollback()
         raise errors.Invalid(f"Materiál „{name}“ už v katalogu existuje.") from None
+    changes = {"name": [None, name]}
+    if item is not None:
+        changes["inventory_item"] = [None, item.name]
     audit.record(camp_id=camp.id, entity_type=EntityType.material, entity_id=material.id,
-                 action=AuditAction.create, changes={"name": [None, name]})
+                 action=AuditAction.create, changes=changes)
     db_session.commit()
     return {"material": serialize.material(material)}
 
@@ -75,6 +133,11 @@ def update_material(material: Material, payload: MaterialUpdateIn) -> dict:
             material, material.camp, payload.org_ids, MaterialAssignment)
         if orgs_diff:
             changes["orgs"] = orgs_diff
+    if "inventory_item_id" in payload.model_fields_set:
+        # no_autoflush: the lookups inside would flush a pending rename, and its unique
+        # violation would then escape the guarded flush below as a 500.
+        with db_session.no_autoflush:
+            changes.update(_relink(material, payload.inventory_item_id))
     if not changes:
         return {"material": serialize.material(material)}
     try:
@@ -137,10 +200,19 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
         if a.org_id not in tgt_org_ids:
             a.material = target
             tgt_org_ids.add(a.org_id)
+    # The target keeps its own thing; without one it inherits the source's. The pair is
+    # unique per camp, so the source has to let go before the target takes it.
+    changes = {"merged_from": [source.name, None]}
+    if target.inventory_item_id is None and source.inventory_item_id is not None:
+        item = source.inventory_item
+        source.inventory_item = None
+        db_session.flush()
+        target.inventory_item = item
+        changes["inventory_item"] = [None, item.name]
 
     db_session.delete(source)
     audit.record(camp_id=camp.id, entity_type=EntityType.material, entity_id=target.id,
-                 action=AuditAction.merge, changes={"merged_from": [source.name, None]})
+                 action=AuditAction.merge, changes=changes)
     db_session.commit()
     return {"material": serialize.material(target)}
 

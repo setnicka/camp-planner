@@ -76,7 +76,7 @@ on the helpers in [auth/permissions.py](camp_planner/auth/permissions.py).
 Camp ─┬─ Category        (per-camp palette; user-defined key / label / color)
       ├─ Org             (per-camp roster; shown as initials)
       ├─ Tag             (kind: label | check | progress | text; pinned tags show as columns)
-      ├─ Material        (canonical catalog, deduplicated per camp)
+      ├─ Material        (canonical catalog, deduplicated per camp; may stand for an InventoryItem)
       └─ Activity ─┬─ (type: basic | external | external_lecture | …; config JSON per type)
                    ├─ Slot ── SlotAssignment   (orgs staffing that block during the camp)
                    ├─ ActivityAssignment        (Org × role{garant,helper} — planning responsibility)

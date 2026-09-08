@@ -25,6 +25,7 @@ from camp_planner.schemas import (
     InventoryBoxOut,
     InventoryBoxStateOut,
     InventoryCheckOut,
+    InventoryLinkOut,
     InventoryItemOut,
     InventoryItemRefOut,
     InventoryRecordOut,
@@ -137,7 +138,7 @@ def todo_overview(t: Todo) -> dict:
 def _material(m: Material) -> MaterialOut:
     return MaterialOut(id=m.id, name=m.name, unit=m.unit, note=m.note, url=m.url,
                        acquisition_labels=m.acquisition_labels, sum_strategy=m.sum_strategy,
-                       orgs=_org_refs(m.assignments))
+                       orgs=_org_refs(m.assignments), inventory_item=m.inventory_item)
 
 
 def material(m: Material) -> dict:
@@ -237,6 +238,10 @@ def inventory_box(b: InventoryBox) -> dict:
 def inventory_item_ref(i: InventoryItem) -> dict:
     """A thing named and located, for the pickers (see InventoryItemRefOut)."""
     return _dump(InventoryItemRefOut.model_validate(i))
+
+
+def inventory_link(i: InventoryItem) -> dict:
+    return _dump(InventoryLinkOut.model_validate(i))
 
 
 def inventory_record(r: InventoryCheckRecord) -> dict:
