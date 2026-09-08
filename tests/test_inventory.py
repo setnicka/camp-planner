@@ -36,11 +36,6 @@ ED = editor("t")
 VI = viewer("t")
 
 
-@pytest.fixture
-def box(client):
-    return make_box(client)
-
-
 def test_anonymous_is_rejected(client):
     assert client.get("/inventory").status_code == 401
     assert client.post("/api/inventory/boxes", json={"name": "X"}).status_code == 401
@@ -670,13 +665,6 @@ def test_completion_audits_boxes_by_their_new_name(client, box):
 
 def photo_url(photo, variant="thumb") -> str:
     return f"/inventory/photos/{variant}/{photo['filename']}"
-
-
-@pytest.fixture
-def media_dir(app, tmp_path):
-    """Photos switched on, storing into a scratch directory."""
-    app.extensions["camp_planner"]["media_dir"] = str(tmp_path)
-    return tmp_path
 
 
 def test_oversized_upload_is_a_clean_413(client, box):
