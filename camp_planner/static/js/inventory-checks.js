@@ -19,17 +19,36 @@
   const totals = () => inv.sumProgress(DATA.progress);
 
   function startCheck() {
+    // The name follows the camp until somebody types over it: a check that follows up on
+    // one is named after it, and `auto` remembers what we last filled in, so an edited
+    // name is never overwritten by the next pick.
+    const named = (c) => (c ? `Inventura po ${c.name}`.slice(0, 255)
+                            : "Inventura " + new Date().getFullYear());
+    let auto = named(null);
     const name = el("input", { type: "text", maxLength: 255, class: "cp-modal-name",
-                               value: "Inventura " + new Date().getFullYear() });
+                               value: auto });
+    // Newest first: a check follows up on the camp that just ended.
+    const camp = el("select", { class: "cp-modal-name",
+      onchange: () => {
+        if (name.value !== auto) return;
+        auto = named(DATA.camps.find((c) => String(c.id) === camp.value));
+        name.value = auto;
+      } },
+      el("option", { value: "" }, "bez akce"),
+      ...DATA.camps.map((c) => el("option", { value: String(c.id) }, c.name)));
     formModal({
       title: "Zahájit inventuru",
       pane: el("div", { class: "cp-pane" },
         el("label", { class: "cp-field-label" }, "Název"), name,
         el("div", { class: "cp-field-hint" },
-          "Pod tímto názvem se inventura ukládá do historie a podepisuje poznámky u věcí.")),
+          "Pod tímto názvem se inventura ukládá do historie a podepisuje poznámky u věcí."),
+        el("label", { class: "cp-field-label" }, "Inventura po akci (nepovinné)"), camp,
+        el("div", { class: "cp-field-hint" },
+          "Na detailu krabice přidá sloupec s tím, kolik které věci akce potřebovala.")),
       okLabel: "Zahájit",
       onSubmit: async (close) => {
-        await api("POST", U.checks, { name: name.value.trim() });
+        await api("POST", U.checks, { name: name.value.trim(),
+                                      camp_id: camp.value ? Number(camp.value) : null });
         close();
         toastNext("Inventura zahájena.");
         location.reload();
@@ -111,7 +130,7 @@
     if (!active) return null;
     const { checked, total } = totals();
     return el("section", null,
-      inv.checkBar(active.name, checked, total, null,
+      inv.checkBar(inv.checkTitle(active), checked, total, null,
         mayEdit ? inv.actionGroup([
           { label: "Dokončit inventuru", onClick: completeCheck },
           { label: "Zrušit inventuru", danger: true, onClick: cancelCheck },
@@ -128,7 +147,7 @@
       el("h2", null, "Proběhlé inventury"),
       el("ul", { class: "cp-inv-checks" }, ...DATA.checks.map((c) => {
         return el("li", null,
-          el("a", { href: inv.checkUrl(U, c.id) }, c.name),
+          el("a", { href: inv.checkUrl(U, c.id) }, inv.checkTitle(c)),
           el("span", { class: "cp-muted" }, inv.fmtDate(c.completed_at)),
           el("span", { class: "cp-muted" }, inv.summaryText(c.summary)));
       })));

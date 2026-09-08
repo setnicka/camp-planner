@@ -31,7 +31,8 @@ from camp_planner.models.inventory import (
     InventoryItem,
     InventoryPhoto,
 )
-from camp_planner.services import audit, errors, loaders, media, serialize
+from camp_planner.models.material import Material
+from camp_planner.services import audit, camps, errors, loaders, media, serialize
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -82,6 +83,7 @@ def active_check() -> InventoryCheck | None:
     """The check being walked right now, if any. At most one exists (uq_inventory_check_active)."""
     return db_session.scalars(
         db.select(InventoryCheck).where(InventoryCheck.active_lock.is_not(None))
+        .options(*loaders.INVENTORY_CHECK_CAMP)
     ).first()
 
 
@@ -173,6 +175,24 @@ def _box_progress(
     return items, sum(1 for i in mine if i.id in records), len(mine)
 
 
+def _taken_for_camp(check: InventoryCheck | None,
+                    items: list[InventoryItem]) -> dict[int, Material]:
+    """The camp's materials standing for the things listed, keyed by thing: what the camp
+    took of each. Empty without a camp; the serializer drops a material with no amounts.
+
+    Not gated by camp grant: whoever walks the storeroom needs the numbers. start_check
+    gates which camp a check may follow."""
+    if check is None or check.camp_id is None or not items:
+        return {}
+    linked = db_session.scalars(
+        db.select(Material)
+        .where(Material.camp_id == check.camp_id,
+               Material.inventory_item_id.in_([i.id for i in items]))
+        .options(*loaders.MATERIAL_NEEDS)
+    ).all()
+    return {m.inventory_item_id: m for m in linked}
+
+
 def _box_state(box: InventoryBox, check: InventoryCheck | None) -> dict:
     """One box page's whole state, the running check included."""
     records = _box_records(check, box)
@@ -188,6 +208,7 @@ def _box_state(box: InventoryBox, check: InventoryCheck | None) -> dict:
         box, listed,
         [records[i.id] for i in listed if i.id in records],
         checked=checked, total=total, check=check,
+        taken=_taken_for_camp(check, listed),
     )
 
 
@@ -301,6 +322,7 @@ def box_history(box: InventoryBox) -> dict:
 def _completed_checks() -> list[InventoryCheck]:
     return db_session.scalars(
         db.select(InventoryCheck).where(_COMPLETED).order_by(InventoryCheck.completed_at.desc())
+        .options(*loaders.INVENTORY_CHECK_CAMP)
     ).all()
 
 
@@ -323,6 +345,8 @@ def checks_data() -> dict:
         "active_check": _check_out(check),
         "progress": _progress(records) if check is not None else [],
         "checks": [serialize.inventory_check(c) for c in _completed_checks()],
+        # Newest first: a check follows up on the camp that just ended.
+        "camps": [serialize.camp_ref(c) for c in camps.viewable(newest_first=True)],
     }
 
 
@@ -583,15 +607,23 @@ def set_title_photo(photo: InventoryPhoto) -> dict:
 def start_check(payload: InventoryCheckCreate) -> dict:
     """Open a check. The DB refuses a second active one (uq_inventory_check_active), so two
     simultaneous clicks cannot both succeed."""
-    check = InventoryCheck(name=_clean_name(payload.name), author=_author())
+    camp = None
+    if payload.camp_id is not None:
+        camp = camps.viewable_by_id(payload.camp_id)
+        if camp is None:
+            raise errors.Invalid("Vybraná akce neexistuje.")
+    check = InventoryCheck(name=_clean_name(payload.name), author=_author(),
+                           camp=camp)
     db_session.add(check)
     try:
         db_session.flush()
     except IntegrityError:
         db_session.rollback()
         raise errors.Invalid("Jedna inventura už probíhá.") from None
-    _audit(EntityType.inventory_check, check.id, AuditAction.create,
-           {"name": [None, check.name]})
+    changes = {"name": [None, check.name]}
+    if camp is not None:
+        changes["camp"] = [None, camp.name]
+    _audit(EntityType.inventory_check, check.id, AuditAction.create, changes)
     db_session.commit()
     return {"check": serialize.inventory_check(check)}
 

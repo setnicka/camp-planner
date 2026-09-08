@@ -108,6 +108,9 @@ window.cpInventory = (function () {
     (acc, r) => ({ checked: acc.checked + r.checked, total: acc.total + r.total }),
     { checked: 0, total: 0 });
 
+  // What a check is called wherever it is listed: its name, and the camp it follows up on.
+  const checkTitle = (c) => (c.camp ? c.name + " · " + c.camp.name : c.name);
+
   // `name` is text or, where the page is not the check's own, a link to it. `scope` says
   // what the numbers count when it is not the whole warehouse; it travels with them, so a
   // narrow screen never leaves it on a line of its own.
@@ -648,7 +651,7 @@ window.cpInventory = (function () {
   }
 
   return { actionGroup, activatable, amountEl, amountFields, badge, boxLink, boxModal,
-           boxNameOf, boxPicker, boxUrl, checkBar, checkUrl, countLabel, fmtDate, fmtDay,
+           boxNameOf, boxPicker, boxUrl, checkBar, checkTitle, checkUrl, countLabel, fmtDate, fmtDay,
            fromLabel, groupByLocation, impactText, itemFields, itemLabel, itemModal,
            itemSubline, latest, locationOf, locationSections, locationUrl, moved,
            movePicker, progressEl, recordState, recordUrl, removeModal, restorePicker,

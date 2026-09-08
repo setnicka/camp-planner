@@ -246,16 +246,76 @@
 .cp-inv-items-detail .cp-inv-row-main { grid-column: 1; }
 /* Counted from the end, so the history columns can slide in between name and amount. */
 .cp-inv-items-detail .cp-inv-amount { grid-column: -3; justify-self: end; font-weight: 500; }
+/* What the check's camp took: its own column left of the amount, tinted and ruled off on
+   both sides, so its number is not read as the stock amount beside it. */
+.cp-inv-items-detail .cp-inv-taken,
+.cp-inv-taken-head {
+  grid-column: -4;
+  justify-self: stretch;
+  padding: 0 .5rem;
+  font-size: .85em;
+}
+.cp-inv-items-detail .cp-inv-taken {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+/* One band behind the whole column: per-cell fills break into dashes at the rows' padding
+   and strips. measureList places it from the head; z-index with isolation keeps it behind
+   the rows, above the list's background. The running check's colour, faded below the
+   banner's. */
+.cp-inv-taken-col { position: relative; isolation: isolate; }
+.cp-inv-taken-col::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--taken-l, 0);
+  width: var(--taken-w, 0);
+  z-index: -1;
+  opacity: .55;
+  background: var(--cp-warning-subtle);
+  border-left: 1px solid var(--cp-warning-text);
+  border-right: 1px solid var(--cp-warning-text);
+}
+/* The camp column's head reads the usual way (a camp name is longer than a date) and sits
+   over the numbers it heads, the camp on its own line: the label alone would set the
+   column's max-content width and take that width off the names. It does not slide in with
+   the date heads: it was there before the history arrived. */
+.cp-inv-taken-head { align-self: end; text-align: right; max-width: 10rem; }
+/* A phone has no column to spare (the JS leaves it out of the template): the number goes
+   on its own line, which then carries the whole label and wraps as it needs. Not into the
+   amount's track: being max-content, it would grow to the widest label in the box and
+   take that width off the names. The check's own colour again, in a pill under the amount:
+   as plain text on the left it would read as one more grey note under the name. */
+@media (max-width: 40rem) {
+  .cp-inv-items-detail .cp-inv-taken {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: inline-block;
+    justify-self: end;
+    margin: .1rem 0;
+    padding: .05rem .5rem;
+    white-space: normal;
+    background: var(--cp-warning-subtle);
+    border: 1px solid var(--cp-border);
+    border-radius: 999px;
+  }
+}
 .cp-inv-items-detail .cp-inv-row-btns { grid-column: -2; }
 .cp-inv-items-detail .cp-inv-row-sub { grid-column: 1; }
 .cp-inv-items-detail .cp-inv-row-actions { grid-column: 1 / -1; }
+/* Short of the camp column, whose band it would otherwise cross. */
+.cp-inv-taken-col .cp-inv-row-actions { grid-column: 1 / -4; }
 
 /* With history columns the name keeps a floor (inline template) and the list scrolls
    sideways within itself, so a phone squeezes the columns, not the names. */
 .cp-inv-items-hist { overflow-x: auto; }
 /* The observation strip spans the whole grid, which is wider than the screen once the
    history columns are in; sized to the visible list (--list-w, measured by
-   measureHistList) and stuck to its left edge, it stays whole while the columns scroll
+   measureList) and stuck to its left edge, it stays whole while the columns scroll
    under it. */
 .cp-inv-items-hist .cp-inv-row-actions {
   position: sticky;
@@ -263,6 +323,10 @@
   width: calc(var(--list-w, 100%) - 1rem);
   justify-self: start;
   z-index: 1;   /* above the right-edge fade below: the strip does not scroll, so it must not fade */
+}
+/* Unscrolled it ends before the camp column too; scrolled, the columns pass under it. */
+.cp-inv-items-hist.cp-inv-taken-col .cp-inv-row-actions {
+  width: min(calc(var(--list-w, 100%) - 1rem), calc(var(--taken-l, 100%) - 1.25rem));
 }
 
 /* Right-edge fade while columns hide past the edge (JS toggles cp-inv-more-right). */

@@ -37,7 +37,8 @@ def list_materials(camp: Camp) -> dict:
 
 def list_materials_overview(camp: Camp) -> dict:
     """All catalog materials, each with the activity needs that use it (camp-wide
-    materials page; per-unit sums are computed client-side)."""
+    materials page; per-unit sums are computed client-side, see Material.unit_totals for
+    the same rule where the server needs it)."""
     return {"materials": [serialize.material_overview(m) for m in by_name(camp.materials)]}
 
 

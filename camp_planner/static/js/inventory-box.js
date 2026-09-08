@@ -11,7 +11,8 @@
   const dataEl = document.getElementById("cp-inventory-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, formModal, searchPicker, toast, toastNext, withId, reveal } = window.cpDom;
+  const { el, api, amountList, amountText, czechKey, formModal, searchPicker, toast, toastNext, withId,
+          reveal } = window.cpDom;
   const inv = window.cpInventory;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
@@ -95,7 +96,7 @@
   // scroll away.
   const narrow = window.matchMedia("(max-width: 40rem)");
   const histCap = () => (narrow.matches ? 3 : 5);
-  narrow.addEventListener("change", () => { if (showHistory) render(); });
+  narrow.addEventListener("change", () => { if (showHistory || state.active_check?.camp) render(); });
 
   const NONE = new Map();
   function histColumns() {
@@ -108,6 +109,46 @@
   // Grid column 1 is the name; history cells fill 2..n+1 (amount and buttons count from
   // the end, matching the inline template render() builds). --i drives the slide-in delay.
   const colStyle = (i) => `grid-column: ${2 + i}; --i: ${i}`;
+
+  // What the check's camp needed of the things here, when the check follows up on one:
+  // null when there is no camp or nothing listed was asked for, else the amounts by thing
+  // and whether they get a column of their own. A phone has none to spare, so there the
+  // number rides under the amount (CSS), naming the camp in the line itself.
+  function takenFor(shown) {
+    if (!checking() || !state.active_check.camp) return null;
+    const at = new Map(state.taken.map((t) => [t.item_id, t]));
+    if (!shown.some((i) => at.has(i.id))) return null;
+    const camp = state.active_check.camp;
+    return { at, column: !narrow.matches, camp: camp.name, campId: camp.id };
+  }
+
+  function takenCell(item, tk) {
+    const t = tk?.at.get(item.id);
+    // The column keeps its place in rows the camp asked nothing of: an empty cell, so the
+    // tint and the rules run down the whole list instead of breaking at every gap.
+    if (!t) return tk?.column ? el("span", { class: "cp-inv-taken" }) : null;
+    const text = amountList(t.totals);
+    // Under the amount (a phone) the number has no head above it, so the line spells the
+    // whole label out, camp included.
+    return el("span", { class: "cp-inv-taken cp-muted", "data-cp-hint": "",
+      title: `Akce „${tk.camp}“ potřebovala ${text} (`
+        + inv.countLabel(t.activities, "aktivita", "aktivity", "aktivit") + ")" },
+      tk.column ? text : `Použito na ${tk.camp}: ${text}`);
+  }
+
+  function takenHead(tk) {
+    if (!tk?.column) return null;
+    const link = DATA.camp_materials?.camp_id === tk.campId ? DATA.camp_materials.url : null;
+    // The hint sits on the label alone: it swallows the tap, and the camp may be a link.
+    return el("span", { class: "cp-inv-taken-head" },
+      el("span", { "data-cp-hint": "", title: "Kolik bylo potřeba na akci " + tk.camp }, "Použito na"),
+      el("br"), link ? el("a", { href: link }, tk.camp) : tk.camp);
+  }
+
+  // "3 ks → " and "5 ks", split so a row can mute the old amount; no amount shows the
+  // empty glyph.
+  const changeText = (from, to) =>
+    [(amountText(from.count, from.unit) || "—") + " → ", amountText(to.count, to.unit) || "—"];
 
   // One item's outcome in one finished check as a compact symbol; the tooltip carries
   // the details. `prev` is the item's previous recorded state, the best guess for what
@@ -162,17 +203,17 @@
     return out;
   }
 
-  // The date heads the column: six sideways "Inventura N" were hard to read and said
-  // less. The name is in the tooltip; a tap follows the link, which lands on the name.
-  function histHead(hist) {
+  // Dated heads, the check's name in the tooltip; the camp column is headed by the camp.
+  function headsRow(hist, tk) {
     return el("li", { class: "cp-inv-row cp-inv-hist-heads" },
-      ...hist.checks.map((c, i) => el("a", {
+      ...(hist ? hist.checks.map((c, i) => el("a", {
         class: "cp-inv-hist-head"
           + (i === hist.checks.length - 1 ? " cp-inv-hist-last" : ""),
         style: colStyle(i),
         href: inv.checkUrl(U, c.id),
-        title: c.name,
-      }, inv.fmtDay(c.completed_at))));
+        title: inv.checkTitle(c),
+      }, inv.fmtDay(c.completed_at))) : []),
+      takenHead(tk));
   }
 
   const AMOUNT_HINT = "Prázdný počet znamená „máme, nepočítáno“. Slovní množství patří "
@@ -355,7 +396,7 @@
             st === "discarded" ? inv.badge("vyřazuje se") : null];
   }
 
-  function row(item, hist) {
+  function row(item, hist, tk) {
     const record = recordOf(item.id);
     const st = inv.recordState(item, record, state.box.id);
     // A live record that differs shows the change; otherwise the record agrees with the
@@ -368,6 +409,7 @@
       el("div", { class: "cp-inv-row-main" },
         inv.itemLabel(item, U, ...marks(item, st))),
       ...histCells(item, hist),
+      takenCell(item, tk),
       amountCell,
       el("span", { class: "cp-inv-row-btns" }, ...rowButtons(item)),
       inv.itemSubline(item),
@@ -532,13 +574,17 @@
   // The name links to the checks page, where finishing and cancelling live. The other
   // banners show whole-warehouse progress, so this one says its scope; and it carries the
   // list legend for the check, since it is the check's own place on the page.
-  function checkBanner() {
+  function checkBanner(tk) {
     if (!checking()) return null;
-    const bar = inv.checkBar(el("a", { href: U.checksPage }, state.active_check.name),
+    const bar = inv.checkBar(el("a", { href: U.checksPage }, inv.checkTitle(state.active_check)),
       state.checked, state.total, "v této krabici",
       mayEdit && state.items.length ? el("span", { class: "cp-inv-bar-hint cp-field-hint" },
         "✎\u00a0upraví název a podrobnosti, počty a přesuny jdou jen přes inventuru. "
-        + "✕\u00a0smaže omylem založenou věc. Změny se ukládají hned.") : null);
+        + "✕\u00a0smaže omylem založenou věc. Změny se ukládají hned.") : null,
+      // The column's head is a tooltip away on a touch screen, and a phone has no head.
+      tk ? el("span", { class: "cp-inv-bar-hint cp-field-hint" },
+        (tk.column ? "Sloupec" : "Štítek u počtu")
+        + ` „Použito na ${tk.camp}“ ukazuje, kolik které věci akce potřebovala.`) : null);
     bar.classList.add("cp-inv-bar-box");   // shares the list's right edge
     return bar;
   }
@@ -552,16 +598,21 @@
       list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
   }
 
-  // The visible width, for the observation strips pinned inside the scrolling list. It
-  // can only change with a redraw or a resize, so writing it in the scroll handler would
-  // force a layout on every scroll event for a value that never differs.
-  function measureHistList() {
-    const list = mount.querySelector(".cp-inv-items-hist");
+  // Layout reads (the camp column's place, the width the strips are pinned to), kept out
+  // of the scroll handler: they only change on a redraw or a resize.
+  function measureList() {
+    const list = mount.querySelector(".cp-inv-items-detail");
     if (!list) return;
+    const head = list.querySelector(".cp-inv-taken-head");
+    if (head) {
+      list.style.setProperty("--taken-l", head.offsetLeft + "px");
+      list.style.setProperty("--taken-w", head.offsetWidth + "px");
+    }
+    if (!list.classList.contains("cp-inv-items-hist")) return;
     list.style.setProperty("--list-w", list.clientWidth + "px");
     refreshHistFade();
   }
-  window.addEventListener("resize", measureHistList);
+  window.addEventListener("resize", measureList);
 
   // The redraw drops every node. Whoever already clicked into the next note field (its
   // blur saved the previous one) must not lose it: fields and verdicts carry a focus key
@@ -595,19 +646,24 @@
     const histEmpty = hist && !hist.checks.length;
     if (histEmpty) hist = null;
     const shown = matching();
+    const tk = takenFor(shown);
+    // The template grows a column per shown check and one for the camp; the amount and
+    // the buttons count from the end (CSS), so they stay put.
+    const extra = (hist ? hist.checks.length : 0) + (tk?.column ? 1 : 0);
     const list = el("ul", { class: "cp-inv-items cp-inv-items-detail"
-                   + (hist ? " cp-inv-items-hist" : "") + (hist && histEnter ? " cp-inv-hist-enter" : ""),
-                 style: hist ? "grid-template-columns: minmax(min(11rem, 55vw), 1fr)"
-                   + ` repeat(${hist.checks.length}, max-content) max-content max-content` : null },
-      ...(hist ? [histHead(hist)] : []),
-      ...(shown.length ? shown.map((i) => row(i, hist))
+                   + (hist ? " cp-inv-items-hist" : "") + (hist && histEnter ? " cp-inv-hist-enter" : "")
+                   + (tk?.column ? " cp-inv-taken-col" : ""),
+                 style: extra ? "grid-template-columns: minmax(min(11rem, 55vw), 1fr)"
+                   + ` repeat(${extra}, max-content) max-content max-content` : null },
+      ...(hist || tk?.column ? [headsRow(hist, tk)] : []),
+      ...(shown.length ? shown.map((i) => row(i, hist, tk))
                        : [el("li", { class: "cp-muted" },
                            !state.items.length ? "Krabice je prázdná."
                              : hiding() && !state.items.some(unchecked) ? "Vše zkontrolováno."
                              : "Nic nenalezeno.")]));
     if (hist) list.addEventListener("scroll", refreshHistFade, { passive: true });
     const put = (part, ...nodes) => part.replaceChildren(...nodes.filter(Boolean));
-    put(parts.banner, checkBanner());
+    put(parts.banner, checkBanner(tk));
     put(parts.header, header(histEmpty));
     parts.filter.hidden = !filterable();
     put(parts.hint, listHint());
@@ -619,7 +675,7 @@
         "+ Přidat novou věc")) : null);
     if (hist && scrolled) list.scrollLeft = scrolled;
     histEnter = false;
-    measureHistList();
+    measureList();
     restoreFocus();
   }
 

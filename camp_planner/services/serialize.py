@@ -20,8 +20,10 @@ from camp_planner.schemas import (
     ActivityOut,
     ApiTokenOut,
     AssignmentOut,
+    AmountOut,
     AuditEntryOut,
     CampOut,
+    CampRefOut,
     InventoryBoxOut,
     InventoryBoxStateOut,
     InventoryCheckOut,
@@ -29,6 +31,7 @@ from camp_planner.schemas import (
     InventoryItemOut,
     InventoryItemRefOut,
     InventoryRecordOut,
+    InventoryTakenOut,
     MaterialNeedOut,
     MaterialOut,
     MaterialUsageOut,
@@ -244,6 +247,10 @@ def inventory_link(i: InventoryItem) -> dict:
     return _dump(InventoryLinkOut.model_validate(i))
 
 
+def camp_ref(c: Camp) -> dict:
+    return _dump(CampRefOut.model_validate(c))
+
+
 def inventory_record(r: InventoryCheckRecord) -> dict:
     return _dump(InventoryRecordOut.model_validate(r))
 
@@ -255,13 +262,24 @@ def inventory_check(c: InventoryCheck) -> dict:
 def inventory_box_state(
     box: InventoryBox, items: list[InventoryItem], records: list[InventoryCheckRecord],
     *, checked: int, total: int, check: InventoryCheck | None,
+    taken: dict[int, Material],
 ) -> dict:
-    """A box page's whole state: box, contents, observations, progress and the running
-    check (see InventoryBoxStateOut)."""
+    """`taken` maps a thing to the camp's material standing for it; one with no amounts
+    to show drops out."""
     return _dump(InventoryBoxStateOut(
         box=InventoryBoxOut.model_validate(box),
         items=[InventoryItemOut.model_validate(i) for i in items],
         records=[InventoryRecordOut.model_validate(r) for r in records],
         checked=checked, total=total,
         active_check=InventoryCheckOut.model_validate(check) if check is not None else None,
+        taken=[t for item_id, m in taken.items() if (t := _taken_out(item_id, m)).totals],
     ))
+
+
+def _taken_out(item_id: int, m: Material) -> InventoryTakenOut:
+    """What one camp material took: its needs summed per unit, and how many named an
+    amount; an activity that named none is in neither number."""
+    return InventoryTakenOut(
+        item_id=item_id,
+        totals=[AmountOut(amount=amount, unit=unit) for unit, amount in m.unit_totals().items()],
+        activities=sum(1 for n in m.needs if n.amount is not None))

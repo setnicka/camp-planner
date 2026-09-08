@@ -63,7 +63,7 @@
 
   mount.replaceChildren(
     el("div", { class: "cp-inv-head" },
-      el("h1", null, check.name),
+      el("h1", null, inv.checkTitle(check)),
       summaryLine(),
       legend()),
     ...(sections.length ? sections

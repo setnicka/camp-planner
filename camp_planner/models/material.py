@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import operator
 import re
 from typing import TYPE_CHECKING
 
@@ -81,6 +82,20 @@ class Material(Base):
         back_populates="material", cascade="all, delete-orphan"
     )
     inventory_item: Mapped[InventoryItem | None] = relationship()
+
+    def unit_totals(self) -> dict[str | None, float]:
+        """The needs summed per effective unit, as the materials page shows them: `sum`
+        adds the amounts up, `max` takes the largest single need. Units are trimmed, so
+        " ks" and "ks" are one bucket; a need without an amount has nothing to add. Units
+        come in the order the needs were added."""
+        combine = max if self.sum_strategy == SumStrategy.max else operator.add
+        totals: dict[str | None, float] = {}
+        for need in sorted(self.needs, key=lambda n: n.id):   # Material.needs has no SQL order
+            if need.amount is None:
+                continue
+            unit = (need.effective_unit or "").strip() or None
+            totals[unit] = combine(totals[unit], need.amount) if unit in totals else need.amount
+        return totals
 
     @staticmethod
     def normalize_name(name: str) -> str:

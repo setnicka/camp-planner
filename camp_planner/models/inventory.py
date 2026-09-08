@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, Float, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,6 +19,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from camp_planner.config import fk, table_name
 from camp_planner.extensions import Base
 from camp_planner.models.common import TimestampMixin
+
+if TYPE_CHECKING:
+    from camp_planner.models.camp import Camp
 
 
 class InventoryCheckStatus(str, enum.Enum):
@@ -132,6 +136,11 @@ class InventoryCheck(Base):
     active_lock: Mapped[int | None] = mapped_column(default=1)
     author: Mapped[str] = mapped_column(String(255))   # host-provided identity, as in AuditLog
     summary: Mapped[dict | None] = mapped_column(JSON)
+    # Optional camp the check follows up on; the box page then shows what each linked
+    # thing was taken for. SET NULL: the check outlives the camp.
+    camp_id: Mapped[int | None] = mapped_column(
+        ForeignKey(fk("camps.id"), ondelete="SET NULL", name="fk_inventory_check_camp")
+    )
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column()
 
@@ -139,6 +148,7 @@ class InventoryCheck(Base):
     records: Mapped[list[InventoryCheckRecord]] = relationship(
         back_populates="check", cascade="all, delete-orphan"
     )
+    camp: Mapped[Camp | None] = relationship()
 
     @property
     def status(self) -> InventoryCheckStatus:

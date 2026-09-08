@@ -27,7 +27,7 @@
   function checkBanner() {
     if (!DATA.active_check) return null;
     const totals = inv.sumProgress(DATA.boxes);
-    return inv.checkBar(el("a", { href: U.checksPage }, DATA.active_check.name),
+    return inv.checkBar(el("a", { href: U.checksPage }, inv.checkTitle(DATA.active_check)),
       totals.checked, totals.total, null);
   }
 

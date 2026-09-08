@@ -22,6 +22,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Warehouse photos: need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
 - A camp material can be linked with a warehouse thing: camp pages then show its box,
   photo and how much of it is in stock.
+- An inventory check may follow up on a camp: a box page then shows how much of each
+  linked thing that camp's activities asked for.
 
 ### Changed
 
