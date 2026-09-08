@@ -12,13 +12,12 @@ from camp_planner.auth.identity import CampRole
 from camp_planner.auth.permissions import (
     can_edit,
     can_edit_camp_meta,
-    can_view,
     login_redirect,
     require_admin,
     require_edit,
     require_view,
 )
-from camp_planner.extensions import db, db_session, first_or_404
+from camp_planner.extensions import db, first_or_404
 from camp_planner.models.activity import Activity
 from camp_planner.models.camp import Camp
 from camp_planner.models.common import czech_sort_key
@@ -74,8 +73,7 @@ def _form_choices() -> dict:
 
 @bp.get("/")
 def index():
-    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date.desc())).all()
-    visible = [camp for camp in camps if can_view(camp)]
+    visible = camps_service.viewable(newest_first=True)
     # Anonymous with nothing visible: to login (embedded has none, the empty list stays).
     if not visible and not g.identity.is_authenticated and (login := login_redirect()):
         return login
@@ -91,8 +89,7 @@ def csrf_refresh() -> dict:
 
 def _copy_sources() -> list[Camp]:
     """Existing camps a new camp may copy its taxonomies from (those the user can view)."""
-    camps = db_session.scalars(db.select(Camp).order_by(Camp.start_date)).all()
-    return [camp for camp in camps if can_view(camp)]
+    return camps_service.viewable()
 
 
 @bp.get("/camps/new")
