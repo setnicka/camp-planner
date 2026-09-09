@@ -1,7 +1,7 @@
 {% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}Materiál – {{ camp.name }}{% endblock %}
-{% block header_nav %}{{ camp_nav(camp, "materials") }}{% endblock %}
+{% block cp_nav %}{{ camp_nav(camp, "materials") }}{% endblock %}
 
 {% block cp_head %}
   {{ css('css/components.css') }}

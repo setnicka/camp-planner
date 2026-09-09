@@ -44,9 +44,10 @@ _BARE_TEMPLATE = "_layouts/bare.html"
 _FULL_TEMPLATE = "_layouts/full.html"
 
 
-# Slots every shell must declare: our pages' markup, stylesheets and scripts render into
-# these. Checked at registration — a missing slot ships unstyled, inert pages.
-_REQUIRED_BLOCKS = ("content", "cp_head", "cp_scripts")
+# Slots every shell must declare: our pages' markup, stylesheets, scripts and
+# section links render into these. Checked at registration (a missing slot ships
+# pages that are unstyled, inert or impossible to navigate).
+_REQUIRED_BLOCKS = ("content", "cp_head", "cp_scripts", "cp_nav")
 
 
 def _check_host_template(app: Flask, base_template: str) -> None:
@@ -68,9 +69,9 @@ def _check_host_template(app: Flask, base_template: str) -> None:
         warnings.warn(
             f"base_template={base_template!r} declares no {' / '.join(missing)} block. Camp "
             "Planner renders each page's markup into `content`, its stylesheets into `cp_head` "
-            "(place it in <head>) and its scripts into `cp_scripts` (before </body>); a missing "
-            "slot means those pages ship without them. Link css/content.css there too. "
-            "See docs/DEPLOYMENT.md §2.",
+            "(place it in <head>), its scripts into `cp_scripts` (before </body>) and the links "
+            "between a camp's sections into `cp_nav`; a missing slot means those pages ship "
+            "without them. Link css/content.css there too. See docs/DEPLOYMENT.md §2.",
             RuntimeWarning,
             stacklevel=3,
         )

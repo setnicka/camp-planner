@@ -1,7 +1,7 @@
 {% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}{{ activity.title }} – {{ camp.name }}{% endblock %}
-{% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
+{% block cp_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
 {% block cp_head %}
   {{ css('vendor/codemirror@5.65.18/lib/codemirror.css') }}

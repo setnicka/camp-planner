@@ -64,11 +64,11 @@ jiných webů. Liší se to, o co se Camp Planner stará, odkud pochází identi
 přihlášeného orga a co se vykresluje. Podrobnosti a návody jsou
 v [DEPLOYMENT.md](DEPLOYMENT.md).
 
-| Režim        | Identita                                | Přidělování práv           | Vykreslování                                                        | Světlé/tmavé téma           | Typické nasazení                   |
-| ------------ | --------------------------------------- | -------------------------- | ------------------------------------------------------------------- | --------------------------- | ---------------------------------- |
-| `standalone` | vlastní účty a přihlašovací formulář    | v aplikaci (`/auth/users`) | celá stránka                                                        | in-app přepínač             | samostatná instalace               |
-| `proxy`      | hlavičky `X-Remote-*` od reverzní proxy | hlavička `X-Remote-Roles`  | celá stránka                                                        | in-app přepínač             | vedle existující aplikace za nginx |
-| `embedded`   | dodá hostitelská Flask aplikace         | hostitelská aplikace       | jen tři bloky do Jinja šablony (`content`, `cp_head`, `cp_scripts`) | vynuceno hostitelským webem | planner vložený do většího webu    |
+| Režim        | Identita                                | Přidělování práv           | Vykreslování                                                   | Světlé/tmavé téma           | Typické nasazení                   |
+| ------------ | --------------------------------------- | -------------------------- | -------------------------------------------------------------- | --------------------------- | ---------------------------------- |
+| `standalone` | vlastní účty a přihlašovací formulář    | v aplikaci (`/auth/users`) | celá stránka                                                   | in-app přepínač             | samostatná instalace               |
+| `proxy`      | hlavičky `X-Remote-*` od reverzní proxy | hlavička `X-Remote-Roles`  | celá stránka                                                   | in-app přepínač             | vedle existující aplikace za nginx |
+| `embedded`   | dodá hostitelská Flask aplikace         | hostitelská aplikace       | bloky do šablony: `content`, `cp_head`, `cp_scripts`, `cp_nav` | vynuceno hostitelským webem | planner vložený do většího webu    |
 
 ## Přihlášení a role
 

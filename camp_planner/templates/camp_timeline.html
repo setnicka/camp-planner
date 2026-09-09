@@ -2,7 +2,7 @@
 {% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}{{ camp.name }} – timeline{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
-{% block header_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
+{% block cp_nav %}{{ camp_nav(camp, "timeline") }}{% endblock %}
 
 {% block cp_head %}
   {# Start the ~550 KB timeline engine downloading during header render, instead of only

@@ -160,11 +160,12 @@ def test_embedded_pages_ship_their_own_css_js_and_csrf_token(embedded):
 HOST_BASE = """<html><head><title>Host</title>
 <link rel=stylesheet href="/planner/static/css/content.css">
 {% block cp_head %}{% endblock %}</head>
-<body>{% block content %}{% endblock %}{% block cp_scripts %}{% endblock %}</body></html>"""
+<body><nav>{% block cp_nav %}{% endblock %}</nav>
+{% block content %}{% endblock %}{% block cp_scripts %}{% endblock %}</body></html>"""
 
 
 def test_a_host_base_template_places_our_assets_where_it_wants(embedded_factory):
-    """The contract is three slots. A host declaring them gets our stylesheets in its <head> and
+    """The contract is four slots. A host declaring them gets our stylesheets in its <head> and
     our scripts before </body> — proper placement, which only the host's template can do."""
     client, holder = embedded_factory(base_template="hb.html", templates={"hb.html": HOST_BASE})
     _admin(holder)
@@ -180,7 +181,7 @@ def test_a_host_base_template_places_our_assets_where_it_wants(embedded_factory)
 
 def test_a_host_base_template_missing_the_slots_warns_at_registration(embedded_factory):
     """A missing slot warns at startup instead of shipping unstyled, inert pages."""
-    with pytest.warns(RuntimeWarning, match="cp_head / cp_scripts"):
+    with pytest.warns(RuntimeWarning, match="cp_head / cp_scripts / cp_nav"):
         embedded_factory(base_template="bad.html",
                          templates={"bad.html": "<html><body>{% block content %}{% endblock %}"
                                                 "</body></html>"})

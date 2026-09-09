@@ -1,7 +1,7 @@
 {% extends "_layouts/page.html" %}
 {% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}{{ camp.name }} – nastavení akce{% endblock %}
-{% block header_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
+{% block cp_nav %}{{ camp_nav(camp, "settings") }}{% endblock %}
 
 {% block cp_head %}
   {{ css('css/components.css') }}
