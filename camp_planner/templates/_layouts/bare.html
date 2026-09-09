@@ -11,7 +11,7 @@
 {% block cp_head %}{% endblock %}
 <nav class="cp-camp-nav">
   <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>
-  {% block header_nav %}{% endblock %}
+  {% block cp_nav %}{% endblock %}
   {{ theme_switch(force_theme) }}
 </nav>
 <noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>

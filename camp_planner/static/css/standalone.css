@@ -10,7 +10,7 @@ body {
   color: var(--cp-text);
 }
 
-/* One condensed header line: grey brand · camp heading (the header_nav block) · account
+/* One condensed header line: grey brand · camp heading (the cp_nav block) · account
    controls pushed to the right. The camp-heading bits are styled in content.css. */
 .cp-header {
   display: flex;

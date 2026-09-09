@@ -14,6 +14,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Changed
 
+- Embedded: the navigation slot is renamed `header_nav` → `cp_nav`.
+  **Upgrade note:** a host `base_template` must rename the block.
 - Other small visual improvements.
 
 ## [0.3.4] - 2026-08-14

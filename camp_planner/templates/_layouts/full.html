@@ -18,10 +18,10 @@
   {% block cp_head %}{% endblock %}
 </head>
 <body>
-  {# One condensed header line: grey brand · camp heading (header_nav) · account on the right. #}
+  {# One condensed header line: grey brand · camp heading (cp_nav) · account on the right. #}
   <header class="cp-header">
     <a class="cp-brand" href="{{ url_for('main.index') }}">Camp Planner</a>
-    {% block header_nav %}{% endblock %}
+    {% block cp_nav %}{% endblock %}
     <div class="cp-account">
       {% if identity.is_authenticated %}<span class="cp-user">{{ identity.display_name }}</span>{% endif %}
       {% if auth_enabled and can_manage_users() %}<a href="{{ url_for('auth.users') }}">Uživatelé</a>{% endif %}

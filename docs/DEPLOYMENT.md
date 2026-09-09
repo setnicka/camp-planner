@@ -90,8 +90,8 @@ slugs are ignored — same convention as the proxy header.
   `camp_planner`** — in this module as shown, or in the environment. It can't be a
   `register_camp_planner()` argument: by then the models are already named.
 - Auth hooks are blueprint-scoped — they never touch the host's other routes.
-- **Template contract:** a `base_template` of yours declares three slots; pages carry
-  their own stylesheets and scripts, so both need a home:
+- **Template contract:** a `base_template` of yours declares four slots; pages carry
+  their own navigation, stylesheets and scripts, so each needs a home:
 
   ```jinja
   <head>
@@ -99,16 +99,17 @@ slugs are ignored — same convention as the proxy header.
     {% block cp_head %}{% endblock %}   {# page stylesheets + our CSRF meta tag #}
   </head>
   <body>
+    <nav>{% block cp_nav %}{% endblock %}</nav>   {# section links of the page's area #}
     {% block content %}{% endblock %}      {# the page itself #}
     {% block cp_scripts %}{% endblock %}   {# page scripts, after the markup they drive #}
   </body>
   ```
 
-  Omit one and `register_camp_planner` warns at startup. Link `content.css` (the palette +
-  `.cp-*` component styles) before `cp_head`, so page CSS can read the tokens; do *not*
-  link `css/standalone.css` — that's our own shell's chrome. Define `title` and our page
-  titles land in it. Omitting `base_template` gets our bare fragment, which links
-  `content.css` itself.
+  Omit any and `register_camp_planner` warns at startup; without `cp_nav` the pages still
+  render, they only lose the links between a camp's sections. Link `content.css` (the
+  palette + `.cp-*` component styles) before `cp_head`, so page CSS can read the tokens.
+  Define `title` and our page titles land in it. Omitting `base_template` gets our bare
+  fragment, which links `content.css` itself.
 
 - **Colour theme:** every colour is a `--cp-*` token in `content.css`. By default we
   render a light/auto/dark switch and remember the visitor's choice; embedded we default

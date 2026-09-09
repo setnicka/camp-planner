@@ -2,7 +2,7 @@
 {% from "_macros.html" import camp_nav, csrf_meta, css, js %}
 {% block title %}Seznam her – {{ camp.name }}{% endblock %}
 {% block main_class %}cp-wide{% endblock %}
-{% block header_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
+{% block cp_nav %}{{ camp_nav(camp, "overview") }}{% endblock %}
 
 {% block cp_head %}
   {{ css('css/components.css') }}
