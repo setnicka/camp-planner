@@ -7,7 +7,7 @@ sees; only the admin-gated pages are taken as 'admin', so no screenshot advertis
 a control a normal user does not have.
 
     uv pip install -e '.[docs]' && uv run playwright install chromium
-    uv run flask --app wsgi seed-demo --out demo/demo.sqlite
+    uv run flask --app wsgi seed-demo --out demo/demo.sqlite --media demo/media
     uv run python scripts/shoot_docs.py
 """
 
@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from camp_planner.demo_data import (
     ADMIN_USER,
+    CAMP_NAME,
     EDITOR_USER,
     HERO_ACTIVITY,
     PASSWORD,
@@ -62,7 +63,7 @@ def wait_for(url: str, timeout: float = 30.0) -> None:
     raise SystemExit(f"server did not come up at {url}")
 
 
-def spawn_server(db: Path, port: int) -> subprocess.Popen:
+def spawn_server(db: Path, port: int, media: Path) -> subprocess.Popen:
     """Start the Flask server; the caller waits for /healthz once it needs it up."""
     env = {
         **os.environ,
@@ -70,6 +71,8 @@ def spawn_server(db: Path, port: int) -> subprocess.Popen:
         "AUTH_MODE": "standalone",
         "SECRET_KEY": "docs-screenshots",
         "FLASK_DEBUG": "0",
+        # Where seed-demo wrote the warehouse photos; unset, those pages lose them.
+        "MEDIA_DIR": str(media.resolve()),
     }
     return subprocess.Popen(
         [sys.executable, "-m", "flask", "--app", "wsgi", "run", "--port", str(port)],
@@ -219,6 +222,45 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
         else:
             print("  10-google-nacteni.webp skipped — demo seeded without --calendar")
 
+        # 13 — the warehouse map: boxes grouped by the shelf they stand on.
+        page.goto(f"{base}/inventory")
+        page.wait_for_selector(".cp-inv-tile-name")
+        shoot(page, out, "13-sklad-prehled.webp")
+
+        # 14 — one box: photos, other names, notes and the last checks' columns.
+        page.get_by_role("link", name="Papírnictví").click()
+        page.wait_for_selector(".cp-inv-item-name")
+        page.get_by_role("button", name="Historie").click()
+        page.wait_for_selector(".cp-inv-hist-head")
+        shoot(page, out, "14-sklad-krabice.webp")
+
+        # 15 — a thing's dialog: every field and its photos in one place.
+        page.get_by_title("Upravit", exact=True).first.click()
+        page.wait_for_selector(".cp-modal-overlay")
+        shoot(page, out, "15-sklad-vec.webp", selector=".cp-modal-overlay > *")
+        page.keyboard.press("Escape")
+
+        # 16 / 17 — a check in progress, started here rather than seeded (the demo database
+        # keeps only finished ones) and cancelled again below, so the run can repeat.
+        page.goto(f"{base}/inventory/checks")
+        page.get_by_role("button", name="Zahájit inventuru").click()
+        page.wait_for_selector(".cp-modal-overlay")
+        page.select_option("select.cp-modal-name", label=CAMP_NAME)
+        page.get_by_role("button", name="Zahájit", exact=True).click()
+        page.wait_for_selector(".cp-inv-progress")
+        # The "started" toast would otherwise sit in the corner of the shot.
+        page.locator(".cp-toast").wait_for(state="detached", timeout=10000)
+        shoot(page, out, "16-inventury.webp")
+
+        page.goto(f"{base}/inventory/boxes/1")
+        page.wait_for_selector(".cp-inv-taken")
+        shoot(page, out, "17-inventura.webp")
+
+        page.goto(f"{base}/inventory/checks")
+        page.once("dialog", lambda dialog: dialog.accept())    # the cancel confirms first
+        page.get_by_role("button", name="Zrušit inventuru").click()
+        page.get_by_role("button", name="Zahájit inventuru").wait_for()
+
         # 11 — the same timeline in the dark theme. The switch sits in the account
         # menu now, so the menu has to be opened for it and closed again before the shot.
         page.goto(camp)
@@ -264,12 +306,14 @@ def main() -> None:
     ap.add_argument("--db", type=Path, default=REPO / "demo/demo.sqlite")
     ap.add_argument("--out", type=Path, default=REPO / "docs/screenshots")
     ap.add_argument("--port", type=int, default=5099)
+    ap.add_argument("--media", type=Path, default=REPO / "demo/media",
+                    help="The seed's photo directory, served as MEDIA_DIR.")
     args = ap.parse_args()
 
     if not args.db.exists():
         raise SystemExit(f"{args.db} not found — run: flask --app wsgi seed-demo --out {args.db}")
 
-    proc = spawn_server(args.db, args.port)
+    proc = spawn_server(args.db, args.port, args.media)
     base = f"http://127.0.0.1:{args.port}"
     try:
         ids, google = read_demo(args.db)         # overlaps the Flask boot

@@ -322,6 +322,8 @@ Nastavení servisního účtu popisuje [google_calendar_setup.md](google_calenda
 
 ## Sklad
 
+![Přehled skladu](screenshots/13-sklad-prehled.webp)
+
 Sklad je společný pro všechny akce; odkaz na něj je na úvodní stránce v hlavičce.
 Vidí do něj každý přihlášený, upravovat ho může editor aspoň jedné akce.
 
@@ -341,6 +343,10 @@ alternativní názvy pro hledání, odkaz (třeba na e-shop), poznámku a fotky.
 nemá vlastní stránku: na detailu krabice se tlačítkem ✎ otevře dialog s editací
 (včetně přidání/odebrání fotek), kliknutím na počet s jednotkou se otevře jen
 menší editační okno pro úpravu počtu.
+
+![Detail krabice s historií inventur](screenshots/14-sklad-krabice.webp)
+
+![Dialog věci](screenshots/15-sklad-vec.webp)
 
 S věcí se také dají udělat následující akce:
 
@@ -362,6 +368,8 @@ v tu chvíli se všechny zápisy propíší do stavu věcí. Dokončená inventu
 neměnná historie. Započatou inventuru lze i zrušit (**Zrušit inventuru** tamtéž),
 v tu chvíli se všechny zápisy inventury zahodí.
 
+![Stránka Inventury](screenshots/16-inventury.webp)
+
 Inventura se zahajuje na stránce **Inventury** a při zahajování lze zvolit
 i existující akci pro zobrazení pomocného sloupce **Použito na …** s tím, kolik
 které věci akce potřebovala (a tedy kolik se jich mělo vrátit nebo kolik se jich
@@ -376,6 +384,8 @@ Během inventury lze v detailu krabice o každé věci prohlásit:
 * **vyřadit** – věc už neexistuje,
 * **přesunout** – věc patří do jiné krabice,
 * **nezkontrolováno** – výchozí stav (lze se do něj vrátit přes **zrušit kontrolu**).
+
+![Zápis stavu během inventury](screenshots/17-inventura.webp)
 
 K zápisu jde připsat poznámka, při dokončení se připojí na konec existující
 poznámky u věci. Tlačítko **↝ Přesunout existující věc z jiné krabice** hledá v
