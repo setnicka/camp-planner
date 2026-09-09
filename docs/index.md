@@ -24,13 +24,15 @@ The role rules (`admin` / `editor` / `viewer`) are identical in all three.
 The camp in every screenshot in [pruvodce.md](pruvodce.md) is generated, not real:
 
 ```bash
-uv run flask --app wsgi seed-demo --out demo/demo.sqlite
-DATABASE_URL="sqlite:///$PWD/demo/demo.sqlite" uv run flask --app wsgi run
+uv run flask --app wsgi seed-demo --out demo/demo.sqlite --media demo/media
+DATABASE_URL="sqlite:///$PWD/demo/demo.sqlite" MEDIA_DIR="$PWD/demo/media" \
+  uv run flask --app wsgi run
 ```
 
 Log in as `org` (editor) or `admin`, password `demo1234`. The generator
 ([../camp_planner/demo_data.py](../camp_planner/demo_data.py)) is deterministic — the same
-`--seed` rebuilds the same camp.
+`--seed` rebuilds the same camp. It fills the warehouse too, with generated placeholder
+photos; those need the `[photos]` extra and are skipped without it.
 
 To re-shoot the screenshots after a UI change:
 

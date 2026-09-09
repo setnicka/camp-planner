@@ -16,7 +16,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Warehouse (`/inventory`): boxes and items shared by all camps, with inventory
   checks. Any signed-in user reads, admins and editors of any camp edit.
-  Described in the user guide. **Adds a DB migration.**
+  Described in the user guide; `flask seed-demo` stocks a demo warehouse.
+  **Adds a DB migration.**
   - Photos need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
   - A camp material can be linked with a warehouse item: camp pages then show
     its box, photo and how much of it is in stock.

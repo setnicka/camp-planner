@@ -62,7 +62,11 @@ def register_cli(app: Flask) -> None:
     @click.option("--calendar", "calendar_id", default=None, metavar="CALENDAR_ID",
                   help="Connect the demo camp to this Google calendar. Omitted = not "
                        "connected, which is what you want unless you can write to it.")
-    def seed_demo(out: str, seed: int, calendar_id: str | None) -> None:
+    @click.option("--media", "media_dir", default="demo/media", show_default=True,
+                  type=click.Path(file_okay=False),
+                  help="Where to write the warehouse photos; run the demo with this as "
+                       "MEDIA_DIR. Needs the [photos] extra.")
+    def seed_demo(out: str, seed: int, calendar_id: str | None, media_dir: str) -> None:
         """Build the demo camp used for the documentation screenshots.
 
         Writes a self-contained SQLite file, leaving the configured database alone.
@@ -74,7 +78,7 @@ def register_cli(app: Flask) -> None:
         from camp_planner.services import errors
 
         try:
-            counts = build(out, seed, calendar_id)
+            counts = build(out, seed, calendar_id, media_dir)
         except errors.Invalid as exc:
             raise click.ClickException(str(exc)) from None
         summary = ", ".join(f"{v} {k}" for k, v in counts.items())
@@ -84,7 +88,8 @@ def register_cli(app: Flask) -> None:
         # Absolute URL, not SQLITE_PATH: a relative SQLITE_PATH resolves against the Flask
         # instance path, which would quietly create an empty DB somewhere else.
         db_url = f"sqlite:///{Path(out).resolve()}"
-        click.echo(f'Run it with: DATABASE_URL="{db_url}" uv run flask --app wsgi run')
+        click.echo(f'Run it with: DATABASE_URL="{db_url}" '
+                   f'MEDIA_DIR="{Path(media_dir).resolve()}" uv run flask --app wsgi run')
         if calendar_id:
             # The seed leaves the outbound queue full, so the push is one command.
             click.echo(f'Push to the calendar with: DATABASE_URL="{db_url}" '
