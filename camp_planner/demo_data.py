@@ -34,9 +34,16 @@ from camp_planner.models.camp import Camp, Category, Tag, TagKind
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed, SumStrategy
 from camp_planner.models.common import slugify
 from camp_planner.models.google import GoogleSyncOp, SyncOpKind
+from camp_planner.models.inventory import (
+    InventoryBox,
+    InventoryCheck,
+    InventoryCheckRecord,
+    InventoryItem,
+    InventoryPhoto,
+)
 from camp_planner.models.org import Org
 from camp_planner.models.slot import Slot, SlotAssignment, SlotRole
-from camp_planner.services import errors
+from camp_planner.services import errors, media
 
 CAMP_NAME = "Soustředění 2026"
 PREV_CAMP_NAME = "Soustředění 2025"
@@ -51,6 +58,7 @@ SLOTS_ACTIVITY = "Přednáška"   # the override_name showcase — eight individ
 START = date(2026, 8, 1)       # Saturday → Sunday 9. 8., nine day-rows
 LENGTH_DAYS = 9
 LOCATION = {"latitude": 49.5940, "longitude": 15.5800}   # Vysočina — day/night shading
+ESHOP = "https://example.org/eshop"   # the "where to buy" link of demo rows
 
 # --- taxonomy ---------------------------------------------------------------
 
@@ -315,11 +323,11 @@ UNSCHEDULED = [
 # name, unit, strategy, acquisition labels, [activities that need it], typical amount
 
 MATERIALS = [
-    ("Papír A4", "ks", SumStrategy.sum, ["koupit: papírnictví"],
+    ("Papír A4", "ks", SumStrategy.sum, ["zabalit: sklad"],
      ["Šifrovačka", "Velká strategická hra", "Burza", "Tvořivá dílna", "Vědomostní kvíz"], 80),
-    ("Fixy", "ks", SumStrategy.sum, ["koupit: papírnictví"],
+    ("Fixy", "ks", SumStrategy.sum, ["zabalit: sklad", "koupit: papírnictví"],
      ["Divadelní scénky", "Tvořivá dílna", "Burza", "Šifrovačka"], 12),
-    ("Izolepa", "ks", SumStrategy.sum, [],
+    ("Izolepa", "ks", SumStrategy.sum, ["zabalit: sklad"],
      ["Šifrovačka", "Tvořivá dílna", "Orientační běh"], 3),
     ("Provázek", "m", SumStrategy.sum, ["koupit: železářství"],
      ["Šifrovačka", "Noční bojovka", "Orientační běh"], 50),
@@ -329,25 +337,90 @@ MATERIALS = [
      ["Zahajovací táborák"], 1),
     ("Kartičky na hru", "ks", SumStrategy.sum, ["vyrobit"],
      ["Burza", "Velká strategická hra"], 200),
-    ("Projektor", "ks", SumStrategy.max, ["půjčit: škola"],
+    ("Projektor", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Přednáška", "Divadelní scénky", "Vědomostní kvíz"], 1),
-    ("Plátno", "ks", SumStrategy.max, ["půjčit: škola"],
+    ("Plátno", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Přednáška", "Vědomostní kvíz"], 1),
-    ("Ozvučení", "ks", SumStrategy.max, ["půjčit: Klára"],
+    ("Ozvučení", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Divadelní scénky", "Závěrečný večer a vyhlášení", "Zpívání s kytarou"], 1),
-    ("Lano 20 m", "ks", SumStrategy.max, [],
+    ("Lano 20 m", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Šifrovačka", "Sportovní odpoledne"], 2),
     ("Baterky", "ks", SumStrategy.max, ["koupit: baterie zvlášť"],
      ["Noční bojovka", "Šifrovačka", "Pozorování hvězd"], 15),
-    ("Lékárnička", "ks", SumStrategy.max, [],
+    ("Lékárnička", "ks", SumStrategy.max, ["půjčit: Klára"],
      ["Celodenní výlet", "Noční bojovka", "Sportovní odpoledne", "Vodní bitva u rybníka"], 1),
-    ("Míče", "ks", SumStrategy.max, [],
+    ("Míče", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Vybíjená", "Turnaj ve fotbale", "Sportovní odpoledne"], 4),
-    ("Rozlišovací dresy", "ks", SumStrategy.max, ["půjčit: tělocvična"],
+    ("Rozlišovací dresy", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Vybíjená", "Turnaj ve fotbale", "Sportovní odpoledne"], 20),
-    ("Buzoly", "ks", SumStrategy.max, ["půjčit: skauti"],
+    ("Buzoly", "ks", SumStrategy.max, ["zabalit: sklad"],
      ["Orientační běh", "Celodenní výlet"], 10),
 ]
+
+# --- warehouse --------------------------------------------------------------
+
+# Boxes: (name, location, virtual, note). The last two are places rather than boxes,
+# which is what virtual means.
+INVENTORY_BOXES = [
+    ("Papírnictví", "police A1", False, None),
+    ("Šifrovačky", "police A1", False, "klíč od zámku má Klára"),
+    ("Sport", "police B1", False, None),
+    ("Kostýmy", "police B1", False, None),
+    ("Technika", "regál C", False, "těžké věci dole"),
+    ("Volně v A0", "police A0", True, None),
+    ("Nezvěstné", None, True, "co se nenašlo při inventuře"),
+]
+
+# Things: (name, box, count, unit, other names, url, note, photo, the material it stands
+# for). count None = "we have it, the number is not the point"; a fuzzy amount is written
+# as the unit itself ("hodně"). The material is one of MATERIALS, so the camp's pages show
+# the link and a check following up on the camp has numbers to show.
+INVENTORY_ITEMS = [
+    ("Papír A4", "Papírnictví", 320, None, ["kancelářský papír"], ESHOP, None, True, "Papír A4"),
+    ("Fixy", "Papírnictví", 24, None, ["popisovače"], ESHOP, None, True, "Fixy"),
+    ("Izolepa", "Papírnictví", 6, None, ["lepicí páska"], None, None, False, "Izolepa"),
+    ("Špejle", "Papírnictví", None, "hodně", [], None, None, False, None),
+    ("Krepový papír", "Papírnictví", 5, "role", [], None, "chybí základní barvy", True, None),
+    ("Kryptex", "Šifrovačky", 8, None, [], None, "heslo GAUSS", True, None),
+    ("UV fixa a svítilna", "Šifrovačky", 2, "sada", [], None, None, False, None),
+    ("Zámečky na klíček", "Šifrovačky", 10, None, ["zámky"], None, "různé velikosti", False, None),
+    ("Lano 20 m", "Šifrovačky", 2, None, [], None, None, True, "Lano 20 m"),
+    ("Míče", "Sport", 4, None, ["fotbalový míč"], None, "jeden je vyfouklý", True, "Míče"),
+    ("Rozlišovací dresy", "Sport", 20, None, [], None, "půjčené z tělocvičny", False,
+     "Rozlišovací dresy"),
+    ("Švihadla", "Sport", 12, None, [], None, None, False, None),
+    ("Buzoly", "Sport", 10, None, ["kompasy"], None, "vrátit skautům", True, "Buzoly"),
+    ("Šátky", "Kostýmy", None, None, [], None, "různé barvy, počet neřešíme", False, None),
+    ("Trička s logem", "Kostýmy", 35, None, [], ESHOP, None, True, None),
+    ("Maska draka", "Kostýmy", 1, None, [], None, None, True, None),
+    ("Projektor", "Technika", 1, None, [], None, "půjčený ze školy", True, "Projektor"),
+    ("Plátno", "Technika", 1, None, [], None, None, False, "Plátno"),
+    ("Ozvučení", "Technika", 1, "sada", ["repráky", "aparát"], None, None, True, "Ozvučení"),
+    ("Prodlužovací kabely", "Technika", 6, None, ["prodlužky"], None, "1,5 m i 5 m", False, None),
+    ("Celty", "Volně v A0", 6, None, [], None, None, False, None),
+    ("Petrolejka", "Volně v A0", 2, None, [], None, "lampový olej je vedle", True, None),
+    ("Pumpa na míče", "Nezvěstné", 1, None, [], None, "naposledy viděná na jaře", False, None),
+]
+
+# The generated photos: one colour each, spread over a 4x3 grid of these brightnesses.
+PHOTO_TINTS = ["#8fb8d8", "#d8b48f", "#9ec4a4", "#c9a0c0", "#c8c48f", "#a6a6c8"]
+PHOTO_SHADES = [1.18, 0.94, 0.78, 1.06, 0.88, 1.22, 0.72, 1.0, 0.84, 1.12, 0.68, 0.98]
+
+# Two finished checks, so the box pages have history columns to show. The newer one saw
+# the things as they are now (completing a check writes its observations into them); the
+# older one counted more of what has since been used up, saw one thing in another box and
+# one that is gone by now. The newer one also names the camp it followed up on.
+CHECK_OLDER = ("Inventura 2025", date(2025, 9, 6), False)
+CHECK_NEWER = ("Inventura po soustředění", date(2026, 8, 12), True)
+# What the older check counted, where it differs from today.
+CHECK_BEFORE = {"Papír A4": 500.0, "Fixy": 30.0, "Izolepa": 8.0}
+# The thing the newer check moved, and the box it came from.
+CHECK_MOVED = ("Lano 20 m", "Volně v A0")
+# Counted by the older check, gone by the newer one: kept with discarded_at and out of
+# every box, listed in both checks.
+CHECK_LOST = ("Stopky", "Sport", 2.0, "nenašly se, koupit nové")
+# Boxes the older check did not get to, so the history has an unchecked column as well.
+CHECK_SKIPPED = {"Technika"}
 
 # --- todos ------------------------------------------------------------------
 # activity, title, due offset in days before camp start, done
@@ -518,7 +591,8 @@ PREV_ACTIVITIES = [
 ]
 
 
-def build(path: str | Path, seed: int = 20260801, calendar_id: str | None = None) -> dict[str, int]:
+def build(path: str | Path, seed: int = 20260801, calendar_id: str | None = None,
+          media_dir: str | Path | None = None) -> dict[str, int]:
     """Create a fresh demo SQLite file at `path`. Returns a count summary.
 
     Refuses to overwrite a database that is not recognisably a previous demo build, so a
@@ -539,7 +613,7 @@ def build(path: str | Path, seed: int = 20260801, calendar_id: str | None = None
     Base.metadata.create_all(engine)
 
     with Session(engine) as db:
-        counts = _populate(db, rnd, calendar_id)
+        counts = _populate(db, rnd, calendar_id, Path(media_dir) if media_dir else None)
         db.commit()
     engine.dispose()
     return counts
@@ -574,7 +648,8 @@ def _seed_taxonomy(db: Session, camp: Camp, cat_rows, org_rows,
     return cats, orgs, tags
 
 
-def _populate(db: Session, rnd: random.Random, calendar_id: str | None) -> dict[str, int]:
+def _populate(db: Session, rnd: random.Random, calendar_id: str | None,
+              media_dir: Path | None) -> dict[str, int]:
     planning_start = datetime.combine(START - timedelta(days=60), time(9, 0))
 
     camp = Camp(
@@ -673,8 +748,7 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None) -> dict[
     for name, unit, strategy, labels, users, amount in MATERIALS:
         mat = Material(camp_id=camp.id, name=name, unit=unit, sum_strategy=strategy,
                        acquisition_labels=labels,
-                       url="https://example.org/eshop" if labels and
-                       labels[0].startswith("koupit") else None)
+                       url=ESHOP if any(x.startswith("koupit") for x in labels) else None)
         db.add(mat)
         db.flush()
         materials[name] = mat
@@ -764,6 +838,9 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None) -> dict[
                                 created_at=queued_at, updated_at=queued_at)
                    for s in all_slots)
 
+    # Last, so its rows draw no randomness the camp above depends on.
+    warehouse = _seed_inventory(db, camp, materials, media_dir)
+
     return {
         "activities": len(activities),
         "slots": len(all_slots),
@@ -771,8 +848,120 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None) -> dict[
         "materials": len(MATERIALS),
         "todos": len(TODOS),
         "audit": len(AUDIT),
+        **warehouse,
     }
 
+
+def _photo_files(media_dir: Path, filename: str, index: int) -> None:
+    """Write one placeholder photo in every size media.py stores.
+
+    A blurred field of one colour, not a drawn shape: anything with an outline reads as
+    an icon rather than as a photo of a thing. Built as a 4x3 grid of brightnesses and
+    blown up smoothly, which is all the grids, the row previews and the lightbox need.
+    """
+    from PIL import Image, ImageColor
+
+    r, g, b = ImageColor.getrgb(PHOTO_TINTS[index % len(PHOTO_TINTS)])
+    twist = index % len(PHOTO_SHADES)
+    shades = PHOTO_SHADES[twist:] + PHOTO_SHADES[:twist]
+    seed = Image.new("RGB", (4, 3))
+    seed.putdata([tuple(min(255, int(c * f)) for c in (r, g, b)) for f in shades])
+    for variant, px, quality in media.SIZES:
+        img = seed.resize((px, px * 3 // 4), Image.BICUBIC)
+        path = media_dir / "inventory" / variant / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        img.save(path, "JPEG", quality=quality)
+
+
+def _seed_inventory(db: Session, camp: Camp, materials: dict[str, Material],
+                    media_dir: Path | None) -> dict[str, int]:
+    """The warehouse: boxes, things with photos, and two finished checks.
+
+    Draws no randomness, so extending it cannot shift the camp built above.
+    """
+    # Photos need Pillow (the [photos] extra); without it the demo is simply photo-less.
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        media_dir = None
+
+    boxes = {name: InventoryBox(name=name, location=location, virtual=virtual, note=note)
+             for name, location, virtual, note in INVENTORY_BOXES}
+    db.add_all(boxes.values())
+    db.flush()
+
+    filed = datetime.combine(START - timedelta(days=40), time(18, 0))
+    items: dict[str, InventoryItem] = {}
+    box_of: dict[str, InventoryBox] = {}
+    photos = 0
+    for i, row in enumerate(INVENTORY_ITEMS):
+        name, box, count, unit, alt_names, url, note, photo, material = row
+        item = InventoryItem(name=name, box_id=boxes[box].id, count=count, unit=unit,
+                             alt_names=alt_names, url=url, note=note,
+                             created_at=filed, updated_at=filed)
+        db.add(item)
+        db.flush()
+        items[name], box_of[name] = item, boxes[box]
+        if material:
+            materials[material].inventory_item_id = item.id
+        if photo and media_dir is not None:
+            filename = f"{i:032x}.jpg"
+            _photo_files(media_dir, filename, i)
+            db.add(InventoryPhoto(item_id=item.id, filename=filename))
+            photos += 1
+
+    # Retired by the newer check below, so it has no box and no count of its own any more.
+    lost_name, lost_box, lost_count, lost_note = CHECK_LOST
+    lost = InventoryItem(name=lost_name, note=lost_note, created_at=filed, updated_at=filed)
+    db.add(lost)
+    db.flush()
+
+    moved_name, moved_from = CHECK_MOVED
+    checks = []
+    for name, day, newer in (CHECK_OLDER, CHECK_NEWER):
+        at = datetime.combine(day, time(19, 30))
+        check = InventoryCheck(
+            name=name, author="Org Pilný", camp_id=camp.id if newer else None,
+            created_at=at - timedelta(hours=3), completed_at=at,
+        )
+        db.add(check)
+        db.flush()
+        # A Python-side default cannot be overridden with None, so the lock is cleared
+        # afterwards, the way completing a check clears it (and only one may hold it).
+        check.active_lock = None
+        db.flush()
+        checks.append(check)
+
+        counted = 0
+        for item_name, item in items.items():
+            if not newer and box_of[item_name].name in CHECK_SKIPPED:
+                continue
+            # The move: the older check saw it in the box it came from, the newer one where
+            # it belongs now, and from_box_id is where it stood when the record was made.
+            was_in = boxes[moved_from] if item_name == moved_name else box_of[item_name]
+            db.add(InventoryCheckRecord(
+                check_id=check.id, item_id=item.id,
+                count=item.count if newer else CHECK_BEFORE.get(item_name, item.count),
+                unit=item.unit,
+                box_id=box_of[item_name].id if newer else was_in.id,
+                from_box_id=was_in.id, author=check.author, updated_at=at,
+            ))
+            counted += 1
+        db.add(InventoryCheckRecord(
+            check_id=check.id, item_id=lost.id, discarded=newer,
+            count=None if newer else lost_count,
+            box_id=boxes[lost_box].id, from_box_id=boxes[lost_box].id,
+            author=check.author, updated_at=at,
+        ))
+        counted += 1
+        check.summary = {"checked": counted, "adjusted": len(CHECK_BEFORE) if newer else 0,
+                         "discarded": 1 if newer else 0, "moved": 1 if newer else 0,
+                         "revived": 0}
+
+    lost.discarded_at = checks[-1].completed_at
+    db.flush()
+    return {"boxes": len(boxes), "things": len(items) + 1,
+            "photos": photos, "checks": len(checks)}
 
 def _build_previous_camp(db: Session, rnd: random.Random) -> Camp:
     start = date(2025, 8, 2)
