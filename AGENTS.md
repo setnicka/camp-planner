@@ -51,3 +51,10 @@ node --check camp_planner/static/js/X.js  # JS has no test runner, syntax-check 
 - Comments, changelog and commit messages stay terse: keep the non-obvious why, drop the
   derivation. Commit messages are self-contained (no references to uncommitted docs or
   review-finding numbers). Czech documentation never addresses the reader in second person.
+- Commit titles read `Area: imperative summary` (lowercase after the colon, no trailing
+  period, at most 72 characters). One prefix only, naming the part of the product rather
+  than the layer, so one feature's commits read as one story. The areas are `Activities:`,
+  `API:`, `Auth:`, `Camps:`, `Docs:`, `Embedded:`, `Frontend:` (chrome and helpers across
+  pages), `Materials:`, `Migrations:`, `Tests:`, `Timeline:`, `Todos:` and `Warehouse:`.
+  A feature's own tests and documentation ride under its area, so `Docs:` and `Tests:`
+  are left for commits that belong to no feature.
