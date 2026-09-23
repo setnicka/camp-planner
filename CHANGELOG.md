@@ -25,6 +25,7 @@ Versioning convention: a release that ships a new DB migration should bump the
     turns parts of the app off; `inventory` hides the warehouse and the camp
     materials' link to it.
 - The activities overview can create an activity without a slot.
+- Toasts are announced to screen readers.
 
 ### Changed
 
