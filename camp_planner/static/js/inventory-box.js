@@ -435,7 +435,7 @@
   }
 
   async function deleteBox() {
-    const warn = DATA.in_history
+    const warn = state.in_history
       ? " Figuruje v dokončených inventurách – její záznamy tam zůstanou, "
         + "ale jen jako „(smazaná krabice)“."
       : "";
@@ -510,7 +510,7 @@
           // The heading right above says what these act on.
           { label: "Upravit", onClick: editBox },
           // The reason comes from the predicate the server refuses on (delete_blocked).
-          { label: "Smazat", danger: true, onClick: deleteBox, disabled: DATA.delete_blocked },
+          { label: "Smazat", danger: true, onClick: deleteBox, disabled: state.delete_blocked },
         ]) : null,
         // Its own group, so a narrow screen wraps between the groups and neither of
         // them breaks apart.
@@ -520,7 +520,7 @@
             onClick: () => {
               if (showHistory) { showHistory = false; render(); } else loadHistory();
             },
-            disabled: DATA.has_history ? null : NO_HISTORY,
+            disabled: state.has_history ? null : NO_HISTORY,
           },
         ]),
         hideCheckedBox()),

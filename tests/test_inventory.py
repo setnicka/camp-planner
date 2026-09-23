@@ -187,22 +187,28 @@ def test_pages_are_titled_after_their_box_and_check(client, box):
     assert "<title>Jarní – Sklad</title>" in html
 
 
-def test_box_page_knows_whether_history_mentions_it(client, box):
+def test_box_state_knows_whether_history_mentions_it(client, box):
     """has_history greys out the Historie button; in_history warns before a delete that
-    finished checks would lose the box's name. Both flags follow the finished checks only."""
+    finished checks would lose the box's name. Both flags follow the finished checks only,
+    and ride in the state every write returns, as the page changes without a reload."""
     target = make_box(client, "Krabice 2")
     item = make_item(client, box["id"])
-    url = f"/inventory/boxes/{target['id']}"
     check = start_check(client)
-    observe(client, box["id"], item["id"], box_id=target["id"])
-    before = page_data(client, url)
+    before = observe(client, box["id"], item["id"], box_id=target["id"]).get_json()["state"]
     assert (before["in_history"], before["has_history"]) == (False, False)
     complete(client, check)
-    after = page_data(client, url)
+    after = box_state(client, target["id"])
     assert (after["in_history"], after["has_history"]) == (True, True)
-    source = page_data(client, f"/inventory/boxes/{box['id']}")
+    source = box_state(client, box["id"])
     assert source["in_history"] is True        # the record's from_box_id leg
     assert source["has_history"] is False      # but nothing it lists was observed here
+
+
+def test_box_state_says_whether_it_can_be_deleted(client, box):
+    item = make_item(client, box["id"])
+    assert "jsou v ní věci" in box_state(client, box["id"])["delete_blocked"]
+    discard(client, item)
+    assert box_state(client, box["id"])["delete_blocked"] is None
 
 
 # --- items -------------------------------------------------------------------
@@ -842,8 +848,7 @@ def test_pages_render_with_the_data_their_scripts_read(client, box):
     contract = {
         "/inventory": shared | {"boxes", "discarded", "revived", "active_check"},
         f"/inventory/boxes/{box['id']}":
-            shared | {"state", "boxes", "all_items", "in_history", "has_history",
-                      "delete_blocked"},
+            shared | {"state", "boxes", "all_items"},
         "/inventory/checks": shared | {"active_check", "progress", "checks"},
         f"/inventory/checks/{check['id']}": shared | {"check", "groups", "boxes"},
     }

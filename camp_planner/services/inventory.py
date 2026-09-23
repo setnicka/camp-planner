@@ -209,6 +209,16 @@ def _box_state(box: InventoryBox, check: InventoryCheck | None) -> dict:
         [records[i.id] for i in listed if i.id in records],
         checked=checked, total=total, check=check,
         taken=_taken_for_camp(check, listed),
+        delete_blocked=_delete_blocker(box, check),
+        # Deleting a box referenced by finished checks degrades their history to
+        # "(smazaná krabice)"; the delete confirm warns about it.
+        in_history=_any_record(
+            _COMPLETED,
+            db.or_(InventoryCheckRecord.box_id == box.id,
+                   InventoryCheckRecord.from_box_id == box.id)),
+        # The same filter box_history applies.
+        has_history=bool(listed) and _any_record(
+            _COMPLETED, InventoryCheckRecord.item_id.in_([i.id for i in listed])),
     )
 
 
@@ -258,27 +268,10 @@ def box_data(box: InventoryBox) -> dict:
     """One box page's data: its state, the boxes things can move to and every item in the
     warehouse, discarded included. Past checks load on demand through box_history."""
     all_items = by_name(db_session.scalars(db.select(InventoryItem)).all())
-    check = active_check()
-    # Deleting a box referenced by finished checks degrades their history to "(smazaná
-    # krabice)"; the delete confirm warns about it from this flag.
-    in_history = _any_record(
-        _COMPLETED,
-        db.or_(InventoryCheckRecord.box_id == box.id,
-               InventoryCheckRecord.from_box_id == box.id))
-    state = _box_state(box, check)
-    # Whether the "Historie" button has anything to show: a finished check that said
-    # something about a thing listed here (the same filter box_history applies).
-    item_ids = [i["id"] for i in state["items"]]
-    has_history = bool(item_ids) and _any_record(
-        _COMPLETED, InventoryCheckRecord.item_id.in_(item_ids))
     return {
-        "state": state,
+        "state": _box_state(box, active_check()),
         "boxes": [serialize.inventory_box(b) for b in _sorted_boxes()],
         "all_items": [serialize.inventory_item_ref(i) for i in all_items],
-        "in_history": in_history,
-        "has_history": has_history,
-        # Why Delete is unavailable, straight from the predicate delete_box refuses on.
-        "delete_blocked": _delete_blocker(box, check),
     }
 
 
