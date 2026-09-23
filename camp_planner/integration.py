@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import re
 import warnings
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 from flask import abort, current_app, g, request
 
 import camp_planner.models  # noqa: F401  (register mappers on the shared Base)
+from camp_planner import features
 from camp_planner.api import api_token_auth
 from camp_planner.api import bp as api_bp
 from camp_planner.auth import permissions
@@ -119,6 +120,7 @@ def _inject() -> dict[str, Any]:
         "can_create_camp": permissions.can_create_camp,
         "can_manage_users": permissions.can_manage_users,
         "can_view_inventory": permissions.can_view_inventory,
+        "feature": features.enabled,
     }
 
 
@@ -139,7 +141,8 @@ def _wire_blueprint(bp: Blueprint) -> None:
     shared across apps, so re-registering would stack duplicate hooks).
 
     Registration order is the hook order, and it is load-bearing: the contract check
-    must see the session before anything of ours queries it, the size gate must run
+    must see the session before anything of ours queries it, a switched off feature
+    answers 404 before any auth or validation could tell it exists, the size gate must run
     before csrf.protect() parses a whole multipart body, and _load_identity defers to
     the token api_token_auth resolves. Hence api.py registers no hook of its own.
     """
@@ -147,6 +150,7 @@ def _wire_blueprint(bp: Blueprint) -> None:
         return
     _wired.add(bp)
     bp.before_request(_check_session_contract)
+    bp.before_request(features.gate)
     if bp is api_bp:
         bp.before_request(_check_request_size)
         bp.before_request(api_token_auth)
@@ -164,6 +168,7 @@ def _attach(
     url_prefix: str | None = None,
     force_theme: str | None = None,
     media_dir: str | None = None,
+    disabled_features: str | Iterable[str] | None = None,
     session: Session | Callable[[], Session] | None = None,
 ) -> None:
     # An explicit argument (embedded) wins over the CP_FORCE_THEME env var (standalone/
@@ -182,6 +187,7 @@ def _attach(
         "base_template": base_template,
         "force_theme": force_theme or None,
         "media_dir": media_dir or None,
+        "disabled_features": features.parse(disabled_features),
         # None = ours; else a callable giving the host's, normalized once here.
         "session": session if session is None or callable(session) else lambda: session,
     }
@@ -218,6 +224,7 @@ def wire_app(app: Flask) -> None:
         base_template=app.config["BASE_TEMPLATE"],
         login_endpoint=login_endpoint,
         media_dir=app.config["MEDIA_DIR"],
+        disabled_features=app.config["CP_DISABLED_FEATURES"],
     )
 
 
@@ -231,6 +238,7 @@ def register_camp_planner(
     base_template: str = _BARE_TEMPLATE,
     force_theme: str | None = None,
     media_dir: str | None = None,
+    disabled_features: Iterable[str] = (),
 ) -> None:
     """Mount Camp Planner's blueprints on a host Flask app (embedded mode).
 
@@ -251,6 +259,9 @@ def register_camp_planner(
 
     media_dir is a writable directory for warehouse photo uploads (needs the
     camp-planner[photos] extra). Omit it and the warehouse works without photos.
+
+    disabled_features names the features to switch off (see features.FEATURES), e.g.
+    ["inventory"]; everything is on by default.
     """
     if session is not None and database_uri:
         raise ValueError(
@@ -270,5 +281,6 @@ def register_camp_planner(
         url_prefix=url_prefix,
         force_theme=force_theme,
         media_dir=media_dir,
+        disabled_features=disabled_features,
         session=session,
     )

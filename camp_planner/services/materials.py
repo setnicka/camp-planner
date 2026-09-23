@@ -15,6 +15,7 @@ from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import by_name
 from camp_planner.models.material import Material, MaterialAssignment, MaterialNeed
+from camp_planner import features
 from camp_planner.services import audit, errors, inventory, orgs, serialize
 
 if TYPE_CHECKING:
@@ -62,10 +63,17 @@ def _commit_or_refuse(message: str) -> None:
         raise errors.Invalid(message) from None
 
 
+def _require_stock() -> None:
+    """A switched off warehouse keeps its links, hidden: neither made nor let go."""
+    if not features.enabled("inventory"):
+        raise errors.Invalid("Sklad je vypnutý, materiál s ním nelze propojit.")
+
+
 def _relink(material: Material, item_id: int | None) -> dict[str, list]:
     """Point the material at another thing, or at none. The diff names the things."""
     if item_id == material.inventory_item_id:
         return {}
+    _require_stock()
     item = inventory.live_item(item_id) if item_id is not None else None
     if item is not None:
         _refuse_taken(material.camp_id, item, material)
@@ -81,7 +89,10 @@ def create_material(camp: Camp, payload: MaterialCreate) -> dict:
     With inventory_item_id the material is made from a warehouse thing: its name, unit and
     url stand in for what the caller did not send. A same-named unlinked material is linked
     instead of duplicated, otherwise unchanged."""
-    item = inventory.live_item(payload.inventory_item_id) if payload.inventory_item_id is not None else None
+    item = None
+    if payload.inventory_item_id is not None:
+        _require_stock()
+        item = inventory.live_item(payload.inventory_item_id)
     name = (payload.name or "").strip() or (item.name.strip() if item is not None else "")
     if not name:
         raise errors.Invalid("Název je povinný.")

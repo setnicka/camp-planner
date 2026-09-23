@@ -5,7 +5,7 @@
    warehouse belongs to no camp, so its link sits beside it and the body offers no second
    way in. Loose, not in .cp-camp-links: a phone would move that box onto a row of its own. #}
 {% block cp_nav %}<span class="cp-camp-name">Akce</span>
-  {% if can_view_inventory() %}
+  {% if feature("inventory") and can_view_inventory() %}
     <a class="cp-camp-link" href="{{ url_for('main.inventory_overview') }}">Sklad</a>
   {% endif %}{% endblock %}
 

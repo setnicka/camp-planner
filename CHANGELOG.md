@@ -24,6 +24,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   photo and how much of it is in stock.
 - An inventory check may follow up on a camp: a box page then shows how much of each
   linked thing that camp's activities asked for.
+- Feature switches: `CP_DISABLED_FEATURES` (embedded: `disabled_features=`) turns parts of
+  the app off; `inventory` hides the warehouse and the camp materials' link to it.
 
 ### Changed
 

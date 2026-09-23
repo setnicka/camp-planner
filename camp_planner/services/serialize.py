@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from camp_planner import features
 from camp_planner.models.activity import OrgRole
 from camp_planner.models.common import czech_sort_key
 from camp_planner.schemas import (
@@ -139,9 +140,11 @@ def todo_overview(t: Todo) -> dict:
 
 
 def _material(m: Material) -> MaterialOut:
+    # A switched off warehouse keeps its links in the DB but shows none of them.
+    item = m.inventory_item if features.enabled("inventory") else None
     return MaterialOut(id=m.id, name=m.name, unit=m.unit, note=m.note, url=m.url,
                        acquisition_labels=m.acquisition_labels, sum_strategy=m.sum_strategy,
-                       orgs=_org_refs(m.assignments), inventory_item=m.inventory_item)
+                       orgs=_org_refs(m.assignments), inventory_item=item)
 
 
 def material(m: Material) -> dict:

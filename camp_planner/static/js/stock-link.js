@@ -32,12 +32,17 @@ window.cpStock = (function () {
   const photo = (urls, item, opts) => thumb(urls.inventoryPhoto, (item?.photos || []).map((p) => p.filename),
                                             { zoom: item?.name, ...opts });
 
+  // A deployment may switch the warehouse off; the pages then get none of its urls.
+  const on = (urls) => !!urls.inventoryItems;
+
   // The live things, fetched once per page visit (the picker reopens without a round trip).
+  // None at all while the warehouse is off.
   let cache = null;
   const items = () => cache;
-  const load = (urls) => (cache
-    ? Promise.resolve(cache)
-    : api("GET", urls.inventoryItems).then((j) => (cache = j.items || [])));
+  const load = (urls) => {
+    if (!on(urls)) cache = [];
+    return cache ? Promise.resolve(cache) : api("GET", urls.inventoryItems).then((j) => (cache = j.items || []));
+  };
 
   // How a thing appears in a picker: its photo, its name, the box it stands in, and the
   // alternative names it also answers to. The photos hold a place only where the list has
@@ -52,5 +57,5 @@ window.cpStock = (function () {
     };
   }
 
-  return { normName, sameName, retired, boxName, place, photo, load, items, rows };
+  return { on, normName, sameName, retired, boxName, place, photo, load, items, rows };
 })();
