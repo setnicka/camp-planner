@@ -338,11 +338,7 @@ window.cpDom = (function () {
     });
   }
 
-  // Column-header org filter: a "Vše ▾ / Orgové (n) ▾" button opening a checkbox panel.
-  // Toggles mutate the caller-owned `selected` Set in place, then onChange() fires.
-  // `extra` (optional) prepends a page-specific checkbox { label, checked, set(v),
-  // countInLabel }. Outside clicks and Escape close the open panel. Returns { th,
-  // setLabel } — setLabel(n) lets freezeColumns size the column to the widest label.
+  // The one open popover panel; outside clicks and Escape close it.
   let openPopover = null;
   document.addEventListener("click", () => {
     if (openPopover) { openPopover.hidden = true; openPopover = null; }
@@ -419,6 +415,11 @@ window.cpDom = (function () {
     return group;
   }
 
+  // Column-header org filter: a "Vše ▾ / Orgové (n) ▾" button opening a checkbox panel.
+  // Toggles mutate the caller-owned `selected` Set in place, then onChange() fires.
+  // `extra` (optional) prepends a page-specific checkbox { label, checked, set(v),
+  // countInLabel }. Returns { th, setLabel }: setLabel(n) lets freezeColumns size the
+  // column to the widest label.
   // `label` names the column and the button ("Garant (2) ▾"); the roster is orgs either way.
   function orgFilterHead({ orgs, selected, extra, onChange, label = "Orgové" }) {
     const btn = el("button", { type: "button", class: "cp-th-filter cp-th-dd-btn" });
@@ -645,14 +646,11 @@ window.cpDom = (function () {
     return img;
   }
 
-  // Small tab↔URL-hash controller shared by the tabbed pages (camp settings, activity detail).
-  // Reads the active tab from location.hash on load (validated against validKeys) and writes it
-  // back on change with replaceState — shareable/reloadable links, no scroll-jump, no history
-  // spam. Returns { initial, write }: initial is the hashed key if valid else null (the caller
-  // picks its own default); write(key) updates the hash.
-  // Tab selection persisted in the URL hash as the first `&`-segment (e.g. #todos&done=1), so it
-  // can coexist with a page's filter params that follow it. write() swaps only the tab token and
-  // preserves the trailing segments, so a page's filters survive switching tabs and back.
+  // Tab↔URL-hash controller shared by the tabbed pages (camp settings, activity detail). The
+  // tab is the hash's first `&`-segment (e.g. #todos&done=1), so a page's filter params can
+  // follow it; write() swaps only that token with replaceState (no scroll-jump, no history
+  // spam). Returns { initial, write }: initial is the hashed key if valid, else null (the
+  // caller picks its own default).
   function tabHash(validKeys) {
     const segs = location.hash.slice(1).split("&");
     return {
