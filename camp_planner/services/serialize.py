@@ -262,7 +262,7 @@ def inventory_check(c: InventoryCheck) -> dict:
 def inventory_box_state(
     box: InventoryBox, items: list[InventoryItem], records: list[InventoryCheckRecord],
     *, checked: int, total: int, check: InventoryCheck | None,
-    taken: dict[int, Material],
+    taken: dict[int, Material], delete_blocked: str | None, in_history: bool, has_history: bool,
 ) -> dict:
     """`taken` maps a thing to the camp's material standing for it; one with no amounts
     to show drops out."""
@@ -273,6 +273,7 @@ def inventory_box_state(
         checked=checked, total=total,
         active_check=InventoryCheckOut.model_validate(check) if check is not None else None,
         taken=[t for item_id, m in taken.items() if (t := _taken_out(item_id, m)).totals],
+        delete_blocked=delete_blocked, in_history=in_history, has_history=has_history,
     ))
 
 

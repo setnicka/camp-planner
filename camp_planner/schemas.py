@@ -1156,6 +1156,9 @@ class InventoryBoxStateOut(BaseModel):
     total: int          # items that count as this box's work
     active_check: InventoryCheckOut | None = None   # None once nobody is checking
     taken: list[InventoryTakenOut] = []   # only with a check that has a camp
+    delete_blocked: str | None = None   # why the box cannot be deleted right now
+    in_history: bool = False            # finished checks name the box
+    has_history: bool = False           # finished checks name something listed here
 
 
 class InventoryBoxEnvelope(_Ok):
