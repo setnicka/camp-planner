@@ -521,7 +521,7 @@ window.cpDom = (function () {
   // Click to dismiss early. The stack container is created on first use.
   function toast(message, isError) {
     let stack = document.getElementById("cp-toasts");
-    if (!stack) { stack = stampTheme(el("div", { id: "cp-toasts", class: "cp-toasts" })); document.body.append(stack); }
+    if (!stack) { stack = stampTheme(el("div", { id: "cp-toasts", class: "cp-toasts", "aria-live": "polite" })); document.body.append(stack); }
     const box = el("div", { class: "cp-toast" + (isError ? " cp-toast-error" : "") }, message);
     const dismiss = () => {
       box.classList.remove("cp-toast-show");
