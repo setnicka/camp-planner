@@ -35,7 +35,14 @@ SECRET_KEY=<random>
 DB_BACKEND=sqlite        # or postgresql / mysql (install the [postgres] / [mysql] extra)
 CP_FORCE_THEME=          # empty → light/auto/dark switch; "light"/"dark"/"auto" forces one
 MEDIA_DIR=               # empty → no photo uploads in the warehouse; else a writable dir
+CP_DISABLED_FEATURES=    # empty → everything on; "inventory" drops the warehouse
 ```
+
+`CP_DISABLED_FEATURES` switches off whole parts of the app (comma separated; an unknown
+name refuses to start). The only one so far is `inventory`, for a one-off event that
+keeps no warehouse: its pages and API answer 404 and the camp pages lose the Sklad column
+and the material link. Warehouse rows and links stay in the database and come back once
+it is on again.
 
 Warehouse photos are stored as resized JPEGs under `MEDIA_DIR` (originals are not kept);
 this needs the `camp-planner[photos]` extra (Pillow). Uploads are capped at
@@ -73,10 +80,12 @@ register_camp_planner(
     url_prefix="/planner",
     base_template="base.html",        # host template with {% block content %}; omit for a bare fragment
     media_dir="/srv/planner-media",   # optional: enables warehouse photo uploads
+    disabled_features=[],             # optional: e.g. ["inventory"], see §1
 )
 ```
 
-`media_dir` is `MEDIA_DIR` (§1) for the embedded shape. The API checks the upload size
+`media_dir` is `MEDIA_DIR` and `disabled_features` is `CP_DISABLED_FEATURES` (§1) for
+the embedded shape. The API checks the upload size
 itself; the host's `MAX_CONTENT_LENGTH` is left alone.
 
 The callback returns `None`, or a dict (so the host needn't import our internals):

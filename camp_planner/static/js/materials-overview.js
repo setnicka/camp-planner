@@ -19,9 +19,10 @@
   const MATS = DATA.materials;              // catalog materials with usages; mutated in place
   const ORGS = DATA.orgs || [];            // camp roster [{id, initials, name}] — edit picker
   const orgName = new Map(ORGS.map((o) => [o.id, o.name]));
+  const hasStock = stock.on(U);             // the Sklad column and the link, unless switched off
   // Fixed column widths so the layout doesn't reflow ("jump") as filtering changes which rows
   // (and thus which widest cell) are visible. Order matches the header; last width = actions col.
-  const WIDTHS = ["25%", "10%", "20%", "20%", "10%", "7%"];
+  const WIDTHS = hasStock ? ["25%", "10%", "20%", "20%", "10%", "7%"] : ["35%", "15%", "25%", "12%", "7%"];
   if (mayEdit) WIDTHS.push("8%");   // three icon segments
 
   // Filters: label = free-text query matched against the acquisition label(s) ("" = none);
@@ -130,7 +131,7 @@
     // The unit rides along in Množství and the badge in Aktivity carries the activity count,
     // so neither gets a column of its own.
     const headRow = el("tr", null,
-      el("th", null, "Materiál"), el("th", null, "Množství"), el("th", null, "Sklad"),
+      el("th", null, "Materiál"), el("th", null, "Množství"), hasStock ? el("th", null, "Sklad") : null,
       acqHead(), orgsHead(), el("th", null, "Aktivity"));
     if (mayEdit) headRow.append(el("th", { class: "cp-actions" }, ""));
     const colgroup = el("colgroup", null, ...WIDTHS.map((w) => el("col", { style: "width:" + w })));
@@ -278,7 +279,7 @@
           ? el("span", { class: "cp-muted cp-mat-agg", "data-cp-hint": "",
                           title: "Maximum napříč aktivitami" }, " (max)")
           : null),
-      stockCell(m, sums),
+      hasStock ? stockCell(m, sums) : null,
       el("td", { class: "cp-mat-acq" }, acqCell(m)),
       el("td", { class: "cp-mat-orgs" }, orgsCell(m)),
       el("td", { class: "cp-mat-hotovo" }, readyBadge(ready, total)));
@@ -329,7 +330,7 @@
         u.note ? el("div", { class: "cp-muted cp-usage-note" }, u.note) : null),
       el("td", null, amountText(u.amount, u.unit || m.unit) || dash()),
       // Sklad, Štítky and Garant belong to the material, not to one activity's need.
-      el("td", { colspan: "3" }),
+      el("td", { colspan: hasStock ? "3" : "2" }),
       el("td", { class: "cp-mat-hotovo" }, cb));
     if (mayEdit) tr.append(el("td", { class: "cp-actions" }, actionGroup([
       { label: "✎", title: "Upravit", onClick: () => openUsageEdit(m, u) },
@@ -464,7 +465,7 @@
     const orgGroup = chipGroup(ORGS.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
       { multi: true, selected: (m.orgs || []).map((o) => o.org_id) });
     if (!ORGS.length) orgGroup.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
-    const link = linkField(m);
+    const link = hasStock ? linkField(m) : null;
 
     formModal({
       title: "Upravit materiál",
@@ -479,14 +480,14 @@
         el("label", { class: "cp-field-label" }, "Garant"), orgGroup.node,
         el("label", { class: "cp-field-label" }, "Poznámka"), note,
         el("label", { class: "cp-field-label" }, "Odkaz"), url,
-        el("label", { class: "cp-field-label" }, "Věc ve skladu"), link.node),
+        link && el("label", { class: "cp-field-label" }, "Věc ve skladu"), link?.node),
       onSubmit: async (close) => {
         const nm = name.value.trim();
         if (!nm) { name.focus(); return; }
         const j = await api("PATCH", withId(U.materialItem, m.id),
           { name: nm, unit: unit.value || null, note: note.value || null, url: url.value || null,
             acquisition_labels: acq.get(), sum_strategy: strat.value, org_ids: orgGroup.get(),
-            inventory_item_id: link.get() });
+            ...(link && { inventory_item_id: link.get() }) });
         Object.assign(m, j.material);   // envelope carries no `usages` → m.usages preserved
         close(); renderTable(); toast("Uloženo");   // renderTable re-sorts (name may have changed)
       },

@@ -21,6 +21,9 @@ Versioning convention: a release that ships a new DB migration should bump the
   - Photos need `MEDIA_DIR` (embedded: `media_dir=`) and the `[photos]` extra.
   - A camp material can be linked with a warehouse item: camp pages then show
     its box, photo and how much of it is in stock.
+  - Feature switches: `CP_DISABLED_FEATURES` (embedded: `disabled_features=`)
+    turns parts of the app off; `inventory` hides the warehouse and the camp
+    materials' link to it.
 - The activities overview can create an activity without a slot.
 
 ### Changed

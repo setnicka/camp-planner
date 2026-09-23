@@ -19,6 +19,7 @@ from flask import (
 )
 from flask_wtf.csrf import generate_csrf
 
+from camp_planner import features
 from camp_planner.auth.identity import CampRole
 from camp_planner.auth.permissions import (
     can_edit,
@@ -421,7 +422,10 @@ def _photo_url() -> str | None:
 
 
 def _stock_urls() -> dict[str, str | None]:
-    """What a camp page needs to reach the warehouse: the pickable things, a box, a photo."""
+    """What a camp page needs to reach the warehouse: the pickable things, a box, a photo.
+    None of them while the warehouse is off, which is how the pages know to leave it out."""
+    if not features.enabled("inventory"):
+        return {}
     return {
         "inventoryItems": url_for("api.inventory_item_list"),
         "inventoryBox": url_for("main.inventory_box", box_id=0),

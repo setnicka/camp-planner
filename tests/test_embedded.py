@@ -235,3 +235,12 @@ def test_a_bad_theme_value_fails_loudly(embedded_factory):
     with pytest.raises(ValueError, match="expected 'light', 'dark', 'auto' or None"):
         embedded_factory(force_theme="midnight")
 
+
+
+def test_embedded_host_switches_it_off(embedded_factory):
+    client, holder = embedded_factory(disabled_features=["inventory"])
+    holder["value"] = HOST_ADMIN
+    assert client.get("/planner/inventory").status_code == 404
+    assert client.get("/planner/api/inventory/items").status_code == 404
+    with pytest.raises(ValueError):
+        embedded_factory(disabled_features=["inventroy"])

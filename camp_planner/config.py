@@ -111,6 +111,9 @@ class Config:
     # UI hides itself. Needs the camp-planner[photos] extra; embedded hosts pass
     # register_camp_planner(media_dir=...) instead.
     MEDIA_DIR = os.environ.get("MEDIA_DIR") or None
+    # Features to switch off, comma separated (see features.FEATURES), e.g. "inventory" for a
+    # one-off event that keeps no warehouse. Embedded hosts pass disabled_features=[...].
+    CP_DISABLED_FEATURES = os.environ.get("CP_DISABLED_FEATURES", "")
     # Our own app only: an embedded host's request limit is the host's business.
     MAX_CONTENT_LENGTH = MAX_UPLOAD_BYTES
 

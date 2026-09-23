@@ -25,6 +25,8 @@ node --check camp_planner/static/js/X.js  # JS has no test runner, syntax-check 
   calendar arithmetic. Never convert through `ZoneInfo`; `camp.timezone` is display only.
 - KISS the data model, but `Org.external_id` and `Activity.config`/external types are
   deliberate integration hooks, not dead code.
+- A switchable feature (`features.FEATURES`) owns the endpoints named `<feature>_…` in both
+  blueprints; one hook 404s them while it is off. Code outside them asks `features.enabled`.
 - Embedded mode (app can mount under a path prefix): build URLs only with `url_for`,
   never hardcode paths. CSRF travels as the `X-CSRFToken` header.
 - Migrations: generate with `DB_TABLE_PREFIX` unset, then wrap new names with
