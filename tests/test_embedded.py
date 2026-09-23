@@ -4,6 +4,7 @@ under a URL prefix, with identity supplied by the host's auth callback.
 
 from __future__ import annotations
 
+import io
 import re
 
 import pytest
@@ -12,8 +13,9 @@ from flask_wtf import CSRFProtect
 from jinja2 import DictLoader
 
 from camp_planner import register_camp_planner
+from camp_planner.config import MAX_UPLOAD_BYTES
 from camp_planner.extensions import db
-from tests.conftest import HOST_ADMIN, make_camp_embedded
+from tests.conftest import HOST_ADMIN, make_camp_embedded, page_data, png
 
 
 @pytest.fixture
@@ -244,3 +246,28 @@ def test_embedded_host_switches_it_off(embedded_factory):
     assert client.get("/planner/api/inventory/items").status_code == 404
     with pytest.raises(ValueError):
         embedded_factory(disabled_features=["inventroy"])
+
+
+def test_the_warehouse_under_a_host(embedded_factory, tmp_path):
+    """Photos come from media_dir=, every url carries the prefix, and the upload cap holds
+    without the host setting MAX_CONTENT_LENGTH."""
+    client, holder = embedded_factory(media_dir=str(tmp_path))
+    holder["value"] = HOST_ADMIN
+    box = client.post("/planner/api/inventory/boxes", json={"name": "B"}).get_json()["box"]
+    item = client.post("/planner/api/inventory/items",
+                       json={"name": "Lano", "box_id": box["id"]}).get_json()["item"]
+
+    data = page_data(client, f"/planner/inventory/boxes/{box['id']}")
+    assert data["photos_enabled"] is True
+    assert all(url.startswith("/planner/") for url in data["urls"].values())
+
+    resp = client.post(f"/planner/api/inventory/items/{item['id']}/photos",
+                       data={"photos": (io.BytesIO(png()), "foto.png")},
+                       content_type="multipart/form-data")
+    photo = resp.get_json()["item"]["photos"][0]
+    assert list((tmp_path / "inventory").rglob(photo["filename"]))
+    assert client.get(f"/planner/inventory/photos/thumb/{photo['filename']}").status_code == 200
+
+    resp = client.post(f"/planner/api/inventory/items/{item['id']}/photos",
+                       environ_overrides={"CONTENT_LENGTH": str(MAX_UPLOAD_BYTES + 1)})
+    assert resp.status_code == 413
