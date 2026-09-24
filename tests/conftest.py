@@ -21,6 +21,7 @@ os.environ["SECRET_KEY"] = "test-secret"
 from datetime import date  # noqa: E402
 
 import pytest  # noqa: E402
+from flask import g  # noqa: E402
 
 from camp_planner import create_app  # noqa: E402
 from camp_planner.extensions import db  # noqa: E402
@@ -33,6 +34,9 @@ from camp_planner.models.org import Org  # noqa: E402
 def app():
     app = create_app("testing")   # in-memory SQLite; evaporates with the app's engine
     app.config["WTF_CSRF_ENABLED"] = False
+    # Requests share this fixture's app context, hence its g: a token request's g.api_token
+    # would make the next request skip the provider. g.identity stays for direct service calls.
+    app.teardown_request(lambda exc: g.pop("api_token", None))
     with app.app_context():
         db.create_all()
         yield app
