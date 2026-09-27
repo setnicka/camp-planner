@@ -12,6 +12,11 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+The warehouse: boxes and items shared by all camps, inventory checks and a link
+to camp materials.
+
 ### Added
 
 - Warehouse (`/inventory`): boxes and items shared by all camps, with inventory
@@ -318,7 +323,8 @@ overlapping activities across days.
 - Alembic DB migrations with runtime `DB_TABLE_PREFIX` support.
 - Unit tests, README, and deployment docs.
 
-[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/setnicka/camp-planner/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/setnicka/camp-planner/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/setnicka/camp-planner/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/setnicka/camp-planner/compare/v0.3.1...v0.3.2
