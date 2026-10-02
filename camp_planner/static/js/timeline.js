@@ -13,6 +13,7 @@
   if (!dataEl || !container) return;
 
   const payload = JSON.parse(dataEl.textContent);
+  const { el, withId, actionGroup } = window.cpDom;
   const camp = payload.camp;
   const DAY_MIN = 24 * 60;
   const WINDOW_START = camp.window_start_min;
@@ -78,6 +79,10 @@
   const winStart = REF + WINDOW_START * 60000;
   const winEnd = REF + WINDOW_END * 60000;
   const mToDate = (minFromWindow) => new Date(winStart + minFromWindow * 60000);
+  const DAY_MS = DAY_MIN * 60000;
+  // day-row whose window holds an instant on the axis (rows roll over at the window start)
+  const dayOf = (t) => Math.floor((t - winStart) / DAY_MS);
+  const inCamp = (day) => day >= 0 && day < camp.length_days;
 
   // --- per-category colours + legend ----------------------------------------
 
@@ -119,7 +124,7 @@
   function dayLabel(iso) {
     const [y, m, d] = iso.split("-").map(Number);
     const weekday = CZ_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-    return `${weekday} <span class="day-dom">${d}. ${m}.</span>`;
+    return `${weekday}<span class="day-dom">${d}. ${m}.</span>`;
   }
 
   const groups = new vis.DataSet(
@@ -232,6 +237,27 @@
 
   // --- timeline (read-only) --------------------------------------------------
 
+  // A phone opens on NARROW_HOURS of the day: around now during the camp, else from the first
+  // program, on a whole hour so the axis starts with a label. Passed to the constructor, as vis
+  // resets an earlier setWindow.
+  const NARROW_HOURS = 6;
+  function initialWindow() {
+    if (!window.matchMedia("(max-width: 40rem)").matches) return [winStart, winEnd];
+    const span = NARROW_HOURS * 3600000;
+    const now = campNowOnAxis(), day = dayOf(now);
+    let from;
+    if (inCamp(day)) {
+      const back = now - day * DAY_MS - 3600000;   // an hour back, the rest ahead
+      from = REF + Math.floor((back - REF) / 3600000) * 3600000;
+    } else {
+      const first = Math.min(...payload.segments.filter((s) => !s.cont_back).map((s) => s.rel_start_min));
+      from = Number.isFinite(first) ? REF + Math.floor((WINDOW_START + first) / 60) * 3600000 : winStart;
+    }
+    from = Math.max(winStart, Math.min(from, winEnd - span));
+    return [from, from + span];
+  }
+  const [initStart, initEnd] = initialWindow();
+
   const timeline = new vis.Timeline(container, items, groups, {
     stack: true,
     stackSubgroups: false,
@@ -243,7 +269,7 @@
     groupOrder: "id",
     orientation: { axis: "both" },
     min: winStart, max: winEnd,
-    start: winStart, end: winEnd,
+    start: initStart, end: initEnd,
     editable: false,
     itemsAlwaysDraggable: { item: false, range: false },
     xss: { disabled: true },   // our content is trusted server HTML; keep class/data-* attrs
@@ -442,7 +468,6 @@
   nowLine.className = "cp-nowline";
   nowLine.hidden = true;
   let nowDay = null;   // day-row the line last sat on; a change means snap (rollover), not slide
-  const DAY_MS = DAY_MIN * 60000;
   // "Now" positioned on the axis in the camp's wall clock, not the viewer's: the axis renders
   // browser-local, so shift the real instant by (camp offset − browser offset). Identical when
   // the viewer sits in the camp timezone.
@@ -464,18 +489,18 @@
     todayId = id;
     groups.update(updates);
   }
-  function placeNowLine(animate) {
-    const center = container.querySelector(".vis-panel.vis-center");
-    if (!center) return;
+  // animate=true (the minute tick) glides the line to its new spot; redraws / zoom / pan /
+  // resize / the day rollover snap instantly (animating those would lag or slide backwards).
+  function placeNowLine(center, animate) {
     if (nowLine.parentNode !== center) center.appendChild(nowLine);
     const now = campNowOnAxis();
-    const day = Math.floor((now - winStart) / DAY_MS);         // day-row whose window holds now
+    const day = dayOf(now);
     markToday(day);
     const groupEl = container.querySelectorAll(".vis-foreground .vis-group")[day];
     const win = timeline.getWindow();
     const nowOnAxis = now - day * DAY_MS;                       // fold now back onto the day-0 window axis
     const x = ((nowOnAxis - win.start.getTime()) / (win.end.getTime() - win.start.getTime())) * center.clientWidth;
-    if (day < 0 || day >= camp.length_days || !groupEl || x < 0 || x > center.clientWidth) {
+    if (!inCamp(day) || !groupEl || x < 0 || x > center.clientWidth) {
       nowLine.hidden = true;
       nowDay = null;
       return;
@@ -488,11 +513,25 @@
     nowLine.style.height = gr.height + "px";
     nowDay = day;
   }
-  placeNowLine();
-  timeline.on("changed", () => placeNowLine());   // redraws: zoom, pan, data/height changes
-  timeline.on("rangechange", () => placeNowLine());
-  window.addEventListener("resize", () => placeNowLine());
-  setInterval(() => placeNowLine(true), 15000);
+
+  // --- more of the day off screen: a shade on the edge it lies past --------------
+  const moreLeft = el("div", { class: "cp-more cp-more-l" });
+  const moreRight = el("div", { class: "cp-more cp-more-r" });
+  function markMore(center) {
+    if (moreLeft.parentNode !== center) center.append(moreLeft, moreRight);
+    const w = timeline.getWindow(), slack = 60000;   // a minute's leeway for rounding
+    moreLeft.hidden = w.start.getTime() <= winStart + slack;
+    moreRight.hidden = w.end.getTime() >= winEnd - slack;
+  }
+
+  const redraw = (animate) => {
+    const center = container.querySelector(".vis-panel.vis-center");
+    if (center) { placeNowLine(center, animate === true); markMore(center); }
+  };
+  redraw();
+  timeline.on("changed", redraw);   // after every vis redraw: zoom, pan, data/height changes
+  window.addEventListener("resize", redraw);
+  setInterval(() => redraw(true), 15000);
 
   // --- controls (day/night toggle + zoom) ------------------------------------
   const dnBtn = document.getElementById("cp-dn-toggle");
