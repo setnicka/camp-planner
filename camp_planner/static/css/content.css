@@ -84,17 +84,14 @@
   /* — timeline chrome — */
   --cp-nowline: #ea4335;
   --cp-zebra: rgba(20, 30, 50, .05);      /* alternating day-row tint */
-  --cp-row-hover: rgba(255, 205, 0, .15);
-  --cp-row-hover-edge: #444444;
+  --cp-selected-edge: #ffffff;   /* selected slot's edge: page colour (light), text colour (dark) */
   /* Night overlay; JS ramps only the alpha (1 = night, 0 = day). Dark mode needs a
      lighter tone — keep it indigo (R≈G): pushed light enough it turns azure, i.e. water. */
   --cp-daynight-rgb: 24 34 62;
   /* Overlays drawn on category-coloured event boxes. Those colours come from the
-     database and ignore the theme, so these stay light in both; only
-     --cp-selected-ring inverts, because it is drawn against the page. */
+     database and ignore the theme, so these stay light in both. */
   --cp-seam: rgba(255, 255, 255, .85);    /* dashed cut edge of a continued span */
   --cp-nowline-halo: rgba(255, 255, 255, .57);
-  --cp-selected-ring: rgba(0, 0, 0, .8);
 
   /* — form controls — */
   --cp-track: #868fa0;                    /* switch track, off */
@@ -154,12 +151,10 @@
     --cp-scrim-deep: rgba(0, 0, 0, .92);
     --cp-nowline: #ff6b5e;
     --cp-zebra: rgba(255, 255, 255, .04);
-    --cp-row-hover: rgba(255, 205, 0, .12);
-    --cp-row-hover-edge: #c9b26a;
+    --cp-selected-edge: #e0e0e0;
     --cp-daynight-rgb: 52 58 120;
     --cp-seam: rgba(255, 255, 255, .85);
     --cp-nowline-halo: rgba(255, 255, 255, .57);
-    --cp-selected-ring: rgba(255, 255, 255, .85);
     --cp-track: #616a78;
     --cp-knob: #dfe3e8;
     --cp-tag-pre-l: 32%;
@@ -210,12 +205,10 @@
     --cp-scrim-deep: rgba(0, 0, 0, .92);
     --cp-nowline: #ff6b5e;
     --cp-zebra: rgba(255, 255, 255, .04);
-    --cp-row-hover: rgba(255, 205, 0, .12);
-    --cp-row-hover-edge: #c9b26a;
+    --cp-selected-edge: #e0e0e0;
     --cp-daynight-rgb: 52 58 120;
     --cp-seam: rgba(255, 255, 255, .85);
     --cp-nowline-halo: rgba(255, 255, 255, .57);
-    --cp-selected-ring: rgba(255, 255, 255, .85);
     --cp-track: #616a78;
     --cp-knob: #dfe3e8;
     --cp-tag-pre-l: 32%;
