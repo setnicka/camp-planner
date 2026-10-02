@@ -11,7 +11,7 @@ END_MARKER = "/* === end palette"
 
 # Layout tokens live in the palette block but carry no colour, so they need no
 # dark counterpart.
-NON_COLOUR = {"--cp-page-width", "--cp-page-pad"}
+NON_COLOUR = {"--cp-page-width", "--cp-page-pad", "--cp-daynight-max"}
 
 # Per-component state written at runtime by JS — deliberately absent from the palette
 # block. (Element-keyed values like the materials hue --h don't use the --cp- prefix.)

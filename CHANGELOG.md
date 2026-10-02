@@ -15,7 +15,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Changed
 
 - Timeline:
-  - Restyled slot boxes.
+  - Restyled slot boxes, a lighter grid with the night marked.
   - A selected slot highlights its sibling slots and shows its actions.
 
 ## [0.4.0] - 2026-09-27

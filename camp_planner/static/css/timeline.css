@@ -80,6 +80,11 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
   border: 0; z-index: -1; transition: opacity 0.35s ease;
 }
 #cp-timeline.dn-hidden .vis-item.cp-daynight { opacity: 0; }
+/* night motif: a fill cut out by the motif and the night gradient (masks set inline) */
+#cp-timeline .vis-item.cp-nightsky {
+  background: var(--cp-night-motif);
+  mask-repeat: no-repeat; mask-size: 100% 100%; mask-composite: intersect;
+}
 /* current-time line: a thin marker over today's row, on top of the event boxes. The minute
    tick glides via the transition; .cp-snap disables it for zoom/pan/resize/rollover repositions. */
 #cp-timeline .cp-nowline {
@@ -96,9 +101,6 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 #cp-timeline .vis-time-axis .vis-text { font-size: 11px; }
 #cp-timeline .vis-labelset .vis-label { font-weight: 600; }
 #cp-timeline .vis-label .day-dom { font-weight: 400; color: var(--cp-muted); font-size: 11px; }
-/* zebra row tint marks day boundaries even under boxes */
-#cp-timeline .vis-foreground .vis-group:nth-child(even) { background: var(--cp-zebra); }
-#cp-timeline .vis-labelset .vis-label:nth-child(even) { background: var(--cp-surface-2); }
 #cp-timeline .vis-foreground .vis-group,
 #cp-timeline .vis-labelset .vis-label { border-bottom: 1px solid var(--cp-border-strong); }
 
@@ -156,7 +158,7 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 
 /* hour lines: vis centres them on the hour, the shift puts them mid gap */
 #cp-timeline .vis-time-axis .vis-grid.vis-vertical {
-  border-color: var(--cp-text-dim); opacity: .25; translate: 0.5px 0;
+  border-color: var(--cp-text-dim); opacity: .2; translate: 0.5px 0;
 }
 
 /* midnight marker (vis custom time), static; 1px like the hour lines */
