@@ -47,14 +47,23 @@
     return pad(Math.floor(t / 60)) + ":" + pad(t % 60);
   }
 
-  // Readable text colour for a category background (white on dark, near-black on light).
+  // White or the page's dark text (box colours ignore the theme), whichever wins by APCA
+  // contrast; WCAG 2 contrast overrates dark text on mid tones.
+  const DARK_TEXT = "#333333";
+  function apcaY(rgb) {   // "rrggbb" -> APCA screen luminance, soft-clamped near black
+    const n = parseInt(rgb, 16);
+    const c = (v) => (v / 255) ** 2.4;
+    const y = 0.2126729 * c((n >> 16) & 255) + 0.7151522 * c((n >> 8) & 255) + 0.072175 * c(n & 255);
+    return y > 0.022 ? y : y + (0.022 - y) ** 1.414;
+  }
+  const DARK_Y = apcaY(DARK_TEXT.slice(1));
   function textColor(hex) {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
     if (!m) return "#fff";
-    const n = parseInt(m[1], 16);
-    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return lum > 0.6 ? "#3c3c3c" : "#fff";
+    const bg = apcaY(m[1]);
+    const dark = bg ** 0.56 - DARK_Y ** 0.57;     // dark text on the box
+    const light = 1 - bg ** 0.65;                  // white text on the box
+    return dark >= light ? DARK_TEXT : "#fff";
   }
 
   function escapeHtml(s) {
@@ -78,18 +87,10 @@
     .map((c) => `#cp-timeline .vis-item.cat-${c.key}{background-color:${c.color};color:${textColor(c.color)}}`)
     .join("");
 
-  // Row hover: highlight the hovered day row plus its left-panel label. The label lives
-  // in a separate subtree, so pair it by position via :has() — one rule per day, generated
-  // from the actual group count (no hardcoded cap on camp length).
-  const HOVER_HI = "background:var(--cp-row-hover);box-shadow:inset 0 2px 0 var(--cp-row-hover-edge),inset 0 -2px 0 var(--cp-row-hover-edge)";
-  const hoverRules = "#cp-timeline .vis-foreground .vis-group:hover{" + HOVER_HI + "}" +
-    payload.groups.map((g, i) =>
-      `#cp-timeline:has(.vis-foreground .vis-group:nth-child(${i + 1}):hover) .vis-labelset .vis-label:nth-child(${i + 1}){${HOVER_HI}}`
-    ).join("");
   // Constructed sheet, not a <style> element: an embedding host's CSP may forbid inline
   // styles, which blocks a <style> we inject but not the CSSOM.
   const sheet = new CSSStyleSheet();
-  sheet.replaceSync(styleRules + hoverRules);
+  sheet.replaceSync(styleRules);
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
 
   // The legend doubles as the category filter: each entry is a button carrying its
@@ -140,15 +141,11 @@
     const heading = roleHeading(s.role, s.override_name || s.title);
     const left = s.cont_back ? "«&nbsp;" : "";
     const right = s.cont_fwd ? "&nbsp;»" : "";
-    // garants (bold) + helpers (normal), then any slot attendees in italics after a pipe.
-    const people = [
-      ...s.garants.map((id) => `<b>${initials(id)}</b>`),
-      ...s.helpers.map((id) => initials(id)),
-    ].join(", ");
-    const attending = s.attending.length
-      ? `${people ? " | " : ""}<i>${s.attending.map(initials).join(", ")}</i>` : "";
-    const orgs = (people || attending)
-      ? ` | <span class="ev-orgs">${people}${attending}</span>` : "";
+    // garants and helpers bold (the tooltip names their roles), attendees plain after a pipe
+    const team = [...s.garants, ...s.helpers].map(initials).join(", ");
+    const who = [team && `<b>${team}</b>`, s.attending.map(initials).join(", ")]
+      .filter(Boolean).join(" | ");
+    const orgs = who && `<span class="ev-orgs"><span class="ev-sep"> | </span>${who}</span>`;
     const when = `${fmtClock(s.abs_start_min)}–${fmtClock(s.abs_end_min)}`;
     const orgIds = [...new Set([...s.garants, ...s.helpers, ...s.attending])].join(",");
     // data-* attributes are the future filter hook (toggle opacity, no refetch).
