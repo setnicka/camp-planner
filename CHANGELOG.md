@@ -17,6 +17,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline: slot boxes with square corners, even gaps and text colour by contrast.
 - Timeline: a selected slot highlights its activity and shows its actions above it and its
   details below, also on a touch screen.
+- Timeline: a dragged slot leaves an outline where it started.
 - Timeline: a lighter grid, with crescents and stars marking the night.
 - Timeline: today is marked in the day column.
 - Timeline: the controls form one toolbar on top of the grid, the filters above it.

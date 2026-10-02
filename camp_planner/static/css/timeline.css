@@ -255,12 +255,17 @@
 }
 
 /* placeholder while the activity-picker modal is open; new (unsaved) slot dashed */
-#cp-timeline .vis-item.cp-placeholder {
+#cp-timeline .vis-item.cp-placeholder, #cp-timeline .vis-item.cp-ghost {
   background-image: repeating-linear-gradient(45deg, var(--cp-surface-3), var(--cp-surface-3) 6px,
                                                       var(--cp-surface-2) 6px, var(--cp-surface-2) 12px);
   color: var(--cp-text);
 }
 #cp-timeline .vis-item.cp-placeholder::before { border-color: var(--cp-text-dim); }
+/* where a dragged box started, until the drop (timeline-edit.js) */
+#cp-timeline .vis-item.cp-ghost {
+  left: 0; pointer-events: none; opacity: .8;
+  outline: 1px dashed var(--cp-text-dim); outline-offset: -3px;
+}
 #cp-timeline .vis-item.cp-new::before { border-style: dashed; border-color: var(--cp-accent); }
 
 /* unsaved-changes counter + its popover list */
