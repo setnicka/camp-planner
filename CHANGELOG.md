@@ -12,6 +12,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Changed
+
+- Timeline: cleaner slot boxes: square, evenly spaced, text colour by contrast.
+
 ## [0.4.0] - 2026-09-27
 
 The warehouse: boxes and items shared by all camps, inventory checks and a link

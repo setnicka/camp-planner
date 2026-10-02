@@ -77,7 +77,7 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 
 /* day/night gradient: full-row background behind everything; toggle fades it out */
 #cp-timeline .vis-item.cp-daynight {
-  border: 0; border-radius: 0; min-height: 0; z-index: -1; transition: opacity 0.35s ease;
+  border: 0; z-index: -1; transition: opacity 0.35s ease;
 }
 #cp-timeline.dn-hidden .vis-item.cp-daynight { opacity: 0; }
 /* current-time line: a thin marker over today's row, on top of the event boxes. The minute
@@ -102,33 +102,43 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 #cp-timeline .vis-foreground .vis-group,
 #cp-timeline .vis-labelset .vis-label { border-bottom: 1px solid var(--cp-border-strong); }
 
-/* row hover (highlight the hovered day row + its left-panel label) is injected by
-   timeline.js, one :has() rule per day, so camp length isn't capped. */
-
-/* event cards. Box gaps = 2px transparent border (NOT margin.item, which inflates collision
-   math); background-clip:padding-box keeps the fill inside it. */
+/* event cards. Gaps are a transparent border (margin.item would skew vis's collision math),
+   uneven so every edge sits 1px off a grid line; integer heights keep lanes off half pixels. */
 #cp-timeline .vis-item {
-  border: 2px solid transparent; background-clip: padding-box; border-radius: 5px;
-  color: var(--cp-text-inverse); font-size: 11px; min-height: 36px; box-sizing: border-box; cursor: pointer;
+  border: solid transparent; border-width: 1px 1px 2px 2px;
+  background-clip: padding-box; border-radius: 0;
+  color: var(--cp-text-inverse); font-size: 11px; height: 40px; box-sizing: border-box; cursor: pointer;
 }
-#cp-timeline .vis-item.solo { min-height: 78px; }   /* no overlap in the row → double height */
-#cp-timeline .vis-item .vis-item-content { padding: 2px 6px; width: 100%; box-sizing: border-box; }
-#cp-timeline .vis-item.solo .vis-item-content {
-  height: 100%; display: flex; flex-direction: column; justify-content: center;
+#cp-timeline .vis-item.solo { height: 80px; }   /* no overlap in the row → double height */
+#cp-timeline .vis-item .vis-item-content {
+  padding: 2px 6px; width: 100%; box-sizing: border-box;
+  /* overflowing text fades out at the edge (a mask reads only alpha) */
+  mask-image: linear-gradient(to left, transparent 2px, var(--cp-text) 10px);
 }
 #cp-timeline .ev-title { font-weight: 600; }
 #cp-timeline .ev-meta { opacity: .9; font-size: 10px; }
-#cp-timeline .ev-orgs { font-weight: 700; }
+/* a full-height box gives the orgs their own line; the time wraps at its dash */
+#cp-timeline .vis-item.solo .ev-meta { white-space: normal; }
+#cp-timeline .vis-item.solo .ev-orgs { display: block; white-space: nowrap; }
+#cp-timeline .vis-item.solo .ev-sep { display: none; }
 
-/* selection: recolour the gap-border */
-#cp-timeline .vis-item.vis-selected { border-color: var(--cp-selected-ring); box-shadow: none; }
-
-/* a span continues onto another row: flatten the cut edge + dashed seam */
-#cp-timeline .vis-item.cut-l {
-  border-top-left-radius: 0; border-bottom-left-radius: 0;
-  border-left: 2px dashed var(--cp-seam);
+/* selection / placeholder / new-slot rings: a layer on the fill, so the uneven gap-border
+   can't skew them; a border, as a shadow blurs at fractional positions */
+#cp-timeline .vis-item.vis-selected::before,
+#cp-timeline .vis-item.cp-placeholder::before,
+#cp-timeline .vis-item.cp-new::before {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  border: 2px solid;
 }
-#cp-timeline .vis-item.cut-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* selection lifts the box: a shadow plus a 2px edge in the gap, against the page so it
+   reads on any box colour */
+#cp-timeline .vis-item.vis-selected::before {
+  inset: -2px; border-color: var(--cp-selected-edge); border-radius: 3px;
+  box-shadow: 0 10px 24px var(--cp-shadow-2), 0 4px 8px var(--cp-shadow-2), 0 1px 3px var(--cp-shadow-2);
+}
+
+/* a span continues onto another row: dashed seam on the cut edge */
+#cp-timeline .vis-item.cut-l { border-left: 2px dashed var(--cp-seam); }
 #cp-timeline .vis-item.cut-r::after {
   content: ''; position: absolute; top: 0; bottom: 0; right: 2px; width: 0;
   border-left: 2px dashed var(--cp-seam); pointer-events: none;
@@ -142,12 +152,14 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 #cp-timeline .vis-item.cp-dim { opacity: .22; }
 #cp-timeline .vis-item.margin.cp-dim { opacity: .12; }
 
-/* hour grid lines visible between the (future) background and the boxes */
-#cp-timeline .vis-time-axis .vis-grid.vis-vertical { border-color: var(--cp-text-dim); opacity: .25; }
+/* hour lines: vis centres them on the hour, the shift puts them mid gap */
+#cp-timeline .vis-time-axis .vis-grid.vis-vertical {
+  border-color: var(--cp-text-dim); opacity: .25; translate: 0.5px 0;
+}
 
-/* midnight day-boundary marker (vis custom time); static, not draggable */
+/* midnight marker (vis custom time), static; 1px like the hour lines */
 #cp-timeline .vis-custom-time.midnight {
-  background-color: var(--cp-text-dim); width: 2px; pointer-events: none; cursor: default;
+  background-color: var(--cp-text-dim); width: 1px; pointer-events: none; cursor: default;
 }
 
 /* --- editing (Phase 2) --------------------------------------------------- */
@@ -159,7 +171,7 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
    double-tap shouldn't trigger the browser's zoom gesture while editing. */
 #cp-timeline.cp-editing {
   touch-action: manipulation;
-  box-shadow: 0 0 0 3px var(--cp-warning); border-radius: 5px;
+  box-shadow: 0 0 0 3px var(--cp-warning); border-radius: 2px;
 }
 #cp-timeline.cp-editing .vis-item[class*="cat-"] { cursor: move; }
 #cp-edit-toggle.on { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
@@ -170,11 +182,12 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 
 /* placeholder while the activity-picker modal is open; new (unsaved) slot dashed */
 #cp-timeline .vis-item.cp-placeholder {
-  background: repeating-linear-gradient(45deg, var(--cp-surface-3), var(--cp-surface-3) 6px,
-                                                var(--cp-surface-2) 6px, var(--cp-surface-2) 12px);
-  color: var(--cp-text); border-color: var(--cp-text-dim);
+  background-image: repeating-linear-gradient(45deg, var(--cp-surface-3), var(--cp-surface-3) 6px,
+                                                      var(--cp-surface-2) 6px, var(--cp-surface-2) 12px);
+  color: var(--cp-text);
 }
-#cp-timeline .vis-item.cp-new { border-color: var(--cp-accent); border-style: dashed; }
+#cp-timeline .vis-item.cp-placeholder::before { border-color: var(--cp-text-dim); }
+#cp-timeline .vis-item.cp-new::before { border-style: dashed; border-color: var(--cp-accent); }
 
 /* unsaved-changes counter + its popover list */
 .cp-tl-changes { background: var(--cp-warning-subtle); border-color: var(--cp-warning); color: var(--cp-warning-text); }
@@ -231,7 +244,7 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 /* unclassed items (vis default is a pale blue box) — every real slot gets a
    .cat-<key> fill injected by timeline.js, so this is only a fallback */
 .vis-item { background-color: var(--cp-surface-2); }
-/* vis paints selection yellow; ours is a ring instead (see .vis-selected above) */
+/* vis paints selection yellow; ours lifts the box instead (see .vis-selected above) */
 .vis-item.vis-selected { background-color: inherit; }
 div.vis-tooltip {
   background-color: var(--cp-surface-2) !important;
