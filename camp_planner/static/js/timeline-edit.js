@@ -147,6 +147,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // vis applies the visual move via callback(item); we sync the batch map + log a
   // change. A same-duration drag is "Přesunut"; a changed duration is "Změněna velikost".
   function onMove(item, callback) {
+    dropGhost();
     showBar();   // back after the drag hid it, also when nothing changed; it waits a frame for vis
     if (isLocked(item)) {  // multi-row (window-crossing) slot: re-slice the whole slot from this one drag
       const change = lockedSlotEdit(item);  // toasts on out-of-range
@@ -210,12 +211,29 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // live feedback; they re-slice to the final layout on drop.
   const cssId = (id) => (window.CSS && CSS.escape) ? CSS.escape(String(id)) : String(id);
   let movingTimeEl = null;  // cached across a drag's many onMoving frames (same item id)
+  // A hatched copy of the box stays where the drag started until the drop. A plain node in the
+  // box's row, not a vis item, so it can't push the other boxes into new lanes.
+  let ghost = null;
+  function dropGhost() { ghost?.remove(); ghost = null; }
+  timeline.on("rangechange", dropGhost);   // a pan or zoom mid-drag would leave it misplaced
+  // the browser taking a drag over (a long-press menu, a scroll) ends it without onMove
+  container.addEventListener("pointercancel", () => { if (ghost) { dropGhost(); showBar(); } });
   function onMoving(item, callback) {
-    callback(item);
     const idStr = String(item.id);
     if (!movingTimeEl || movingTimeEl.dataset.id !== idStr || !movingTimeEl.isConnected) {
       movingTimeEl = container.querySelector('.ev-time[data-id="' + cssId(item.id) + '"]');
     }
+    const box = movingTimeEl?.closest(".vis-item");
+    if (!ghost && box) {   // first frame, before the callback: the box is still where it started
+      // held from the row's bottom, as vis lays its lanes, so it stays put while the row restacks
+      const { transform, width } = box.style;
+      const bottom = box.parentNode.offsetHeight - box.offsetTop - box.offsetHeight;
+      ghost = el("div", { class: "vis-item cp-ghost" });
+      Object.assign(ghost.style, { transform, width, top: "auto", bottom: bottom + "px",
+        height: box.offsetHeight + "px" });
+      box.before(ghost);
+    }
+    callback(item);
     if (movingTimeEl) movingTimeEl.textContent = rangeLabel(item.group, item.start, item.end);
     hideBar();   // the bar and card stay behind as the box moves; back on drop
   }
