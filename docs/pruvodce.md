@@ -121,6 +121,9 @@ aktivity se můžou překrývat.
 (pokud má akce vyplněné souřadnice). Kliknutí na kategorii, orga nebo hru v hlavičce filtruje
 zobrazení, tlačítka `+` a `−` mění přiblížení.
 
+Kliknutí na slot ho vybere a nabídne nad ním akce; zvýrazní se i ostatní sloty téže
+aktivity (příprava, úklid, další dny). Druhé kliknutí na tentýž slot nebo `Esc` výběr zruší.
+
 ### Aktivity a sloty
 
 * **Aktivita** je primární entita, se kterou se operuje – má popis, materiál, úkoly, garanta.
@@ -136,6 +139,7 @@ tlačítkem **Uložit**; odchod ze stránky s neuloženými změnami si vyžád�
 | Zkratka | Co udělá |
 | --- | --- |
 | `Ctrl` + kolečko | přiblížení a oddálení rozvrhu |
+| `Esc` | zrušení výběru slotu |
 | `Ctrl+Z` | zpět, jen v editačním módu |
 | `Ctrl+Y` nebo `Ctrl+Shift+Z` | vpřed |
 

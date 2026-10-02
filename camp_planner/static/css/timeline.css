@@ -144,13 +144,15 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
   border-left: 2px dashed var(--cp-seam); pointer-events: none;
 }
 
-/* prep / cleanup slots: faded, independently placeable */
-#cp-timeline .vis-item.margin { opacity: .45; font-style: italic; }
-
-/* display filter: slots not matching the active filter fade to 0.75 (and prep/cleanup,
-   already at .45, fade further so a dimmed margin slot never reads brighter than baseline) */
-#cp-timeline .vis-item.cp-dim { opacity: .22; }
-#cp-timeline .vis-item.margin.cp-dim { opacity: .12; }
+/* fades: fixed levels that never stack (applyHeights gives a box one of them). Prep / cleanup
+   are told apart by colour, which leaves opacity to the states. */
+#cp-timeline .vis-item.margin { opacity: .8; filter: saturate(.4); font-style: italic; }
+/* a slot is selected: the other activities step back (timeline.js never dims its own) */
+#cp-timeline .vis-item.cp-unfocus { opacity: .7; }
+#cp-timeline .vis-item.margin.cp-unfocus { opacity: .65; }
+/* display filter: slots that don't match it */
+#cp-timeline .vis-item.cp-dim { opacity: .25; }
+#cp-timeline .vis-item.margin.cp-dim { opacity: .2; }
 
 /* hour lines: vis centres them on the hour, the shift puts them mid gap */
 #cp-timeline .vis-time-axis .vis-grid.vis-vertical {
@@ -201,21 +203,14 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 .cp-change-row:last-child { border-bottom: 0; }
 
 /* floating action bar over the selected slot */
-.cp-tl-actions { position: fixed; z-index: 1000; display: flex; gap: 4px; }
+.cp-tl-actions { position: fixed; z-index: 1000; display: flex; }
 .cp-tl-actions[hidden] { display: none; }  /* beat the display:flex so hidden actually hides */
-/* One shared chrome; each action only names its fill. The drop shadow (not a darker
-   border) separates them from the timeline, and hover brightens — as in content.css. */
-.cp-tl-actions button {
-  font: inherit; font-size: 13px; padding: 0.35rem 0.7rem; cursor: pointer;
-  color: var(--cp-text-inverse); border: 0;
-  border-radius: 6px; box-shadow: 0 2px 6px var(--cp-shadow-2);
+/* a neutral, raised group over the coloured boxes */
+.cp-tl-actions .cp-seg {
+  border-color: var(--cp-border-strong);
+  box-shadow: 0 10px 28px var(--cp-shadow-3), 0 3px 8px var(--cp-shadow-2);
 }
-.cp-tl-actions button:hover { filter: brightness(1.12); }
-.cp-tl-orgs { background: var(--cp-accent); }
-.cp-tl-name { background: var(--cp-success); }
-.cp-tl-detail { background: var(--cp-neutral); }
-.cp-tl-retype { background: var(--cp-violet); }
-.cp-tl-del { background: var(--cp-danger); }
+.cp-tl-actions .cp-seg-btn { font-size: 13px; padding: 0.35rem 0.7rem; }
 
 /* activity-picker modal */
 /* Generic modal scaffold, chips, search/list and modal buttons now live in
