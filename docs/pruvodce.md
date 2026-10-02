@@ -129,8 +129,9 @@ ukazuje, na kterou stranu ještě něco je. Filtry jsou schované pod tlačítke
 kterém je vidět právě zapnutý filtr; křížek vedle něj ho zruší. Nápověda je pod tlačítkem
 *?*.
 
-Kliknutí na slot ho vybere a nabídne nad ním akce; zvýrazní se i ostatní sloty téže
-aktivity (příprava, úklid, další dny). Druhé kliknutí na tentýž slot nebo `Esc` výběr zruší.
+Kliknutí na slot ho vybere, nad ním nabídne akce a pod ním ukáže čas a orgy podle rolí;
+zvýrazní se i ostatní sloty téže aktivity (příprava, úklid, další dny). Druhé kliknutí na
+tentýž slot nebo `Esc` výběr zruší.
 
 ### Aktivity a sloty
 

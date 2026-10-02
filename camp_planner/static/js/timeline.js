@@ -144,7 +144,7 @@
     const heading = roleHeading(s.role, s.override_name || s.title);
     const left = s.cont_back ? "«&nbsp;" : "";
     const right = s.cont_fwd ? "&nbsp;»" : "";
-    // garants and helpers bold (the tooltip names their roles), attendees plain after a pipe
+    // garants and helpers bold (the card names their roles), attendees plain after a pipe
     const team = [...s.garants, ...s.helpers].map(initials).join(", ");
     const who = [team && `<b>${team}</b>`, s.attending.map(initials).join(", ")]
       .filter(Boolean).join(" | ");
@@ -158,9 +158,9 @@
       `<div class="ev-meta"><span class="ev-time" data-id="${s.idx}">${when}</span>${orgs}</div></div>`;
   }
 
-  // Hover tooltip (vis `title`): heading + clock, then full org names grouped by role
+  // The card under a selected slot: heading + clock, then full org names grouped by role
   // (empty groups omitted). Shown for every slot, even one with no orgs assigned yet.
-  function segmentTitle(s) {
+  function segmentCard(s) {
     const names = (ids) => ids.map((id) => escapeHtml(orgById[id]?.name ?? "?")).join(", ");
     const when = `${fmtClock(s.abs_start_min)}–${fmtClock(s.abs_end_min)}`;
     const lines = [
@@ -193,7 +193,6 @@
       start: mToDate(s.rel_start_min),
       end: mToDate(s.rel_end_min),
       content: segmentContent(s),
-      title: segmentTitle(s),   // hover tooltip: orgs by role (full names)
       className: base,     // `solo` (double height) is added by applyHeights()
       slotId: s.slot_id,   // editing maps a vis item back to its slot (Phase 2)
       role: s.role,
@@ -736,33 +735,56 @@
     refreshFilterFacets();
   }
 
-  // --- editing (Phase 2) -----------------------------------------------------
-  // --- floating actions over the selected slot ---------------------------------
+  // --- floating actions over the selected slot, its card under it --------------
   // Rebuilt per selection from barActions (the editor sets its own); hidden while the
-  // view moves, back once it settles.
-  const bar = window.cpDom.el("div", { class: "cp-tl-actions", hidden: true });
-  document.body.append(bar);
+  // view moves, back once it settles, and following the slot when the page scrolls.
+  const bar = el("div", { class: "cp-tl-actions", hidden: true });
+  const card = el("div", { class: "cp-hint cp-tl-card", hidden: true });
+  document.body.append(bar, card);
   let barActions = () => [];
   const openDetail = (it) => {
     const aid = it?._seg?.activity_id;
-    if (aid != null) location.href = window.cpDom.withId(container.dataset.activityDetail, aid);
+    if (aid != null) location.href = withId(container.dataset.activityDetail, aid);
   };
-  const hideBar = () => { bar.hidden = true; };
+  const hideBar = () => { bar.hidden = true; card.hidden = true; };
+  // above the selected box, the card under it (no room there: over the bar), kept to the grid's
+  // visible part and out of sight with the box; reads, then writes
+  function placeBar(sel) {
+    const r = sel.getBoundingClientRect();
+    const grid = container.querySelector(".vis-panel.vis-center").getBoundingClientRect();
+    const [bw, bh, cw, ch] = [bar.offsetWidth, bar.offsetHeight, card.offsetWidth, card.offsetHeight];
+    const off = r.bottom < 0 || r.top > window.innerHeight;
+    bar.style.visibility = card.style.visibility = off ? "hidden" : "";
+    const x = Math.max(r.left, grid.left);
+    const leftOf = (w) => Math.max(4, Math.min(x, window.innerWidth - w - 4)) + "px";
+    const barTop = Math.max(4, r.top - bh - 6), below = r.bottom + 6;
+    Object.assign(bar.style, { left: leftOf(bw), top: barTop + "px" });
+    Object.assign(card.style, { left: leftOf(cw),
+      top: (below + ch <= window.innerHeight - 4 ? below : Math.max(4, barTop - ch - 6)) + "px" });
+  }
+  const selectedBox = () => container.querySelector(".vis-item.vis-selected");
   function showBar() {
     requestAnimationFrame(() => {
-      const sel = container.querySelector(".vis-item.vis-selected");
-      const it = selectedItem();
+      const sel = selectedBox(), it = selectedItem();
       if (!sel || !it) return hideBar();
-      bar.replaceChildren(window.cpDom.actionGroup(barActions(it)));
-      const r = sel.getBoundingClientRect();
+      bar.replaceChildren(actionGroup(barActions(it)));
+      card.innerHTML = it._seg ? segmentCard(it._seg) : "";   // a placeholder has nothing to tell yet
       bar.hidden = false;
-      bar.style.left = Math.max(4, Math.min(r.left, window.innerWidth - bar.offsetWidth - 4)) + "px";
-      bar.style.top = Math.max(4, r.top - bar.offsetHeight - 6) + "px";
+      card.hidden = !it._seg;
+      placeBar(sel);
     });
   }
-  timeline.on("select", () => (lastSel != null ? showBar() : hideBar()));
+  // a page scroll or resize only moves them (once a frame), leaving the buttons under the finger
+  let following = false;
+  function follow() {
+    if (bar.hidden || following) return;
+    following = true;
+    requestAnimationFrame(() => { following = false; const sel = selectedBox(); if (sel && !bar.hidden) placeBar(sel); });
+  }
   timeline.on("rangechange", hideBar);   // pan/zoom slides the slot out from under it
   timeline.on("rangechanged", () => { if (lastSel != null) showBar(); });
+  window.addEventListener("scroll", follow, { passive: true });
+  window.addEventListener("resize", follow);
   // focus moving away from the timeline lets the selection go
   const dropSelection = () => { if (lastSel != null) clearSelection(); };
   document.addEventListener("pointerdown", (e) => {
@@ -781,7 +803,7 @@
       EDIT: JSON.parse(editEl.textContent),
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
-      fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase,
+      fmtClock, mToDate, applyHeights, segmentContent, segmentBase,
       rehydrate, clearSelection, openDetail,
       setBarActions: (fn) => { barActions = fn; }, showBar, hideBar,
     });
