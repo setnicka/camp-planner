@@ -7,7 +7,7 @@
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase, rehydrate, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
   const { el, api, withId, canHover, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -147,6 +147,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // vis applies the visual move via callback(item); we sync the batch map + log a
   // change. A same-duration drag is "Přesunut"; a changed duration is "Změněna velikost".
   function onMove(item, callback) {
+    showBar();   // back after the drag hid it, also when nothing changed; it waits a frame for vis
     if (isLocked(item)) {  // multi-row (window-crossing) slot: re-slice the whole slot from this one drag
       const change = lockedSlotEdit(item);  // toasts on out-of-range
       callback(null);                        // always cancel vis's single-piece move; we re-render instead
@@ -164,14 +165,14 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       callback(item); return;  // dropped back where it started → not a change
     }
     const afterTimes = itemTimes(item);
-    // Re-render the box + tooltip from the new time: both the .ev-time and the title's clock
-    // derive from the segment's abs range, so rebuild it from a copy with the new range.
+    // Re-render the box from the new time: its .ev-time and the card's clock derive from the
+    // segment's abs range, so rebuild it from a copy with the new range.
     const afterSeg = seg && { ...seg, day: Number(after.group),
       abs_start_min: absMinOf(after.group, after.start), abs_end_min: absMinOf(after.group, after.end),
       rel_start_min: relMin(after.start), rel_end_min: relMin(after.end) };
     const afterRender = afterSeg
-      ? { _seg: afterSeg, content: segmentContent(afterSeg), title: segmentTitle(afterSeg) } : {};
-    const beforeRender = seg ? { _seg: seg, content: cur.content, title: cur.title } : {};
+      ? { _seg: afterSeg, content: segmentContent(afterSeg) } : {};
+    const beforeRender = seg ? { _seg: seg, content: cur.content } : {};
     const durFrom = (before.end - before.start) / 60000, durTo = (after.end - after.start) / 60000;
     const verb = durFrom === durTo ? "Přesunut" : "Změněna velikost";
     const rFrom = rangeLabel(before.group, before.start, before.end);
@@ -201,7 +202,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       };
     }
     callback(item);                              // apply the visual move first…
-    if (change) { items.update({ id, ...afterRender }); record(change); }  // …refresh box+tooltip, then log
+    if (change) { items.update({ id, ...afterRender }); record(change); }  // …refresh box and card data, then log
   }
 
   // live time-in-box while dragging/resizing: rewrite the .ev-time text directly
@@ -209,22 +210,14 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // live feedback; they re-slice to the final layout on drop.
   const cssId = (id) => (window.CSS && CSS.escape) ? CSS.escape(String(id)) : String(id);
   let movingTimeEl = null;  // cached across a drag's many onMoving frames (same item id)
-  let movingSeg = null;     // the dragged item's segment, for the live tooltip
   function onMoving(item, callback) {
     callback(item);
     const idStr = String(item.id);
     if (!movingTimeEl || movingTimeEl.dataset.id !== idStr || !movingTimeEl.isConnected) {
       movingTimeEl = container.querySelector('.ev-time[data-id="' + cssId(item.id) + '"]');
-      movingSeg = (items.get(item.id) || {})._seg || null;
     }
     if (movingTimeEl) movingTimeEl.textContent = rangeLabel(item.group, item.start, item.end);
-    // vis only refills the hover tooltip on a fresh mouse-enter, so a drag leaves it stale —
-    // rewrite the shown popup's HTML with the live time, like the box time above.
-    const tip = container.querySelector(".vis-tooltip") || document.querySelector(".vis-tooltip");
-    if (tip && movingSeg) {
-      tip.innerHTML = segmentTitle({ ...movingSeg,
-        abs_start_min: absMinOf(item.group, item.start), abs_end_min: absMinOf(item.group, item.end) });
-    }
+    hideBar();   // the bar and card stay behind as the box moves; back on drop
   }
 
   // --- add (double-tap empty space) ------------------------------------------
@@ -256,7 +249,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function segData(seg, isCreate) {
     const base = segmentBase(seg) + (isCreate ? " cp-new" : "");
     return { role: seg.role, className: base, _base: base,
-             content: segmentContent(seg), title: segmentTitle(seg) };
+             content: segmentContent(seg) };
   }
 
   // --- multi-row (window-crossing) slot editing ------------------------------
@@ -449,12 +442,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   });
 
   // Re-render every on-screen segment of a slot after a standalone edit: patch each
-  // segment's local data via `mutate(seg)`, then rebuild its content + tooltip.
+  // segment's local data via `mutate(seg)`, then rebuild its content (the card reads the data).
   function rerenderSegments(slotId, mutate) {
     segsOf(slotId).forEach((it) => {
       if (it._seg) {
         mutate(it._seg);
-        items.update({ id: it.id, content: segmentContent(it._seg), title: segmentTitle(it._seg) });
+        items.update({ id: it.id, content: segmentContent(it._seg) });
       }
     });
   }
@@ -472,6 +465,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       onSaved: (_orgs, ids) => {
         rerenderSegments(slotId, (seg) => { seg.attending = ids; });
         applyHeights();   // attendees changed → refresh the display filter's dim (e.g. an "attending:" filter)
+        showBar();        // and the card
       },
     });
   }
@@ -490,6 +484,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       onSaved: (_orgs, ids, overrideName) => {
         rerenderSegments(slotId, (s) => { s.attending = ids; s.override_name = overrideName; });
         applyHeights();   // attendees changed → refresh the display filter's dim
+        showBar();        // and the card
       },
     });
   }
