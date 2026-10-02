@@ -122,6 +122,10 @@ aktivity se můžou překrývat.
 zobrazení, tlačítka `+` a `−` mění přiblížení. Během akce je dnešní den v levém sloupci
 označen červeným proužkem a v jeho řádku ukazuje červená čára aktuální čas.
 
+Na telefonu se rozvrh otevře jen na části dne: během akce kolem aktuálního času, jinak od
+prvního programu. Zbytek dne se zobrazí posunutím prstem do strany; stín u okraje mřížky
+ukazuje, na kterou stranu ještě něco je.
+
 Kliknutí na slot ho vybere a nabídne nad ním akce; zvýrazní se i ostatní sloty téže
 aktivity (příprava, úklid, další dny). Druhé kliknutí na tentýž slot nebo `Esc` výběr zruší.
 
