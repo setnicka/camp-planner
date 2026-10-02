@@ -204,7 +204,9 @@
 
   // Half-height when a box overlaps another in its row, double-height when solo.
   // Called once now and re-run live during editing as drags change overlaps;
-  // background items (no _base) are skipped.
+  // background items (no _base) are skipped. Also fades the activities other than the
+  // selected one (cp-unfocus); the selected activity is never dimmed by the filter.
+  let selActivity = null;   // activity of the selected slot (see selectionChanged)
   function applyHeights() {
     const rows = {};
     items.get().forEach((it) => { if (it._base != null) (rows[it.group] ??= []).push(it); });
@@ -215,8 +217,11 @@
         for (let j = i + 1; j < arr.length; j++)
           if (arr[i].start < arr[j].end && arr[j].start < arr[i].end) { over.add(arr[i].id); over.add(arr[j].id); }
       arr.forEach((it) => {
-        const dim = it._seg && !segMatches(it._seg) ? " cp-dim" : "";   // display filter (fade non-matches)
-        const cls = it._base + (over.has(it.id) ? "" : " solo") + dim;
+        const mine = selActivity != null && it._seg?.activity_id === selActivity;
+        // one fade at most: the display filter's, else stepping back from the selection
+        const fade = !mine && it._seg && !segMatches(it._seg) ? " cp-dim"
+          : selActivity != null && !mine ? " cp-unfocus" : "";
+        const cls = it._base + (over.has(it.id) ? "" : " solo") + fade;
         if (cls !== it.className) updates.push({ id: it.id, className: cls });
       });
     });
@@ -260,6 +265,40 @@
   });
 
   window.cpTimeline = timeline; // for debugging in the console
+
+  // --- selection --------------------------------------------------------------
+  // A tap selects, a second tap or Escape deselects; every way the selection goes ends in
+  // selectionChanged.
+  let lastSel = null;
+  const selectedItem = () => {
+    const [id] = timeline.getSelection();
+    return id != null ? items.get(id) : null;
+  };
+  function selectionChanged() {
+    lastSel = timeline.getSelection()[0] ?? null;
+    const act = selectedItem()?._seg?.activity_id ?? null;
+    if (act !== selActivity) { selActivity = act; applyHeights(); }
+    if (lastSel != null) showBar(); else hideBar();
+  }
+  function clearSelection() {
+    timeline.setSelection([]);
+    selectionChanged();
+  }
+  timeline.on("select", (props) => {
+    // only a tap toggles: vis also selects on a long press, which starts a touch drag
+    if (props.event?.type === "tap" && props.items.length === 1 && props.items[0] === lastSel) {
+      timeline.setSelection([]);
+    }
+    selectionChanged();
+  });
+  // vis drops a removed item from the selection without a `select` event
+  items.on("remove", () => { if (lastSel != null && !timeline.getSelection().length) clearSelection(); });
+  document.addEventListener("keydown", (e) => {
+    // runs before a dialog's own Escape, so an open dialog is still in the DOM
+    if (e.key === "Escape" && lastSel != null && !document.querySelector(".cp-modal-overlay")) {
+      clearSelection();
+    }
+  });
 
   // vis keeps its root hidden until a `changed` handler sees this flag, so the
   // grid stays blank until the 1 s autoResize poll. Pre-setting it reveals the
@@ -587,6 +626,40 @@
   }
 
   // --- editing (Phase 2) -----------------------------------------------------
+  // --- floating actions over the selected slot ---------------------------------
+  // Rebuilt per selection from barActions (the editor sets its own); hidden while the
+  // view moves, back once it settles.
+  const bar = window.cpDom.el("div", { class: "cp-tl-actions", hidden: true });
+  document.body.append(bar);
+  let barActions = () => [];
+  const openDetail = (it) => {
+    const aid = it?._seg?.activity_id;
+    if (aid != null) location.href = window.cpDom.withId(container.dataset.activityDetail, aid);
+  };
+  const hideBar = () => { bar.hidden = true; };
+  function showBar() {
+    requestAnimationFrame(() => {
+      const sel = container.querySelector(".vis-item.vis-selected");
+      const it = selectedItem();
+      if (!sel || !it) return hideBar();
+      bar.replaceChildren(window.cpDom.actionGroup(barActions(it)));
+      const r = sel.getBoundingClientRect();
+      bar.hidden = false;
+      bar.style.left = Math.max(4, Math.min(r.left, window.innerWidth - bar.offsetWidth - 4)) + "px";
+      bar.style.top = Math.max(4, r.top - bar.offsetHeight - 6) + "px";
+    });
+  }
+  timeline.on("select", () => (lastSel != null ? showBar() : hideBar()));
+  timeline.on("rangechange", hideBar);   // pan/zoom slides the slot out from under it
+  timeline.on("rangechanged", () => { if (lastSel != null) showBar(); });
+  // focus moving away from the timeline lets the selection go
+  const dropSelection = () => { if (lastSel != null) clearSelection(); };
+  document.addEventListener("pointerdown", (e) => {
+    if (!container.contains(e.target) && !bar.contains(e.target)
+        && !e.target.closest(".cp-modal-overlay")) dropSelection();   // a dialog acts on it
+  });
+  window.addEventListener("blur", dropSelection);
+
   // Present only when the server embedded the edit config (i.e. the user can edit).
   // Move/resize existing slots, double-tap to add (with an activity-picker modal),
   // tap-select + action bar to delete — all collected into a pending batch and
@@ -598,42 +671,10 @@
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
       fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase,
-      rehydrate,
+      rehydrate, clearSelection, openDetail,
+      setBarActions: (fn) => { barActions = fn; }, showBar, hideBar,
     });
   } else {
-    // Read-only: selecting a slot shows a floating "Detail" button into the activity
-    // detail (viewers otherwise only get the hover tooltip).
-    const detailTpl = container.dataset.activityDetail;   // url template, 0 = activity id
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "cp-tl-detail";
-    btn.textContent = "ℹ️ Detail";
-    const bar = document.createElement("div");
-    bar.className = "cp-tl-actions";
-    bar.hidden = true;
-    bar.append(btn);
-    document.body.append(bar);
-    const hideBar = () => { bar.hidden = true; };
-    btn.addEventListener("click", () => {
-      const [id] = timeline.getSelection();
-      const it = id != null && items.get(id);
-      const aid = it && it._seg && it._seg.activity_id;
-      if (aid != null) location.href = detailTpl.replace(/\d+$/, aid);
-    });
-    timeline.on("select", (props) => {
-      if (!props.items.length) return hideBar();
-      requestAnimationFrame(() => {
-        const sel = container.querySelector(".vis-item.vis-selected");
-        if (!sel) return hideBar();
-        const r = sel.getBoundingClientRect();
-        bar.hidden = false;
-        bar.style.left = Math.max(4, Math.min(r.left, window.innerWidth - bar.offsetWidth - 4)) + "px";
-        bar.style.top = Math.max(4, r.top - bar.offsetHeight - 6) + "px";
-      });
-    });
-    timeline.on("rangechange", hideBar);   // pan/zoom slides the slot out from under it
-    document.addEventListener("pointerdown", (e) => {
-      if (!container.contains(e.target) && !bar.contains(e.target)) { hideBar(); timeline.setSelection([]); }
-    });
+    barActions = (it) => [{ label: "ℹ️ Detail", onClick: () => openDetail(it) }];
   }
 })();

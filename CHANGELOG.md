@@ -15,6 +15,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Changed
 
 - Timeline: cleaner slot boxes: square, evenly spaced, text colour by contrast.
+- Timeline: a selected slot highlights its activity and shows its actions above it.
 
 ## [0.4.0] - 2026-09-27
 
