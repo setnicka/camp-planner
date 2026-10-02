@@ -7,7 +7,7 @@
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase, rehydrate } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase, rehydrate, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
   const { el, api, withId, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -81,7 +81,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function record(change) { history.push(change); redoStack.length = 0; afterChange(); }
   function undo() { const c = history.pop(); if (c) { c.undo(); redoStack.push(c); afterChange(); } }
   function redo() { const c = redoStack.pop(); if (c) { c.redo(); history.push(c); afterChange(); } }
-  function afterChange() { hideActionBar(); applyHeights(); refresh(); }
+  function afterChange() { showBar(); applyHeights(); refresh(); }   // the bar follows its slot
 
   function pluralChanges(n) {
     return `${n} ${plural(n, "změna", "změny", "změn")}`;
@@ -239,7 +239,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       content: '<div class="ev"><div class="ev-title">Nový blok…</div></div>',
       className: "cp-placeholder",
     });
-    timeline.setSelection([]);
+    clearSelection();
     window.cpActivityPicker({   // shared two-tab picker (activity-picker.js)
       activitiesUrl: EDIT.activities, createUrl: EDIT.createActivity,
       campSlug: camp.slug, categories: payload.categories, roleLabels: ROLE_LABEL,
@@ -433,67 +433,18 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     ok.addEventListener("click", () => { close(); changeSlotType(item, roles.get()); });
   }
 
-  // --- floating action bar (available in view mode too: assign orgs / open detail) --
-  const orgsBtn = el("button", { type: "button", class: "cp-tl-orgs" }, "Přiřadit orgy");
-  const detailBtn = el("button", { type: "button", class: "cp-tl-detail" }, "ℹ️ Detail");
-  const nameBtn = el("button", { type: "button", class: "cp-tl-name" }, "✎ Upravit slot");
-  const retypeBtn = el("button", { type: "button", class: "cp-tl-retype" }, "↺ Typ slotu");
-  const delBtn = el("button", { type: "button", class: "cp-tl-del" }, "🗑 Smazat blok");
-  const actionBar = el("div", { class: "cp-tl-actions", hidden: true }, orgsBtn, detailBtn, nameBtn, retypeBtn, delBtn);
-  delBtn.addEventListener("click", deleteSelected);
-  retypeBtn.addEventListener("click", () => {
-    const [id] = timeline.getSelection();
-    const it = id != null && items.get(id);
-    if (it) openSlotType(it);
+  // --- floating action bar (timeline.js): this mode's actions -----------------------
+  setBarActions((it) => {
+    const saved = it.slotId != null;   // attendees and a name override need a saved slot id
+    return editing ? [
+      saved && { label: "✎ Upravit slot", onClick: () => openSlotEdit(it) },
+      { label: "↺ Typ slotu", onClick: () => openSlotType(it) },
+      { label: "🗑 Smazat blok", danger: true, onClick: deleteSelected },
+    ] : [
+      saved && { label: "Přiřadit orgy", onClick: () => openSlotOrgs(it) },
+      { label: "ℹ️ Detail", onClick: () => openDetail(it) },
+    ];
   });
-  nameBtn.addEventListener("click", () => {
-    const [id] = timeline.getSelection();
-    const it = id != null && items.get(id);
-    if (it && it.slotId != null) openSlotEdit(it);
-  });
-  orgsBtn.addEventListener("click", () => {
-    const [id] = timeline.getSelection();
-    const it = id != null && items.get(id);
-    if (it && it.slotId != null) openSlotOrgs(it);
-  });
-  detailBtn.addEventListener("click", () => {
-    const [id] = timeline.getSelection();
-    const it = id != null && items.get(id);
-    const aid = it && it._seg && it._seg.activity_id;
-    if (aid != null) location.href = withId(container.dataset.activityDetail, aid);
-  });
-  document.body.append(actionBar);
-
-  function showActionBar() {
-    requestAnimationFrame(() => {
-      const sel = container.querySelector(".vis-item.vis-selected");
-      if (!sel) return hideActionBar();
-      const [id] = timeline.getSelection();
-      const it = id != null && items.get(id);
-      // edit mode = change type / delete; view mode = assign orgs / open detail
-      orgsBtn.hidden = editing || !(it && it.slotId != null); // attendees need a saved slot id
-      detailBtn.hidden = editing;
-      nameBtn.hidden = !editing || !(it && it.slotId != null); // a name override needs a saved slot id
-      retypeBtn.hidden = !editing;
-      delBtn.hidden = !editing;
-      const r = sel.getBoundingClientRect();
-      actionBar.hidden = false;
-      actionBar.style.left = Math.max(4, Math.min(r.left, window.innerWidth - actionBar.offsetWidth - 4)) + "px";
-      actionBar.style.top = Math.max(4, r.top - actionBar.offsetHeight - 6) + "px";
-    });
-  }
-  const hideActionBar = () => { actionBar.hidden = true; };
-
-  timeline.on("select", (props) => {
-    if (props.items.length) showActionBar(); else hideActionBar();
-  });
-  // drop the bar whenever interaction/focus moves away from the selected slot
-  const dropSelection = () => { if (!actionBar.hidden) { hideActionBar(); timeline.setSelection([]); } };
-  document.addEventListener("pointerdown", (e) => {
-    if (!container.contains(e.target) && !actionBar.contains(e.target)) dropSelection();
-  });
-  window.addEventListener("blur", dropSelection);   // tab/window loses focus
-  timeline.on("rangechange", hideActionBar);        // pan/zoom slides the slot out from under it
 
   // Re-render every on-screen segment of a slot after a standalone edit: patch each
   // segment's local data via `mutate(seg)`, then rebuild its content + tooltip.
@@ -625,7 +576,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (toggleBtn.parentNode) toggleBtn.parentNode.classList.toggle("editing", on);
     toggleBtn.textContent = on ? "Zrušit" : "✏️ Upravit sloty a časy";
     for (const b of [saveBtn, undoBtn, redoBtn, changesBtn]) if (b) b.hidden = !on;
-    if (!on) { hideActionBar(); timeline.setSelection([]); closeChanges(); }
+    if (!on) { clearSelection(); closeChanges(); }
     // No per-item `editable`: that overrides itemsAlwaysDraggable and would force a
     // select-first step. The global editable + itemsAlwaysDraggable make every box
     // drag/resize directly (matching the mock); multi-segment slots are guarded in onMove.
@@ -643,6 +594,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const data = items.get(ids);
     items.remove(ids);
     items.add(data);
+    applyHeights();   // the removal may have dropped the selection; re-bake the fades
     refresh();
   }
 
@@ -650,7 +602,6 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function discardChanges() {
     while (history.length) history.pop().undo();
     redoStack.length = 0;
-    hideActionBar();
     applyHeights();
     setEditing(false);
   }

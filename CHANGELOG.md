@@ -16,6 +16,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Timeline:
   - Restyled slot boxes.
+  - A selected slot highlights its sibling slots and shows its actions.
 
 ## [0.4.0] - 2026-09-27
 
