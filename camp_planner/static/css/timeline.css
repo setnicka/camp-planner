@@ -101,6 +101,11 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 #cp-timeline .vis-time-axis .vis-text { font-size: 11px; }
 #cp-timeline .vis-labelset .vis-label { font-weight: 600; }
 #cp-timeline .vis-label .day-dom { font-weight: 400; color: var(--cp-muted); font-size: 11px; }
+/* today (timeline.js): a bar in the now-line's red */
+#cp-timeline .vis-labelset .vis-label.cp-today {
+  box-shadow: inset 3px 0 0 var(--cp-nowline); color: var(--cp-text-strong);
+}
+#cp-timeline .vis-label.cp-today .day-dom { color: var(--cp-text); }
 #cp-timeline .vis-foreground .vis-group,
 #cp-timeline .vis-labelset .vis-label { border-bottom: 1px solid var(--cp-border-strong); }
 

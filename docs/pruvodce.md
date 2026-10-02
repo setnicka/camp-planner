@@ -119,7 +119,8 @@ aktivity se můžou překrývat.
 
 Řádek začíná v nastavenou hodinu (výchozí 04:00). Pozadí je stínované podle výšky slunce
 (pokud má akce vyplněné souřadnice). Kliknutí na kategorii, orga nebo hru v hlavičce filtruje
-zobrazení, tlačítka `+` a `−` mění přiblížení.
+zobrazení, tlačítka `+` a `−` mění přiblížení. Během akce je dnešní den v levém sloupci
+označen červeným proužkem a v jeho řádku ukazuje červená čára aktuální čas.
 
 Kliknutí na slot ho vybere a nabídne nad ním akce; zvýrazní se i ostatní sloty téže
 aktivity (příprava, úklid, další dny). Druhé kliknutí na tentýž slot nebo `Esc` výběr zruší.

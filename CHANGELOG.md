@@ -12,6 +12,11 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Timeline:
+  - Today is marked in the day column.
+
 ### Changed
 
 - Timeline:
