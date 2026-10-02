@@ -93,6 +93,12 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
   transition: left 0.8s linear;
 }
 #cp-timeline .cp-nowline.cp-snap { transition: none; }
+/* more of the day past this edge (timeline.js) */
+#cp-timeline .cp-more {
+  position: absolute; top: 0; bottom: 0; width: 18px; z-index: 6; pointer-events: none;
+}
+#cp-timeline .cp-more-l { left: 0; background: linear-gradient(to right, var(--cp-shadow-2), transparent); }
+#cp-timeline .cp-more-r { right: 0; background: linear-gradient(to left, var(--cp-shadow-2), transparent); }
 /* let the hour grid sit between the gradient (-1) and the event boxes */
 #cp-timeline .vis-panel.vis-center > .vis-content { transform: none !important; }
 #cp-timeline .vis-panel.vis-background.vis-vertical { z-index: 0; }
@@ -100,7 +106,8 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 /* one row per day */
 #cp-timeline .vis-time-axis .vis-text { font-size: 11px; }
 #cp-timeline .vis-labelset .vis-label { font-weight: 600; }
-#cp-timeline .vis-label .day-dom { font-weight: 400; color: var(--cp-muted); font-size: 11px; }
+/* date under the weekday: a narrower day column */
+#cp-timeline .vis-label .day-dom { display: block; font-weight: 400; color: var(--cp-muted); font-size: 11px; }
 /* today (timeline.js): a bar in the now-line's red */
 #cp-timeline .vis-labelset .vis-label.cp-today {
   box-shadow: inset 3px 0 0 var(--cp-nowline); color: var(--cp-text-strong);

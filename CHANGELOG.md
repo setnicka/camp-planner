@@ -22,6 +22,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline:
   - Restyled slot boxes, a lighter grid with the night marked.
   - A selected slot highlights its sibling slots and shows its actions.
+  - Mobile friendly view: day opens zoomed in.
 
 ## [0.4.0] - 2026-09-27
 
