@@ -83,11 +83,12 @@
 
   /* — timeline chrome — */
   --cp-nowline: #ea4335;
-  --cp-zebra: rgba(20, 30, 50, .05);      /* alternating day-row tint */
   --cp-selected-edge: #ffffff;   /* selected slot's edge: page colour (light), text colour (dark) */
   /* Night overlay; JS ramps only the alpha (1 = night, 0 = day). Dark mode needs a
      lighter tone — keep it indigo (R≈G): pushed light enough it turns azure, i.e. water. */
   --cp-daynight-rgb: 24 34 62;
+  --cp-daynight-max: .8;   /* peak night shading; the moon motif marks the night anyway */
+  --cp-night-motif: rgba(255, 255, 255, .35);   /* crescents and stars over the night shading */
   /* Overlays drawn on category-coloured event boxes. Those colours come from the
      database and ignore the theme, so these stay light in both. */
   --cp-seam: rgba(255, 255, 255, .85);    /* dashed cut edge of a continued span */
@@ -150,9 +151,9 @@
     --cp-scrim: rgba(0, 0, 0, .65);
     --cp-scrim-deep: rgba(0, 0, 0, .92);
     --cp-nowline: #ff6b5e;
-    --cp-zebra: rgba(255, 255, 255, .04);
     --cp-selected-edge: #e0e0e0;
-    --cp-daynight-rgb: 52 58 120;
+    --cp-daynight-rgb: 40 44 80;   /* muted, so the night doesn't outshine the black day */
+    --cp-night-motif: rgba(255, 255, 255, .22);
     --cp-seam: rgba(255, 255, 255, .85);
     --cp-nowline-halo: rgba(255, 255, 255, .57);
     --cp-track: #616a78;
@@ -204,9 +205,9 @@
     --cp-scrim: rgba(0, 0, 0, .65);
     --cp-scrim-deep: rgba(0, 0, 0, .92);
     --cp-nowline: #ff6b5e;
-    --cp-zebra: rgba(255, 255, 255, .04);
     --cp-selected-edge: #e0e0e0;
-    --cp-daynight-rgb: 52 58 120;
+    --cp-daynight-rgb: 40 44 80;   /* muted, so the night doesn't outshine the black day */
+    --cp-night-motif: rgba(255, 255, 255, .22);
     --cp-seam: rgba(255, 255, 255, .85);
     --cp-nowline-halo: rgba(255, 255, 255, .57);
     --cp-track: #616a78;

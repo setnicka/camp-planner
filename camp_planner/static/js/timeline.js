@@ -358,34 +358,67 @@
       + " Skipping the day/night shading.");
     return null;
   }
-  function dnColor(altRad, rgb) {
+  // peak night shading (--cp-daynight-max); unset or invalid means full strength
+  function nightMax() {
+    const v = parseFloat(getComputedStyle(container).getPropertyValue("--cp-daynight-max"));
+    return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+  }
+  function dnColor(altRad, rgb, max) {
     const a = (altRad * 180) / Math.PI;
     const t = Math.max(0, Math.min(1, (a + 12) / 15)); // 0 = night, 1 = day
-    return `rgba(${rgb},${(1 - t).toFixed(2)})`;
+    return `rgba(${rgb},${((1 - t) * max).toFixed(2)})`;
+  }
+  // Crescents and stars per day row, used as a mask: positions in % of the day keep them on
+  // their hours on zoom, sizes in px keep them from stretching; seeded, so stable.
+  function nightMotif(day) {
+    let seed = (day + 1) * 2654435761 >>> 0;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+    const at = (x, y, body) => `<svg x="${x.toFixed(2)}%" y="${y.toFixed(1)}%" overflow="visible">${body}</svg>`;
+    const crescent = (r) => `<circle r="${r}" fill="#fff"/>` +
+      `<circle cx="${r * .45}" cy="${-r * .35}" r="${r * .85}" fill="#000"/>`;
+    const N = 60;   // one mark per 24 min of the day, nudged off the grid
+    let marks = "";
+    for (let k = 0; k < N; k++) {
+      const x = (k + .2 + rnd() * .6) / N * 100, y = 15 + rnd() * 70, kind = rnd();
+      marks += at(x, y, kind < .12 ? crescent(6) : kind < .22 ? crescent(4)
+        : `<circle r="${(.7 + rnd() * .6).toFixed(2)}" fill="#fff"/>`);
+    }
+    return "url(\"data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><mask id="m">' +
+      '<rect width="100%" height="100%" fill="#000"/>' + marks +
+      '</mask><rect width="100%" height="100%" mask="url(#m)"/></svg>') + "\")";
   }
   function dayNightBackgrounds() {
     const rgb = nightRGB();
     if (!rgb) return [];
-    return payload.groups.map((g, i) => {
+    const max = nightMax();
+    return payload.groups.flatMap((g, i) => {
       const midnightUTC = Date.UTC(Y, Mo - 1, D + i);
       const offMs = tzOffsetMs(camp.timezone, new Date(midnightUTC + 12 * 3600000)); // offset near local noon
-      const samples = [];
+      const alts = [];
       for (let m = 0; m <= DAY_MIN; m += 20) {
         const instant = new Date(midnightUTC + (WINDOW_START + m) * 60000 - offMs);
-        samples.push({ c: dnColor(sunAltitude(instant, camp.latitude, camp.longitude), rgb),
-                       p: (m / DAY_MIN) * 100 });
+        alts.push({ alt: sunAltitude(instant, camp.latitude, camp.longitude), p: (m / DAY_MIN) * 100 });
       }
-      // keep only stops where the colour changes (flat runs collapse to endpoints)
-      const stops = samples
-        .filter((s, k) => k === 0 || k === samples.length - 1 || s.c !== samples[k - 1].c || s.c !== samples[k + 1].c)
-        .map((s) => `${s.c} ${s.p.toFixed(1)}%`);
-      return {
-        id: "bg" + i, group: g.id, type: "background", start: winStart, end: winEnd,
+      const gradientOf = (scale) => {
+        const samples = alts.map((a) => ({ c: dnColor(a.alt, rgb, scale), p: a.p }));
+        // keep only stops where the colour changes (flat runs collapse to endpoints)
+        const stops = samples
+          .filter((s, k) => k === 0 || k === samples.length - 1 || s.c !== samples[k - 1].c || s.c !== samples[k + 1].c)
+          .map((s) => `${s.c} ${s.p.toFixed(1)}%`);
+        return `linear-gradient(to right, ${stops.join(",")})`;
+      };
+      const gradient = gradientOf(max);
+      const span = { group: g.id, type: "background", start: winStart, end: winEnd,
         // limitSize:false stops vis clamping the box to ~3 panel-widths; the CSS gradient maps
         // `to right` across the box, so a clamped box would shift/squash it when zoomed in.
-        limitSize: false,
-        className: "cp-daynight", style: `background: linear-gradient(to right, ${stops.join(",")})`,
-      };
+        limitSize: false };
+      return [
+        { ...span, id: "bg" + i, className: "cp-daynight", style: `background: ${gradient}` },
+        // masked by the uncapped gradient: full strength where the light theme caps the shading
+        { ...span, id: "ns" + i, className: "cp-daynight cp-nightsky",
+          style: `mask-image: ${nightMotif(i)}, ${gradientOf(1)}` },
+      ];
     });
   }
   if (hasLocation) items.add(dayNightBackgrounds());
