@@ -18,7 +18,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline: a selected slot highlights its activity and shows its actions above it.
 - Timeline: a lighter grid, with crescents and stars marking the night.
 - Timeline: today is marked in the day column.
-- Timeline: on a phone the day opens on six hours.
+- Timeline: the controls form one toolbar on top of the grid, the filters above it.
+- Timeline: on a phone the day opens on six hours, the filters and the help fold away, and
+  a slot drags after a long press.
 
 ## [0.4.0] - 2026-09-27
 

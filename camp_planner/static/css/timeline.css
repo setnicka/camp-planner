@@ -3,20 +3,39 @@
  * Linked only on the timeline page; the embed-shared component styles stay in content.css.
  * Category colours (.vis-item.cat-<key>) are injected at runtime by timeline.js. */
 
-/* left column (legend) vs right column (control bars), top-aligned; the help sits outside
-   as a full-width line under both. The legend grows and wraps its chips beside the bars
-   down to its 18rem basis; below that the bars wrap under it, both full width. */
-.cp-tl-top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; }
-.cp-tl-left { flex: 1 1 18rem; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-.cp-tl-bars { flex: 1 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+/* The filters, then one frame that edit mode marks as a whole: the toolbar as the top row of
+   the grid's table, framed like it and sharing its top line. The toolbar: view controls left,
+   editing right, so entering edit mode moves nothing else, and the hint for the mode between;
+   stretch keeps the button groups the same height as their neighbours. */
+.cp-tl-filters { margin-bottom: 0.6rem; }
+.cp-tl-frame { margin-bottom: 12px; }
+.cp-tl-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+  border: 1px solid var(--cp-border); border-bottom: 0; padding: 6px;
+}
+.cp-tl-view, .cp-tl-edit { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.5rem; }
+.cp-tl-edit { margin-left: auto; justify-content: flex-end; }
+/* the facets (legend, game picker, org chips) flow on one line, each wrapping whole */
+.cp-tl-facets { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.2rem; }
 
 /* Reserve height so the header doesn't jump when vis-timeline mounts. #cp-timeline is
    empty until the JS fills it, so :empty shows the loading hint only during the load. */
-#cp-timeline { margin: 12px 0; min-height: 200px; }
+#cp-timeline { min-height: 200px; }
 #cp-timeline:empty { display: flex; align-items: center; justify-content: center; }
 #cp-timeline:empty::before { content: "Načítám timeline…"; color: var(--cp-muted); font-size: 14px; }
 .cp-tl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
-.cp-tl-help { margin: 0.5rem 0 0; font-size: 12px; color: var(--cp-muted); line-height: 1.35; }
+/* two lines still fit the height of a button, so a longer hint doesn't move the page */
+.cp-tl-help { flex: 1 1 0; min-width: 0; margin: 0 0.5rem; font-size: 10px; color: var(--cp-muted); line-height: 1.3; }
+@media (max-width: 75rem) {   /* too little room between: a row of its own over the buttons */
+  .cp-tl-help { order: -1; flex-basis: 100%; margin: 0; }
+}
+.cp-help-touch, .cp-help-edit { display: none; }
+@media (hover: none) {
+  .cp-help-touch { display: inline; }
+  .cp-help-mouse { display: none; }
+}
+.cp-editing .cp-help-view { display: none; }
+.cp-editing .cp-help-edit { display: inline; }
 
 /* vis renders the slot tooltip (item `title`) as a global div.vis-tooltip. vis injects
    its own CSS via JS at runtime (after this file), so !important is needed to win. */
@@ -24,56 +43,99 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 /* legend entries double as the category filter: clickable chips, highlighted when active */
 .cp-tl-legend-item {
   display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px;
-  padding: 0.1rem 0.45rem; border: 1px solid transparent; border-radius: 999px;
-  background: none; color: inherit; cursor: pointer;
+  padding: 0.1rem 0.45rem; border: 1px solid var(--cp-border); border-radius: 999px;
+  background: var(--cp-surface); color: inherit; cursor: pointer;
 }
-.cp-tl-legend-item:hover { background: var(--cp-accent-wash); border-color: var(--cp-border); }
 .cp-tl-legend-item.on { background: var(--cp-accent-subtle); border-color: var(--cp-accent); font-weight: 600; }
 .cp-tl-legend i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
 
-/* controls bar (day/night toggle + zoom; second row = edit buttons); stretch keeps the
-   zoom pair — smaller font, no side padding — the same height as its text neighbours */
-.cp-tl-bar { display: flex; align-items: stretch; gap: 0.5rem; }
 .cp-tl-btn {
-  font: inherit; font-size: 13px; padding: 0.3rem 0.7rem; cursor: pointer;
+  font: inherit; cursor: pointer;
   border: 1px solid var(--cp-border); border-radius: 6px; background: var(--cp-surface); color: var(--cp-text);
 }
-.cp-tl-btn:hover { background: var(--cp-surface-2); }
-.cp-tl-btn.on { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
-/* joined − / + pair: one pill, the shared border collapsed by the -1px overlap */
-.cp-tl-zoom { display: inline-flex; }
-.cp-tl-zoom .cp-tl-btn { width: 2rem; padding: 0.3rem 0; text-align: center; font-size: 16px; line-height: 1; border-radius: 0; }
-.cp-tl-zoom .cp-tl-btn:first-child { border-radius: 6px 0 0 6px; }
-.cp-tl-zoom .cp-tl-btn:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+/* one size for the page's buttons, the joined groups (− / +, undo / redo, filter) too */
+.cp-tl-btn, .cp-tl-toolbar .cp-seg-btn, .cp-tl-fbar .cp-seg-btn { font-size: 13px; padding: 0.3rem 0.7rem; }
+/* a lit toggle, quiet so it doesn't outshout the actions */
+.cp-tl-btn.on, .cp-tl-fbar .cp-seg-btn.on {
+  background: var(--cp-accent-subtle); border-color: var(--cp-accent); color: var(--cp-accent-text); font-weight: inherit;
+}
+/* a tap leaves :hover stuck, so the tints wait for a pointer */
+@media (hover: hover) {
+  .cp-tl-btn:hover { background: var(--cp-surface-2); }
+  .cp-tl-legend-item:hover, .cp-tl-chip:hover { background: var(--cp-accent-wash); }
+  .cp-tl-changes:hover { background: var(--cp-warning-mark); }
+}
+.cp-tl-zoom .cp-seg-btn { width: 2rem; padding: 0.3rem 0; font-size: 16px; line-height: 1; }
+.cp-tl-frame:not(.cp-editing) .cp-tl-undo { display: none; }
 .cp-tl-filter-label { font-size: 12px; font-weight: 600; color: var(--cp-muted); }
 .cp-tl-select {
   font: inherit; font-size: 13px; padding: 0.25rem 0.4rem; max-width: 16rem;
   border: 1px solid var(--cp-border); border-radius: 6px; background: var(--cp-surface); color: var(--cp-text);
 }
 
-/* filter row under the legend: current-time clock + org chips + activity picker on one line */
-.cp-tl-frow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; }
-/* camp-timezone clock at the head of the filter row; tz name (shown only when it differs
-   from the viewer's) trails in small grey */
-.cp-tl-clock { display: inline-flex; align-items: baseline; gap: 0.25rem; font-size: 13px; color: var(--cp-text); margin-left: 0.4rem; }
+.cp-tl-fgroup { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.4rem; }
+/* camp-timezone clock in the toolbar; tz name (shown only when it differs from the viewer's)
+   trails in small grey */
+.cp-tl-clock { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 13px; color: var(--cp-text); }
 .cp-tl-clock-time { font-variant-numeric: tabular-nums; }
 .cp-tl-clock-tz { font-size: 11px; color: var(--cp-muted); }
-.cp-tl-frow .cp-tl-select { margin-left: 0.2rem; }   /* small gap after the "Hra:" label */
+.cp-tl-fact .cp-tl-select { margin-left: 0.2rem; }   /* small gap after the "Hra:" label */
+.cp-tl-forg { flex: 1 1 auto; }   /* fills its line, so the clear button below sits at the end */
+.cp-tl-clear { margin-left: auto; }   /* the far end, as the other pages have it */
+.cp-tl-clear.cp-off { visibility: hidden; }
 .cp-tl-chip {
   font: inherit; font-size: 12px; font-weight: 600; min-width: 1.6rem; padding: 0.1rem 0.45rem; cursor: pointer;
   border: 1px solid var(--cp-border); border-radius: 999px; background: var(--cp-surface); color: var(--cp-text);
 }
-.cp-tl-chip:hover { background: var(--cp-accent-wash); }
 /* active org chip, coloured by relation: reddish = garant/pomocník, blueish = účast na slotu
    (an active chip always carries a mode-* class, which supplies the background) */
 .cp-tl-chip.on { color: var(--cp-text-inverse); }
 .cp-tl-chip.mode-garant { background: var(--cp-danger-soft); border-color: var(--cp-danger-soft); }
 .cp-tl-chip.mode-attending { background: var(--cp-accent); border-color: var(--cp-accent); }
-/* names the active org relation after the org chips (same reddish/blueish as the chip); a fixed
-   reserved width keeps the "Hra:" picker from shifting as the label appears/clears */
-.cp-tl-orgmode { display: inline-block; min-width: 7.5rem; margin-left: 0.3rem;
+/* names the active org relation after the org chips (same reddish/blueish as the chip); its
+   width is reserved, so the group doesn't wrap as it appears */
+.cp-tl-orgmode { display: inline-block; min-width: 7.5rem; min-height: 1lh; margin-left: 0.3rem;
   font-size: 12px; font-style: italic; color: var(--cp-accent-text); }   /* default = účast blue */
 .cp-tl-orgmode.mode-garant { color: var(--cp-danger-text); }            /* garant overrides to red */
+
+/* A narrow screen folds the filters behind a toggle over the frame, so the grid starts near the
+   top, and keeps the toolbar to one row with short labels. */
+.cp-tl-fbar, .cp-tl-htoggle { display: none; }
+@media (max-width: 40rem) {
+  .cp-tl-fbar { display: flex; width: fit-content; max-width: 100%; margin-bottom: 0.4rem; }
+  .cp-tl-fbar .cp-seg-btn { min-height: 0; }
+  /* the bar's own clear sits by the toggle, shown only while a filter is on */
+  .cp-tl-facets .cp-tl-clear, .cp-tl-fbar .cp-off { display: none; }
+  .cp-tl-toolbar, .cp-tl-view, .cp-tl-edit { gap: 0.4rem; }
+  .cp-tl-help:not(.cp-open) { display: none; }
+  .cp-tl-htoggle { display: block; font-weight: 700; }
+  .cp-tl-filters {   /* 0fr to 1fr animates to the content's own height */
+    margin-bottom: 0; display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.15s ease-out;
+  }
+  .cp-tl-filters.cp-open { grid-template-rows: 1fr; }
+  .cp-tl-facets {
+    flex-direction: column; align-items: flex-start; min-height: 0; overflow: hidden;
+    transition: padding-bottom 0.15s ease-out;
+  }
+  .cp-tl-filters.cp-open .cp-tl-facets { padding-bottom: 0.6rem; }
+  /* folded: out of the tab order too, once the slide is over */
+  .cp-tl-filters:not(.cp-open) .cp-tl-facets {
+    visibility: hidden; transition: visibility 0s 0.15s, padding-bottom 0.15s ease-out;
+  }
+  .cp-tl-clock, .cp-tl-zoom { display: none; }   /* pinch zooms */
+  .cp-tl-ftoggle {   /* a long active filter shortens instead of pushing the row off screen */
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .cp-tl-long { display: none; }
+  .cp-tl-fact, .cp-tl-forg { align-self: stretch; min-width: 0; }
+  .cp-tl-fact { flex-wrap: nowrap; }
+  /* a select is as wide as its longest option; a zero width lets the row size it instead */
+  .cp-tl-fact .cp-tl-select { flex: 1; width: 0; max-width: none; }
+  /* tighter, so the edit buttons fit beside the view ones from about 375px up */
+  .cp-tl-toolbar .cp-tl-btn { padding-inline: 0.55rem; }
+  .cp-tl-undo .cp-seg-btn { padding-inline: 0.45rem; }   /* bare arrows */
+  .cp-editing .cp-tl-edit::before { display: none; }   /* the orange ring says it */
+}
 
 /* day/night gradient: full-row background behind everything; toggle fades it out */
 #cp-timeline .vis-item.cp-daynight {
@@ -180,18 +242,17 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 
 /* --- editing (Phase 2) --------------------------------------------------- */
 .cp-tl-save.cp-tl-btn { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
-.cp-tl-save.cp-tl-btn:disabled,
 .cp-tl-btn:disabled { opacity: .5; cursor: default; }
 
-/* edit mode: clearly mark the whole timetable (orange ring) + the active toggle.
-   double-tap shouldn't trigger the browser's zoom gesture while editing. */
-#cp-timeline.cp-editing {
-  touch-action: manipulation;
-  box-shadow: 0 0 0 3px var(--cp-warning); border-radius: 2px;
-}
-#cp-timeline.cp-editing .vis-item[class*="cat-"] { cursor: move; }
-#cp-edit-toggle.on { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
-.cp-tl-edit.editing::before {
+/* edit mode: an orange ring round the frame (toolbar + grid); double-tap shouldn't zoom */
+.cp-tl-frame.cp-editing { box-shadow: 0 0 0 3px var(--cp-warning); }
+.cp-editing #cp-timeline { touch-action: manipulation; }
+/* a touch screen drags only a selected box (timeline-edit.js); it takes the finger whole, so
+   the drag can't also scroll the page, and a long press on a box starts no text selection */
+.cp-editing #cp-timeline .vis-item.vis-selected { touch-action: none; }
+.cp-editing #cp-timeline .vis-item { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.cp-editing #cp-timeline .vis-item[class*="cat-"] { cursor: move; }
+.cp-editing .cp-tl-edit::before {
   content: "✏️ Režim úprav"; align-self: center; margin-right: 0.25rem;
   font-size: 12px; font-weight: 600; color: var(--cp-warning-text);
 }
@@ -207,7 +268,6 @@ div.vis-tooltip { font-size: 11px !important; line-height: 1.2 !important; }
 
 /* unsaved-changes counter + its popover list */
 .cp-tl-changes { background: var(--cp-warning-subtle); border-color: var(--cp-warning); color: var(--cp-warning-text); }
-.cp-tl-changes:hover { background: var(--cp-warning-mark); }
 .cp-changes-panel {
   position: fixed; z-index: 1000; width: min(560px, 92vw); max-height: 50vh; overflow: auto;
   background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 8px;
