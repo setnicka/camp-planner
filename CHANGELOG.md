@@ -17,6 +17,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline: slot boxes with square corners, even gaps and text colour by contrast.
 - Timeline: a selected slot highlights its activity and shows its actions above it.
 - Timeline: a lighter grid, with crescents and stars marking the night.
+- Timeline: today is marked in the day column.
 
 ## [0.4.0] - 2026-09-27
 

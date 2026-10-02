@@ -123,7 +123,8 @@
   }
 
   const groups = new vis.DataSet(
-    payload.groups.map((g) => ({ id: g.id, content: dayLabel(g.iso_date) }))
+    // always a class: vis throws on className "" (see markToday)
+    payload.groups.map((g) => ({ id: g.id, content: dayLabel(g.iso_date), className: "cp-day" }))
   );
 
   // --- items (program segments) ---------------------------------------------
@@ -320,9 +321,10 @@
 
   // Offset (ms) of the camp timezone at a given instant: how far local wall-clock
   // leads UTC. Computed via Intl; falls back to 0 for an unknown timezone.
+  const tzFormats = {};   // building one is slow, and the now-line asks every redraw
   function tzOffsetMs(tz, date) {
     try {
-      const f = new Intl.DateTimeFormat("en-US", {
+      const f = tzFormats[tz] ??= new Intl.DateTimeFormat("en-US", {
         timeZone: tz, hour12: false, year: "numeric", month: "2-digit",
         day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
       });
@@ -451,14 +453,24 @@
     const browserOff = -d.getTimezoneOffset() * 60000;
     return now + campOff - browserOff;
   }
-  // animate=true (the minute tick) glides the line to its new spot; redraws / zoom / pan /
-  // resize / the day rollover snap instantly (animating those would lag or slide backwards).
+  // today's row label (cp-today), set as the group's className so vis keeps it across redraws
+  let todayId = null;
+  function markToday(day) {
+    const id = payload.groups[day]?.id ?? null;
+    if (id === todayId) return;
+    const updates = [];
+    if (todayId != null) updates.push({ id: todayId, className: "cp-day" });
+    if (id != null) updates.push({ id, className: "cp-today" });
+    todayId = id;
+    groups.update(updates);
+  }
   function placeNowLine(animate) {
     const center = container.querySelector(".vis-panel.vis-center");
     if (!center) return;
     if (nowLine.parentNode !== center) center.appendChild(nowLine);
     const now = campNowOnAxis();
     const day = Math.floor((now - winStart) / DAY_MS);         // day-row whose window holds now
+    markToday(day);
     const groupEl = container.querySelectorAll(".vis-foreground .vis-group")[day];
     const win = timeline.getWindow();
     const nowOnAxis = now - day * DAY_MS;                       // fold now back onto the day-0 window axis
