@@ -16,41 +16,61 @@
 {% endblock %}
 
 {% block cp_content %}
-  {# left column = legend (injected by timeline.js); right = control bars. all top-aligned #}
-  <div class="cp-tl-top">
-    <div class="cp-tl-left"></div>
-    <div class="cp-tl-bars">
-      <div class="cp-tl-bar">
-        <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc">🌙 Den/noc</button>
-        <span class="cp-tl-zoom">
-          <button type="button" id="cp-zoom-out" class="cp-tl-btn" title="Oddálit (Ctrl + kolečko)">−</button>
-          <button type="button" id="cp-zoom-in" class="cp-tl-btn" title="Přiblížit (Ctrl + kolečko)">+</button>
+  {# a narrow screen folds the filters behind this toggle, the clear joined to it (timeline.css) #}
+  <div class="cp-seg cp-tl-fbar">
+    <button type="button" id="cp-filter-toggle" class="cp-seg-btn cp-tl-ftoggle"
+            aria-expanded="false" aria-controls="cp-tl-filters">Filtr ▾</button>
+    <button type="button" id="cp-filter-clear" class="cp-seg-btn cp-seg-icon cp-off" title="Zrušit filtr"
+            aria-label="Zrušit filtr">✕</button>
+  </div>
+  {# legend + org chips + activity picker, injected by timeline.js #}
+  <div class="cp-tl-filters" id="cp-tl-filters"><div class="cp-tl-facets"></div></div>
+
+  {# one frame for the toolbar and the grid it works on: the edit mode marks it as a whole #}
+  <div class="cp-tl-frame">
+    {# view controls left, editing right, the hint between #}
+    <div class="cp-tl-toolbar">
+      <div class="cp-tl-view">
+        <span class="cp-seg cp-tl-zoom">
+          <button type="button" id="cp-zoom-out" class="cp-seg-btn" title="Oddálit (Ctrl + kolečko)">−</button>
+          <button type="button" id="cp-zoom-in" class="cp-seg-btn" title="Přiblížit (Ctrl + kolečko)">+</button>
         </span>
+        <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc"
+                aria-label="Pozadí den/noc">🌙<span class="cp-tl-long"> Den/noc</span></button>
+        {# a narrow screen keeps the hint folded behind this (timeline.css) #}
+        <button type="button" id="cp-help-toggle" class="cp-tl-btn cp-tl-htoggle" title="Nápověda"
+                aria-label="Nápověda" aria-expanded="false" aria-controls="cp-tl-help">?</button>
       </div>
+      {# what the mode does, in the gestures of the device; between the groups (timeline.css) #}
+      <p class="cp-tl-help" id="cp-tl-help">
+        <span class="cp-help-view"><span class="cp-help-mouse"><b>Kliknutím na slot</b> otevřeš menu.
+          <b>Ctrl + kolečko</b> přibližuje, <b>Shift + kolečko</b> posouvá do stran.</span><span
+          class="cp-help-touch"><b>Klepnutím na slot</b> otevřeš menu. <b>Prstem do stran</b> posouváš,
+          <b>roztažením dvěma prsty</b> přibližuješ.</span></span>
+        {%- if can_edit(camp) %}
+        <span class="cp-help-edit"><span class="cp-help-mouse"><b>Dvojklik</b> do prázdna vytvoří slot,
+          <b>tažení</b> ho přesune nebo změní délku, <b>klik</b> nabídne úpravy.</span><span
+          class="cp-help-touch"><b>Dvojí klepnutí</b> do prázdna vytvoří slot, <b>klepnutí</b> na slot
+          nabídne úpravy, <b>podržení</b> a tažení ho přesune nebo změní délku.</span></span>
+        {%- endif %}
+      </p>
       {% if can_edit(camp) %}
-      <div class="cp-tl-bar cp-tl-edit">
-        <button type="button" id="cp-edit-toggle" class="cp-tl-btn" title="Upravit sloty a časy">✏️ Upravit sloty a časy</button>
-        <button type="button" id="cp-undo" class="cp-tl-btn" title="Zpět (Ctrl+Z)" hidden>↶ Zpět</button>
-        <button type="button" id="cp-redo" class="cp-tl-btn" title="Vpřed (Ctrl+Y)" hidden>↷ Vpřed</button>
+      <div class="cp-tl-edit">
+        <span class="cp-seg cp-tl-undo">
+          <button type="button" id="cp-undo" class="cp-seg-btn" title="Zpět (Ctrl+Z)" aria-label="Zpět">↶<span class="cp-tl-long"> Zpět</span></button>
+          <button type="button" id="cp-redo" class="cp-seg-btn" title="Vpřed (Ctrl+Y)" aria-label="Vpřed">↷<span class="cp-tl-long"> Vpřed</span></button>
+        </span>
         <button type="button" id="cp-changes" class="cp-tl-btn cp-tl-changes" title="Zobrazit neuložené změny" hidden>0 změn</button>
+        <button type="button" id="cp-edit-toggle" class="cp-tl-btn" title="Upravit sloty a časy">✏️ Upravit<span class="cp-tl-long"> sloty a časy</span></button>
         <button type="button" id="cp-save" class="cp-tl-btn cp-tl-save" hidden>Uložit</button>
       </div>
       {% endif %}
     </div>
+
+    {# the activity-detail URL template rides on the mount for viewers and editors alike #}
+    <div id="cp-timeline"
+         data-activity-detail="{{ url_for('main.activity_detail', slug=camp.slug, activity_id=0) }}"></div>
   </div>
-
-  {# full-width, below the legend and the control bars #}
-  <p class="cp-tl-help"><small><b>Filtruj</b> klikáním na kategorie/orgy/hry výše. <b>Kliknutím na slot</b> otevřeš <b>menu</b>.
-    <b>Ctrl + kolečko</b> přibližuje, <b>Shift + kolečko</b> posouvá do stran.
-    {%- if can_edit(camp) %}
-    Pro změnu/přidání slotů přepni do <b>editačního módu</b>, v něm: <b>dvojklik</b> na prázdném místě
-    vytvoří <b>nový slot</b>, kliknutí na slot umožní <b>mazat</b>, tažení slot <b>přesune nebo
-    zmenší/zvětší</b>.
-    {%- endif %}</small></p>
-
-  {# the activity-detail URL template rides on the mount for viewers and editors alike #}
-  <div id="cp-timeline"
-       data-activity-detail="{{ url_for('main.activity_detail', slug=camp.slug, activity_id=0) }}"></div>
   <script id="cp-timeline-data" type="application/json">{{ timeline | tojson }}</script>
 
   {# below the grid: iCal subscription URL builder (modal lives in js/ical-export.js) #}

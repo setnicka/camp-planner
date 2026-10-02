@@ -18,6 +18,7 @@ def test_timeline_page_edit_wiring_for_editor(client, seeded):
     assert f"/api/camps/{slug}/timeline" in html     # save url resolves
     assert f"/api/camps/{slug}/activities" in html   # picker url resolves
     assert 'name="csrf-token"' in html               # needed by the PATCH/POST headers
+    assert 'class="cp-help-edit"' in html            # the edit-mode hint
 
 
 def test_timeline_page_read_only_for_viewer(client, seeded):
@@ -27,7 +28,8 @@ def test_timeline_page_read_only_for_viewer(client, seeded):
     assert 'id="cp-timeline-edit"' not in html
     # viewers still get the way into the activity detail (slot select → Detail button)
     assert f'data-activity-detail="/camps/{slug}/activities/0"' in html
-    assert "Filtruj" in html                        # the filter help isn't editor-only
+    assert 'class="cp-help-view"' in html           # the viewing hint isn't editor-only
+    assert 'class="cp-help-edit"' not in html
 
 
 def test_activity_detail_page_renders_with_data(client, seeded):

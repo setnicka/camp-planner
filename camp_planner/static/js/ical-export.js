@@ -143,7 +143,7 @@
         el("div", { class: "cp-field-label" }, "Token"), token, tokenHint, genRow,
         el("div", { class: "cp-field-label" }, "Kategorie"), catChips.node,
         el("div", { class: "cp-field-label" }, "Org"),
-        el("div", { class: "cp-tl-frow" }, ...orgChips.map((c) => c.chip), modeLabel),
+        el("div", { class: "cp-tl-fgroup" }, ...orgChips.map((c) => c.chip), modeLabel),
         el("div", { class: "cp-field-label" }, "URL kalendáře"), urlOut,
         el("div", null, copyBtn),
         hint),

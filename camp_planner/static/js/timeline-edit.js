@@ -8,7 +8,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentTitle, segmentBase, rehydrate, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
-  const { el, api, withId, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
+  const { el, api, withId, canHover, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -44,6 +44,8 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   const undoBtn = document.getElementById("cp-undo");
   const redoBtn = document.getElementById("cp-redo");
   const changesBtn = document.getElementById("cp-changes");
+  const toggleLabel = toggleBtn.innerHTML;   // carries the part a phone hides
+  const frame = container.closest(".cp-tl-frame");   // toolbar + grid
 
   // --- time math (vis item <-> naive datetime string), mirrors services.timeline ---
   const relMin = (date) => Math.round((date.getTime() - winStart) / 60000); // 0..1440 from window open
@@ -571,20 +573,20 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- edit-mode toggle ------------------------------------------------------
   function setEditing(on) {
     editing = on;
-    container.classList.toggle("cp-editing", on);
-    toggleBtn.classList.toggle("on", on);
-    if (toggleBtn.parentNode) toggleBtn.parentNode.classList.toggle("editing", on);
-    toggleBtn.textContent = on ? "Zrušit" : "✏️ Upravit sloty a časy";
-    for (const b of [saveBtn, undoBtn, redoBtn, changesBtn]) if (b) b.hidden = !on;
+    frame.classList.toggle("cp-editing", on);   // the CSS hangs every edit-mode look off it
+    toggleBtn.innerHTML = on ? "Zrušit" : toggleLabel;
+    for (const b of [saveBtn, changesBtn]) if (b) b.hidden = !on;
     if (!on) { clearSelection(); closeChanges(); }
     // No per-item `editable`: that overrides itemsAlwaysDraggable and would force a
     // select-first step. The global editable + itemsAlwaysDraggable make every box
-    // drag/resize directly (matching the mock); multi-segment slots are guarded in onMove.
+    // drag/resize directly; multi-segment slots are guarded in onMove. A touch screen keeps
+    // vis's select-first step (a long press selects), so a swipe over a box pans instead.
     // Only attach the callbacks when enabling — vis rejects `undefined` for them, and with
     // editable:false they never fire anyway, so there's no need to clear them on exit.
     const opts = {
       editable: on ? { add: true, updateTime: true, updateGroup: true, remove: false, overrideItems: false } : false,
-      itemsAlwaysDraggable: on ? { item: true, range: true } : { item: false, range: false },
+      itemsAlwaysDraggable: on && canHover()
+        ? { item: true, range: true } : { item: false, range: false },
     };
     if (on) { opts.onMove = onMove; opts.onMoving = onMoving; opts.onAdd = onAdd; }
     timeline.setOptions(opts);

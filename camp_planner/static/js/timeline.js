@@ -109,11 +109,8 @@
   legend.innerHTML = `<span class="cp-tl-filter-label">Kategorie:</span>` +
     payload.categories.map((c) => legendItem(c.key, c.color, c.label)).join("") +
     (payload.segments.some((s) => s.cat_key === "_none") ? legendItem("_none", "#9e9e9e", "Bez kategorie") : "");
-  // into the left column (bars are the right one); falls back to above the timeline
-  // if that container isn't present.
-  const left = document.querySelector(".cp-tl-left");
-  if (left) left.append(legend);
-  else container.parentNode.insertBefore(legend, container);
+  const filtersEl = document.querySelector(".cp-tl-filters");
+  filtersEl.querySelector(".cp-tl-facets").append(legend);
 
   // --- groups (day rows) -----------------------------------------------------
 
@@ -533,7 +530,7 @@
   window.addEventListener("resize", redraw);
   setInterval(() => redraw(true), 15000);
 
-  // --- controls (day/night toggle + zoom) ------------------------------------
+  // --- controls (day/night toggle, hint toggle, zoom) -------------------------
   const dnBtn = document.getElementById("cp-dn-toggle");
   if (dnBtn && !hasLocation) {
     dnBtn.hidden = true; // no coordinates -> day/night shading unavailable
@@ -544,36 +541,44 @@
       dnBtn.classList.toggle("on", !hidden);
     });
   }
+  // a toggle button folding a panel (cp-open) on a narrow screen
+  function disclose(btn, panel, onToggle) {
+    if (btn && panel) btn.addEventListener("click", () => {
+      const open = panel.classList.toggle("cp-open");
+      btn.setAttribute("aria-expanded", open);
+      onToggle(open);
+    });
+  }
+  const helpBtn = document.getElementById("cp-help-toggle");
+  disclose(helpBtn, document.getElementById("cp-tl-help"), (open) => helpBtn.classList.toggle("on", open));
   const zoomIn = document.getElementById("cp-zoom-in");
   const zoomOut = document.getElementById("cp-zoom-out");
-  if (zoomIn) zoomIn.addEventListener("click", () => timeline.zoomIn(0.3));
-  if (zoomOut) zoomOut.addEventListener("click", () => timeline.zoomOut(0.3));
+  if (zoomIn) zoomIn.addEventListener("click", () => timeline.zoomIn(0.4));
+  if (zoomOut) zoomOut.addEventListener("click", () => timeline.zoomOut(0.4));
 
   // --- filter control (clickable legend + org chips + activity picker) -------
-  // The category facet IS the legend (wired here). Below it sit one row of org initial-chips and
-  // an activity picker (long list → a select). Each org chip cycles garant/pomocník → účast na
-  // slotu → off (a trailing label names the active relation). Only one facet is active at a time;
-  // every state is a "type:value" token, also the #filter= hash payload, so applying / reading /
-  // deep-linking share one mapping.
+  // The category facet IS the legend (wired here). After it come an activity picker (long list
+  // → a select) and the org initial-chips, each facet a group that wraps whole. Each org chip
+  // cycles garant/pomocník → účast na slotu → off (a trailing label names the active relation).
+  // Only one facet is active at a time; every state is a "type:value" token, also the #filter=
+  // hash payload, so applying / reading / deep-linking share one mapping.
   const ORG_MODE = { garant: "garant/pomocník", attending: "účast na slotu" };
   // Rebuilds the activity-dependent facets from payload.segments; reassigned by setupFilter
   // and called by rehydrate after a save (a new activity may have appeared). No-op until then.
   let refreshFilterFacets = () => {};
   (function setupFilter() {
-    const legend = document.querySelector(".cp-tl-legend");
     const orgs = payload.orgs.slice().sort((a, b) => a.initials.localeCompare(b.initials, "cs"));
     const actMap = new Map();
     payload.segments.forEach((s) => { if (!actMap.has(s.activity_id)) actMap.set(s.activity_id, s.title); });
     const activities = [...actMap.entries()].sort((a, b) => a[1].localeCompare(b[1], "cs"));
 
-    // org chips + the activity picker share one row
-    const row = document.createElement("div");
-    row.className = "cp-tl-frow";
+    const facets = [];   // the picker and org groups, after the legend
+    const group = (cls, ...kids) => el("div", { class: "cp-tl-fgroup " + cls }, ...kids);
     const fLabel = (text) => Object.assign(document.createElement("span"), { className: "cp-tl-filter-label", textContent: text });
 
-    // The current time in the camp timezone (appended after the Org/Hra filters below),
-    // with the tz name in small grey — only when that differs from the viewer's own
-    // timezone, i.e. when the wall clock is ambiguous. Intl does the tz math.
+    // The current time in the camp timezone (in the toolbar), with the tz name in small grey,
+    // only when that differs from the viewer's own, i.e. when the wall clock is ambiguous.
+    // Intl does the tz math.
     let clock = null;
     let browserTz = "";
     try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_e) { /* leave "" */ }
@@ -593,11 +598,27 @@
       setInterval(tickClock, 1000);
     }
 
+    let actSel = null;
+    if (activities.length) {
+      actSel = document.createElement("select");
+      actSel.className = "cp-tl-select";
+      actSel.add(new Option("– vybrat hru –", ""));
+      activities.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
+      facets.push(group("cp-tl-fact", fLabel("Hra:"), actSel));
+    }
+
+    // shown only while a filter is on, its room kept so nothing reflows; at the end of the
+    // org chips, in the room their last line leaves
+    const clearBtn = el("button", { type: "button", class: "cp-mini cp-tl-clear cp-off" }, "Zrušit filtr");
+    clearBtn.addEventListener("click", () => apply("", true));
+    const fClear = document.getElementById("cp-filter-clear");   // beside the toggle on a phone
+    fClear?.addEventListener("click", () => apply("", true));
+
     // org chips (each org listed once); click cycles garant → účast → off
     const orgChips = [];
     let modeLabel = null;
     if (orgs.length) {
-      row.append(fLabel("Org:"));
+      const orgGroup = group("cp-tl-forg", fLabel("Org:"));
       orgs.forEach((o) => {
         const chip = document.createElement("button");
         chip.type = "button";
@@ -606,27 +627,17 @@
         chip.title = o.name;            // full name on hover
         chip.textContent = o.initials;
         orgChips.push(chip);
-        row.append(chip);
+        orgGroup.append(chip);
       });
       modeLabel = Object.assign(document.createElement("span"), { className: "cp-tl-orgmode" });
-      row.append(modeLabel);
-    }
+      orgGroup.append(modeLabel, clearBtn);
+      facets.push(orgGroup);
+    } else facets.push(clearBtn);
 
-    let actSel = null;
-    if (activities.length) {
-      actSel = document.createElement("select");
-      actSel.className = "cp-tl-select";
-      actSel.add(new Option("— vybrat hru —", ""));
-      activities.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
-      row.append(fLabel("Hra:"), actSel);
-    }
-    if (clock) row.append(clock);   // camp-timezone clock, after the Org/Hra filters
-    if (row.children.length) {   // skip an empty row (no orgs and no slotted activities)
-      if (legend) legend.after(row);
-      else (left || container.parentNode).insertBefore(row, container);
-    }
+    if (clock) document.querySelector(".cp-tl-view")?.append(clock);
+    legend.after(...facets);
 
-    const catChips = legend ? [...legend.querySelectorAll("[data-filter]")] : [];
+    const catChips = [...legend.querySelectorAll("[data-filter]")];
     let VALID = new Set([
       ...catChips.map((c) => c.dataset.filter),
       ...orgs.flatMap((o) => [`garant:${o.id}`, `attending:${o.id}`]),
@@ -634,6 +645,18 @@
     ]);
 
     let current = "";   // the active "type:value" token, "" = no filter
+    const fToggle = document.getElementById("cp-filter-toggle");
+    const filterName = () => filter.type === "category"
+      ? catChips.find((c) => c.dataset.filter === current).textContent
+      : filter.type === "activity" ? actSel?.selectedOptions[0]?.text ?? ""
+        : `${orgById[filter.id].initials} (${ORG_MODE[filter.type]})`;
+    // the folded filters still say what is on (lit by it), the arrow which way they go
+    function labelToggle() {
+      const arrow = filtersEl.classList.contains("cp-open") ? "▴" : "▾";
+      fToggle.textContent = `Filtr${filter ? ": " + filterName() : ""} ${arrow}`;
+      fToggle.classList.toggle("on", !!filter);
+    }
+    disclose(fToggle, filtersEl, labelToggle);
     function apply(token, updateHash) {
       const next = token && VALID.has(token) ? token : "";
       if (next === current) return;   // unchanged → skip the re-bake (also swallows our own hashchange echo)
@@ -654,6 +677,9 @@
         modeLabel.className = "cp-tl-orgmode" + (orgMode ? " mode-" + filter.type : "");
       }
       if (actSel) actSel.value = current.startsWith("activity:") ? current : "";
+      clearBtn.classList.toggle("cp-off", !filter);
+      fClear?.classList.toggle("cp-off", !filter);
+      if (fToggle && filtersEl) labelToggle();
       applyHeights();              // re-bake cp-dim across all items
       if (updateHash) {
         if (filter) location.hash = "filter=" + filter.type + ":" + encodeURIComponent(filter.value);
@@ -689,10 +715,11 @@
       ]);
       if (actSel) {
         const keep = actSel.value;
-        actSel.length = 1;   // drop all but the "— vybrat hru —" placeholder
+        actSel.length = 1;   // drop all but the "– vybrat hru –" placeholder
         acts.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
         actSel.value = VALID.has(keep) ? keep : "";
       }
+      if (current && !VALID.has(current)) apply("", true);   // the filtered activity is gone
     };
   })();
 
