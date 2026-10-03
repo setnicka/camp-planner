@@ -119,15 +119,9 @@ def tag_link(t: ActivityTag) -> dict:
     return _dump(_tag_link(t))
 
 
-def _todo_fields(t: Todo) -> dict:
-    """The base TodoOut fields from a Todo row — the single source of the todo shape, fed to
-    both TodoOut and (with activity_title) TodoWithActivityOut so they can't drift."""
-    return dict(id=t.id, activity_id=t.activity_id, title=t.title, note=t.note,
-                due_date=t.due_date, is_done=t.is_done, orgs=_org_refs(t.assignments))
-
-
 def _todo(t: Todo) -> TodoOut:
-    return TodoOut(**_todo_fields(t))
+    return TodoOut(id=t.id, activity_id=t.activity_id, title=t.title, note=t.note,
+                   due_date=t.due_date, is_done=t.is_done, orgs=_org_refs(t.assignments))
 
 
 def todo(t: Todo) -> dict:
@@ -136,7 +130,7 @@ def todo(t: Todo) -> dict:
 
 def todo_overview(t: Todo) -> dict:
     """A todo with its activity, for the camp-wide TODO page."""
-    return _dump(TodoWithActivityOut(**_todo_fields(t), activity_title=t.activity.title))
+    return _dump(TodoWithActivityOut(**_todo(t).model_dump(), activity_title=t.activity.title))
 
 
 def _material(m: Material) -> MaterialOut:

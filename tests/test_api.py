@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import event
 
 from camp_planner.extensions import db
+from camp_planner.schemas import ConflictOut
 from tests.conftest import ADMIN, editor, make_camp, viewer
 
 
@@ -63,6 +64,8 @@ def test_timeline_save_conflict_on_stale_rev(client, seeded):
     assert resp.status_code == 409
     body = _json(resp)
     assert not body["ok"] and "timeline" in body and body["rev"] == 0
+    # The errorhandler's body skips spectree's response validation.
+    ConflictOut.model_validate(body)
 
 
 def test_timeline_batch_create_move_delete(client, seeded):

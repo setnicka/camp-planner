@@ -79,14 +79,18 @@ class DeletedEnvelope(_Ok):
 
 # --- todos -------------------------------------------------------------------
 
-def _unique_org_ids(org_ids: list[int]) -> list[int]:
-    if len(set(org_ids)) != len(org_ids):
-        raise ValueError("Orgové: org se v seznamu opakuje.")
-    return org_ids
+def _unique_by(key, message: str) -> AfterValidator:
+    """Refuse a list in which two items share a key."""
+    def check(items: list) -> list:
+        keys = [key(item) for item in items]
+        if len(set(keys)) != len(keys):
+            raise ValueError(message)
+        return items
+    return AfterValidator(check)
 
 
 # org-id list with a no-duplicates check (the None branch of the update field skips it)
-OrgIds = Annotated[list[int], AfterValidator(_unique_org_ids)]
+OrgIds = Annotated[list[int], _unique_by(lambda i: i, "Orgové: org se v seznamu opakuje.")]
 
 
 def _cleaned_strings(too_long: str, too_many: str):
@@ -166,7 +170,6 @@ class TagDefOut(BaseModel):
 
 
 class TodoOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     id: int
     activity_id: int
     title: str
@@ -195,14 +198,8 @@ class SlotUpdateIn(BaseModel):
     """Patch a slot's attendees and/or its display-name override (PATCH …/slots/<id>).
     Only the fields present in the request are changed; an empty (or whitespace-only)
     override_name clears the override, so the slot falls back to the activity title."""
-    org_ids: list[int] | None = None              # absent/null → unchanged; [] → clear attendees
+    org_ids: OrgIds | None = None                 # absent/null → unchanged; [] → clear attendees
     override_name: str | None = Field(None, max_length=255)  # absent → unchanged; ""/null → clear
-
-    @model_validator(mode="after")
-    def _unique(self):
-        if self.org_ids is not None and len(set(self.org_ids)) != len(self.org_ids):
-            raise ValueError("Orgové: org se v seznamu opakuje.")
-        return self
 
 
 class SlotOut(BaseModel):
@@ -379,14 +376,8 @@ class ActivityOrgsIn(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [
         {"orgs": [{"org_id": 3, "role": "garant"}, {"org_id": 7, "role": "helper"}]},
     ]})
-    orgs: list[AssignmentIn] = []
-
-    @model_validator(mode="after")
-    def _unique(self):
-        keys = [(o.org_id, o.role) for o in self.orgs]
-        if len(set(keys)) != len(keys):
-            raise ValueError("Orgové: stejný org se opakuje ve stejné roli.")
-        return self
+    orgs: Annotated[list[AssignmentIn], _unique_by(
+        lambda o: (o.org_id, o.role), "Orgové: stejný org se opakuje ve stejné roli.")] = []
 
 
 class TagValueIn(BaseModel):
@@ -398,14 +389,8 @@ class TagsIn(BaseModel):
     model_config = ConfigDict(json_schema_extra={"examples": [
         {"tags": [{"tag_id": 5, "value": "60"}, {"tag_id": 8, "value": None}]},
     ]})
-    tags: list[TagValueIn] = []
-
-    @model_validator(mode="after")
-    def _unique(self):
-        ids = [t.tag_id for t in self.tags]
-        if len(set(ids)) != len(ids):
-            raise ValueError("Tagy: stejný tag se opakuje.")
-        return self
+    tags: Annotated[list[TagValueIn], _unique_by(
+        lambda t: t.tag_id, "Tagy: stejný tag se opakuje.")] = []
 
 
 class AssignmentOut(BaseModel):
@@ -507,6 +492,9 @@ def _http_url(value: str | None) -> str | None:
     return value
 
 
+Url = Annotated[str | None, Field(max_length=1024), AfterValidator(_http_url)]
+
+
 class MaterialCreate(BaseModel):
     """Create a catalog material (registry). Deduplicated by normalized name per camp.
     With inventory_item_id the material stands for that warehouse thing: name, unit and
@@ -514,10 +502,8 @@ class MaterialCreate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255, examples=["A4 papír"])
     unit: str | None = Field(default=None, max_length=40, examples=["ks"])
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
-    url: str | None = Field(default=None, max_length=1024, examples=["https://example.com/a4"])
+    url: Url = Field(default=None, examples=["https://example.com/a4"])
     inventory_item_id: int | None = None
-
-    _check_url = field_validator("url")(_http_url)
 
     @model_validator(mode="after")
     def _named(self):
@@ -533,13 +519,11 @@ class MaterialUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     unit: str | None = Field(default=None, max_length=40)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
-    url: str | None = Field(default=None, max_length=1024)
+    url: Url = None
     acquisition_labels: Labels | None = None
     sum_strategy: SumStrategy | None = None
     org_ids: OrgIds | None = None
     inventory_item_id: int | None = None    # absent → unchanged, null → unlink
-
-    _check_url = field_validator("url")(_http_url)
 
 
 class MaterialEnvelope(_Ok):
@@ -1002,11 +986,10 @@ class InventoryItemCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255, examples=["Kladka"])
     box_id: int                                  # every live item sits in some box
     alt_names: AltNames = []                     # other names it's known by (search only)
-    url: str | None = Field(default=None, max_length=1024)
+    url: Url = None
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     unit: Unit = Field(default=None, examples=["ks", "hodně"])
     count: Amount = Field(default=None, examples=[4])
-    _check_url = field_validator("url")(_http_url)
 
 
 class InventoryItemUpdateIn(BaseModel):
@@ -1015,11 +998,10 @@ class InventoryItemUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     box_id: int | None = None
     alt_names: AltNames | None = None
-    url: str | None = Field(default=None, max_length=1024)
+    url: Url = None
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     unit: Unit = None
     count: Amount = None
-    _check_url = field_validator("url")(_http_url)
 
 
 class InventoryItemRestoreIn(BaseModel):

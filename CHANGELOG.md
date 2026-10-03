@@ -25,6 +25,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   a slot drags after a long press.
 - Static files carry a version in their URL, so after a deploy a browser can't mix its
   cached old files with the new ones.
+- API: a 422 for a repeated item in a list points at the list field.
 
 ### Fixed
 
