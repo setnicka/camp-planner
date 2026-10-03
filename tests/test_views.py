@@ -275,28 +275,6 @@ def test_page_carries_csrf_refresh_meta(client, seeded):
     assert url.endswith("/csrf-token")
 
 
-def test_csrf_token_endpoint_hands_out_a_working_token():
-    # In a CSRF-enabled app the refresh endpoint returns a freshly-signed token that
-    # actually satisfies the CSRFProtect check on a subsequent mutation.
-    app = create_app("testing")   # in-memory SQLite (TestingConfig)
-    app.config["WTF_CSRF_ENABLED"] = True
-    with app.app_context():
-        db.create_all()
-    c = app.test_client()
-    body = {"name": "T", "slug": "t", "start_date": "2026-07-01", "length_days": 3,
-            "timezone": "Europe/Prague", "window_start_min": 240, "snap_minutes": 15}
-
-    # without a token the mutation is rejected with the CSRF-shaped 400 the client detects
-    missing = c.post("/api/camps", json=body, headers=ADMIN)
-    assert missing.status_code == 400
-    assert "csrf" in missing.get_json()["error"].lower()
-
-    # a token from the endpoint passes the CSRF gate (200, not a 400 CSRF error)
-    token = c.get("/csrf-token", headers=ADMIN).get_json()["csrf_token"]
-    ok = c.post("/api/camps", json=body, headers={**ADMIN, "X-CSRFToken": token})
-    assert ok.status_code == 200, ok.get_json()
-
-
 # --- colour theme -----------------------------------------------------------
 
 

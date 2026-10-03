@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import event
 
 from camp_planner.extensions import db
-from tests.conftest import ADMIN, editor, viewer
+from tests.conftest import ADMIN, editor, make_camp, viewer
 
 
 def _json(resp):
@@ -389,9 +389,8 @@ def test_activity_merge_transfers_slots_todos_and_joins_needs(client, seeded):
 
 def test_activity_merge_rejects_cross_camp(client, seeded):
     src = seeded["activity_id"]
-    other = _json(client.post("/api/camps", json={**_NEW_CAMP, "slug": "jina"}, headers=ADMIN))
+    make_camp(client, "jina")
     dst = _json(client.post("/api/camps/jina/activities", json={"title": "Jiná"}, headers=ADMIN))["activity"]["id"]
-    assert other  # camp created
     resp = client.post(f"/api/activities/{src}/merge", json={"into": dst}, headers=ADMIN)
     assert resp.status_code == 400 and "různých akcí" in _json(resp)["error"]
 
@@ -467,6 +466,7 @@ def test_todo_lifecycle(client, seeded):
 
     resp = client.delete(f"/api/todos/{todo_id}", headers=ADMIN)
     assert _json(resp)["id"] == todo_id
+    assert _get(client, f"/api/activities/{aid}")["activity"]["todos"] == []
 
 
 def test_todo_validation_returns_pydantic_error_list(client, seeded):
@@ -624,6 +624,8 @@ def test_material_delete_blocked_while_in_use(client, seeded):
     # material and its need both survive
     mats = [m["id"] for m in _get(client, f"/api/camps/{slug}/materials")["materials"]]
     assert mid in mats
+    needs = _get(client, f"/api/activities/{aid}")["activity"]["material_needs"]
+    assert [n["material"]["id"] for n in needs] == [mid]
 
 
 def test_material_merge_fails_on_unit_mismatch(client, seeded):
@@ -680,6 +682,7 @@ def test_camp_create_copies_only_selected_parts(client, seeded):
     new_slug = _json(resp)["camp"]["slug"]
     tl = _get(client, f"/api/camps/{new_slug}/timeline")
     assert tl["categories"] == []
+    assert [o["initials"] for o in tl["orgs"]] == ["K"]
 
 
 def test_camp_create_unknown_copy_source(client):
@@ -729,6 +732,7 @@ def test_editor_cannot_change_name(client, seeded):
                         headers=editor(slug))
     assert resp.status_code == 200
     assert _json(resp)["camp"]["name"] == "Tábor"  # meta change ignored for editors
+    assert _json(resp)["camp"]["length_days"] == 4  # ...while the rest applies
 
 
 # --- taxonomy (relocated under /api) -----------------------------------------
@@ -975,7 +979,8 @@ def test_audit_feed_and_activity_filter(client, seeded):
 
     entries = _get(client, f"/api/camps/{slug}/audit")["entries"]
     assert len(entries) >= 2
-    assert entries[0]["created_at"] >= entries[-1]["created_at"]  # newest first
+    ids = [e["id"] for e in entries]
+    assert ids == sorted(ids, reverse=True)  # newest first (created_at has whole seconds)
 
     only = _get(client, f"/api/camps/{slug}/audit?activity_id={aid}")["entries"]
     assert only and all(e["activity_id"] == aid for e in only)
