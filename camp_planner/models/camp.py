@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from camp_planner.models.google import GoogleSyncOp
     from camp_planner.models.material import Material
     from camp_planner.models.org import Org
+    from camp_planner.models.slot import Slot
 
 
 class Camp(TimestampMixin, Base):
@@ -79,6 +80,11 @@ class Camp(TimestampMixin, Base):
     def end_date(self) -> date:
         """Last calendar day of the camp (inclusive); the window spans length_days days."""
         return self.start_date + timedelta(days=self.length_days - 1)
+
+    @property
+    def all_slots(self) -> list[Slot]:
+        """Every slot of every activity (slots hang off activities, not the camp)."""
+        return [slot for activity in self.activities for slot in activity.slots]
 
     def __repr__(self) -> str:
         return f"<Camp {self.slug!r}>"

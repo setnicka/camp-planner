@@ -11,7 +11,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 
-from sqlalchemy import Enum, String, func
+from sqlalchemy import Enum, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -50,6 +50,11 @@ def by_name(rows):
     return sorted(rows, key=lambda r: (czech_sort_key(r.name), r.id))
 
 
+def by_initials(rows):
+    """Orgs in the timeline's order: Czech collation of their (per-camp unique) initials."""
+    return sorted(rows, key=lambda r: czech_sort_key(r.initials))
+
+
 def portable_enum(enum_cls: type[enum.Enum], name: str) -> Enum:
     """Build a SQLAlchemy Enum stored as a CHECK-constrained string rather than
     a native DB ENUM, so schema/migrations behave the same on SQLite,
@@ -62,16 +67,3 @@ class TimestampMixin:
 
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
-
-
-class ExternalIdMixin:
-    """An opaque id of this record in a host system, for integration.
-
-    Stored as a string so it holds either a numeric uid (as its decimal text)
-    or a textual id, depending on the host system this deployment integrates
-    with. Nullable: not every record is linked. Indexed for lookups by it.
-    """
-
-    external_id: Mapped[str | None] = mapped_column(String(255), index=True)
-
-

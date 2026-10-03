@@ -1,4 +1,5 @@
-"""Outbound Google Calendar sync: stage changes, deliver them out of band.
+"""Google Calendar sync: stage outbound changes and deliver them out of band, plus the
+reviewed inbound (Google→Planner) import.
 
 Write paths (save_timeline, activity update/delete) call enqueue_* to stage a
 GoogleSyncOp on the session — no Google call, no commit — exactly like audit.record;
@@ -6,8 +7,7 @@ their own commit persists it. `drain` later delivers the queued ops to Google, s
 or unreachable Google never blocks nor fails a timeline edit. drain runs from the
 `flask sync-google` cron command and the "Synchronizovat nyní" button.
 
-Connecting/disconnecting a camp and the inbound (Google→Planner) reviewed import live
-elsewhere (services/camps.py for the connection; inbound is a later phase).
+Connecting/disconnecting a camp lives in services/camps.py.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ def resync_all(camp: Camp) -> dict:
     # One query for the already-queued slot ids (enqueue_upsert would issue one per slot).
     queued = set(db_session.scalars(db.select(GoogleSyncOp.slot_id).where(
         GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.op == SyncOpKind.upsert)))
-    slots = [slot for activity in camp.activities for slot in activity.slots]
+    slots = camp.all_slots
     db_session.add_all(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert)
                        for slot in slots if slot.id not in queued)
     db_session.commit()
@@ -413,7 +413,7 @@ def _detect(camp: Camp) -> list[dict]:
     # clipped/invisible (slice_segments clamps it) — the same rule save_timeline enforces.
     window_start, window_end = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
 
-    for slot in (s for a in camp.activities for s in a.slots):
+    for slot in camp.all_slots:
         if not slot.google_event_id:
             continue
         mapped.add(slot.google_event_id)
@@ -471,7 +471,7 @@ def _detect(camp: Camp) -> list[dict]:
                                     "activity": activity, "new_category_id": new_cat,
                                     "new_label": label, "old_label": old_label})
 
-    own_slot_ids = {s.id for a in camp.activities for s in a.slots}
+    own_slot_ids = {s.id for s in camp.all_slots}
     # Events we've already queued for deletion (slot deleted here, delete op not yet drained, or
     # the push keeps failing). Their marker is our own now-gone slot id, so they'd otherwise look
     # "foreign" and be re-offered for import — re-creating the slot we just deleted. Skip them.

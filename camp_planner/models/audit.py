@@ -48,8 +48,8 @@ class AuditLog(Base):
     after]}. The log is append-only; rows are never updated or deleted
     (enforced in the service layer, not the schema).
 
-    author is the identity the host app reports for the logged-in user
-    (username or its own id); auth/users live entirely in the host system.
+    author is the logged-in identity's stable user_id: the standalone username, or
+    the id a proxy or an embedding host app reports.
     """
 
     __tablename__ = table_name("audit_logs")

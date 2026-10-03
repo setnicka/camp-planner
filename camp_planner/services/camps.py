@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import get_args
 
 from pydantic import ValidationError
 
@@ -12,13 +13,13 @@ from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Camp
 from camp_planner.models.common import slugify
-from camp_planner.schemas import CampUpdate
+from camp_planner.schemas import CampUpdate, SnapMinutes
 from camp_planner.services import audit, errors, google_client, google_sync, taxonomy
 from camp_planner.services.timeline import bump_timeline_rev, camp_window
 
 log = logging.getLogger(__name__)
 
-SNAP_CHOICES = (5, 10, 15, 30, 60)  # allowed editing-grid resolutions (also used by the forms)
+SNAP_CHOICES = get_args(SnapMinutes)  # allowed editing-grid resolutions, for the forms
 # Fields whose change alters the timeline layout, so an in-flight edit must be invalidated.
 _LAYOUT_FIELDS = {"start_date", "length_days", "window_start_min"}
 
@@ -101,17 +102,7 @@ def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=Non
         if source is None or not can_view(source):
             raise errors.Invalid("Převzít z akce: vyberte platnou akci.")
     slug = data.get("slug") or slugify(data["name"])
-    camp = Camp(
-        name=data["name"],
-        slug=slug,
-        start_date=data["start_date"],
-        length_days=data["length_days"],
-        timezone=data["timezone"],
-        window_start_min=data["window_start_min"],
-        snap_minutes=data["snap_minutes"],
-        latitude=data.get("latitude"),
-        longitude=data.get("longitude"),
-    )
+    camp = Camp(**{**data, "slug": slug})  # data's keys are Camp columns
     db_session.add(camp)
     # A dup slug fails at the flush (before copy_into runs), a lost race at the commit.
     with errors.unique_or_invalid(f"Slug „{slug}“ už používá jiná akce."):
@@ -136,10 +127,6 @@ def delete_camp(camp: Camp) -> dict:
     db_session.delete(camp)
     db_session.commit()
     return {"id": camp_id}
-
-
-def _all_slots(camp: Camp):
-    return (slot for activity in camp.activities for slot in activity.slots)
 
 
 def _calendar_conflict(calendar_id: str, start, end, exclude_camp_id: int) -> Camp | None:
@@ -196,7 +183,7 @@ def set_google_calendar(camp: Camp, calendar_id: str) -> dict:
     owned = _owned_events(calendar_id)
     was = camp.google_calendar_id
     camp.google_calendar_id = calendar_id
-    for slot in _all_slots(camp):
+    for slot in camp.all_slots:
         slot.google_event_id = owned.get(str(slot.id))  # adopt our existing event, else None → insert
         google_sync.enqueue_upsert(camp, slot)
     audit.record(camp_id=camp.id, entity_type=EntityType.camp, entity_id=camp.id,
@@ -215,7 +202,7 @@ def disconnect_google(camp: Camp) -> dict:
     old = camp.google_calendar_id
     camp.google_calendar_id = None
     camp.google_last_pull_at = None
-    for slot in _all_slots(camp):
+    for slot in camp.all_slots:
         slot.google_event_id = None
     for op in list(camp.sync_ops):
         db_session.delete(op)

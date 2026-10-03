@@ -3,7 +3,7 @@
 The camp "day" is a 24h window starting at camp.window_start_min (e.g. 04:00), so
 a night program stays on one row. A slot whose [start_at, end_at) crosses a window
 boundary is sliced into one segment per day-row it touches, carrying continuation
-flags. This is a direct port of the mockup's buildSegments/absMin (docs/mockups/data.js).
+flags.
 
 IMPORTANT: slot datetimes are naive local values. All math here is pure calendar
 arithmetic on those values — do NOT convert through ZoneInfo. camp.timezone is

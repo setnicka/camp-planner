@@ -86,11 +86,11 @@ def _fmt_window_start(minutes: int) -> str:
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 
-def _camp_or_404(slug: str) -> Camp:
-    camp = getattr(g, "camp", None)  # stashed by @require_view/@require_edit
-    if camp is not None and camp.slug == slug:
-        return camp
-    return first_or_404(db.select(Camp).filter_by(slug=slug))
+def _camp(slug: str, *options) -> Camp:
+    """The camp @require_view/@require_edit resolved; reloaded only so loader options apply."""
+    if not options:
+        return g.camp
+    return first_or_404(db.select(Camp).filter_by(slug=slug).options(*options))
 
 
 @bp.context_processor
@@ -115,16 +115,11 @@ def csrf_refresh() -> dict:
     return {"csrf_token": generate_csrf()}
 
 
-def _copy_sources() -> list[Camp]:
-    """Existing camps a new camp may copy its taxonomies from (those the user can view)."""
-    return camps_service.viewable()
-
-
 @bp.get("/camps/new")
 @require_admin
 def camp_new():
     return render_template("camp_form.html", values=_NEW_CAMP_DEFAULTS, errors=[],
-                           copy_sources=_copy_sources(), submitted=False)
+                           copy_sources=camps_service.viewable(), submitted=False)
 
 
 @bp.post("/camps/new")
@@ -143,13 +138,13 @@ def camp_create():
             flash(f"Akce „{camp.name}“ vytvořena.", "success")
             return redirect(url_for("main.camp_timeline", slug=camp.slug))
     return render_template("camp_form.html", values=request.form, errors=errors,
-                           copy_sources=_copy_sources(), submitted=True)
+                           copy_sources=camps_service.viewable(), submitted=True)
 
 
 @bp.get("/camps/<slug>")
 @require_view
 def camp_timeline(slug: str):
-    camp = first_or_404(db.select(Camp).filter_by(slug=slug).options(*loaders.TIMELINE))
+    camp = _camp(slug, *loaders.TIMELINE)
     return render_template("camp_timeline.html", camp=camp, timeline=build_timeline(camp))
 
 
@@ -180,12 +175,6 @@ def camp_ical(slug: str):
     return Response(body, mimetype="text/calendar", headers=headers)
 
 
-@bp.get("/camps/<slug>/detail")
-@require_view
-def camp_detail(slug: str):
-    return _render_detail(_camp_or_404(slug))
-
-
 # Czech labels for the activity type (read-only badge on the detail page).
 _ACTIVITY_TYPE_LABELS = {
     "basic": "Vlastní program",
@@ -200,7 +189,7 @@ def activity_detail(slug: str, activity_id: int):
     """One activity's page: orgs / tags / todos / material needs, all edited in place
     from the embedded JSON via the api endpoints (no reloads). Edit affordances are
     gated by can_edit; the api re-checks server-side."""
-    camp = _camp_or_404(slug)
+    camp = _camp(slug)
     activity = first_or_404(
         db.select(Activity).filter_by(id=activity_id, camp_id=camp.id).options(*loaders.ACTIVITY),
         description="Aktivita nenalezena.")
@@ -244,9 +233,7 @@ def camp_materials(slug: str):
     """Camp-wide materials overview: one row per catalog material with the activity needs
     that use it, edited in place from the embedded JSON via the api endpoints (no reloads).
     Edit affordances are gated by can_edit; the api re-checks server-side."""
-    camp = first_or_404(
-        db.select(Camp).filter_by(slug=slug).options(*loaders.MATERIALS_OVERVIEW),
-        description="Akce nenalezena.")
+    camp = _camp(slug, *loaders.MATERIALS_OVERVIEW)
     data = {
         "materials": [serialize.material_overview(m) for m in camp.materials],
         "orgs": taxonomy.orgs(camp),   # roster for the edit modal's responsible-orgs picker
@@ -271,9 +258,7 @@ def camp_overview(slug: str):
     table — category, orgs, todo/material progress, a column per pinned tag, slot counts —
     with delete and merge from the embedded JSON via the api endpoints. Edit affordances are
     gated by can_edit; the api re-checks server-side."""
-    camp = first_or_404(
-        db.select(Camp).filter_by(slug=slug).options(*loaders.ACTIVITIES_OVERVIEW),
-        description="Akce nenalezena.")
+    camp = _camp(slug, *loaders.ACTIVITIES_OVERVIEW)
     tax = taxonomy.serialize(camp)   # categories / orgs (czech-sorted) / tags — reused as filter metadata
     data = {
         # order is decided client-side (the table re-sorts on every filter/sort change)
@@ -283,9 +268,9 @@ def camp_overview(slug: str):
         "camp": {"start_date": camp.start_date.isoformat(), "length_days": camp.length_days,
                  "window_start_min": camp.window_start_min},
         # filter/column metadata: categories, orgs, and the pinned tags (= columns)
-        "categories": [{"id": c["id"], "label": c["label"], "color": c["color"]} for c in tax["categories"]],
+        "categories": tax["categories"],
         "orgs": tax["orgs"],
-        "pinned_tags": [{"id": t["id"], "name": t["name"], "kind": t["kind"]} for t in tax["tags"] if t["pinned"]],
+        "pinned_tags": [t for t in tax["tags"] if t["pinned"]],
         "may_edit": can_edit(camp),
         # activityItem serves DELETE; activityMerge is .../<id>/merge; the trailing 0 is a
         # sentinel the client swaps for the real id.
@@ -306,9 +291,7 @@ def camp_todos(slug: str):
     status, activity, assigned orgs, due date and note — checked/edited/deleted in place
     from the embedded JSON via the api endpoints. Edit affordances are gated by can_edit;
     the api re-checks server-side."""
-    camp = first_or_404(
-        db.select(Camp).filter_by(slug=slug).options(*loaders.TODOS_OVERVIEW),
-        description="Akce nenalezena.")
+    camp = _camp(slug, *loaders.TODOS_OVERVIEW)
     activities = sorted(camp.activities, key=lambda a: czech_sort_key(a.title))
     data = {
         # order is decided client-side (the table re-sorts on every filter/sort change)
@@ -330,14 +313,14 @@ def camp_todos(slug: str):
 @bp.get("/camps/<slug>/edit")
 @require_edit
 def camp_edit(slug: str):
-    camp = _camp_or_404(slug)
+    camp = _camp(slug)
     return render_template("camp_edit.html", camp=camp, values=_camp_values(camp), errors=[])
 
 
 @bp.post("/camps/<slug>/edit")
 @require_edit
 def camp_edit_save(slug: str):
-    camp = _camp_or_404(slug)
+    camp = _camp(slug)
     allow_meta = can_edit_camp_meta(camp)
     data, errors = camps_service.validate_camp_form(request.form, require_meta=allow_meta)
     if errors:
@@ -365,14 +348,18 @@ def _camp_values(camp: Camp) -> dict:
     }
 
 
-def _render_detail(camp: Camp):
+@bp.get("/camps/<slug>/detail")
+@require_view
+def camp_detail(slug: str):
     """Read-only camp detail: scalar parameters (edited on the separate /edit page)
     plus the taxonomy lists, which are edited in place from the embedded JSON and
     saved via the api PUT endpoints. (Copying taxonomies from another camp is only
     offered at creation, not here.)"""
+    camp = _camp(slug)
+    may_edit = can_edit(camp)
     tax = taxonomy.serialize(camp)
     tax_data = {
-        "may_edit": can_edit(camp),
+        "may_edit": may_edit,
         "tag_kinds": list(taxonomy.TAG_KIND_LABELS.items()),
         "urls": {
             "categories": url_for("api.categories_save", slug=camp.slug),
@@ -386,7 +373,7 @@ def _render_detail(camp: Camp):
     # may_edit here and re-checked by the api. The status reports whether the feature is
     # configured at all (status.enabled), so the template can hide the whole section.
     google_data = {
-        "may_edit": can_edit(camp),
+        "may_edit": may_edit,
         "status": camps_service.google_status(camp),
         "urls": {
             "base": url_for("api.google_status", slug=camp.slug),  # GET / PUT / DELETE
@@ -397,7 +384,6 @@ def _render_detail(camp: Camp):
     }
     # API tokens panel — editor-gated (re-checked by the api). may_edit false → the
     # template omits the tab, the data and the script entirely.
-    may_edit = can_edit(camp)
     tokens_data = {
         "may_edit": may_edit,
         "roles": [["editor", "Editor (zápis)"], ["viewer", "Jen čtení"]],
@@ -417,10 +403,6 @@ def _render_detail(camp: Camp):
         google_data=google_data,
         tokens_data=tokens_data,
     )
-
-# All taxonomy mutations (categories/orgs/tags batch save) live in the api blueprint;
-# the detail page links to them via url_for("api.*"). Copying taxonomies from another
-# camp is offered only on the create form (camp_create), never afterwards.
 
 
 # --- inventory (the global warehouse) ----------------------------------------
