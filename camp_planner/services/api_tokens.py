@@ -13,7 +13,6 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from flask import g
-from sqlalchemy.exc import IntegrityError
 
 from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
@@ -55,11 +54,8 @@ def create(camp: Camp, name: str, role: CampRole, created_by: str) -> tuple[ApiT
     token = ApiToken(name=name, token_hash=_hash(secret), camp_id=camp.id,
                      role=role, created_by=created_by)
     db_session.add(token)
-    try:
+    with errors.unique_or_invalid(f"Token „{name}“ už v tomto táboře existuje."):
         db_session.flush()   # get token.id + catch a duplicate name before auditing
-    except IntegrityError:
-        db_session.rollback()
-        raise errors.Invalid(f"Token „{name}“ už v tomto táboře existuje.") from None
     _audit(token, AuditAction.create)
     db_session.commit()
     return token, secret

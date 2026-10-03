@@ -6,7 +6,6 @@ import logging
 import re
 
 from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
 
 from camp_planner.auth.permissions import can_view
 from camp_planner.extensions import db, db_session
@@ -114,21 +113,15 @@ def create_camp(data: dict, *, copy_from_slug: str | None = None, copy_parts=Non
         longitude=data.get("longitude"),
     )
     db_session.add(camp)
-    try:
-        db_session.flush()  # assign camp.id; a dup slug raises here, before copy_into runs
+    # A dup slug fails at the flush (before copy_into runs), a lost race at the commit.
+    with errors.unique_or_invalid(f"Slug „{slug}“ už používá jiná akce."):
+        db_session.flush()  # assign camp.id
         if source is not None:
             taxonomy.copy_into(camp, source, parts=copy_parts)
-        audit.record(
-            camp_id=camp.id,
-            entity_type=EntityType.camp,
-            entity_id=camp.id,
-            action=AuditAction.create,
-            changes={"name": [None, camp.name], "slug": [None, camp.slug]},
-        )
+        audit.record(camp_id=camp.id, entity_type=EntityType.camp, entity_id=camp.id,
+                     action=AuditAction.create,
+                     changes={"name": [None, camp.name], "slug": [None, camp.slug]})
         db_session.commit()
-    except IntegrityError:  # dup slug at flush, or a race lost at commit
-        db_session.rollback()
-        raise errors.Invalid(f"Slug „{slug}“ už používá jiná akce.") from None
     return camp
 
 

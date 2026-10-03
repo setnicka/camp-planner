@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy.exc import IntegrityError
-
 from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import by_name
@@ -51,16 +49,6 @@ def _refuse_taken(camp_id: int, item: InventoryItem, material: Material | None =
         db.select(Material).filter_by(camp_id=camp_id, inventory_item_id=item.id))
     if other is not None and other is not material:
         raise errors.Invalid(f"Na věc „{item.name}“ už odkazuje materiál „{other.name}“.")
-
-
-def _commit_or_refuse(message: str) -> None:
-    """Commit, or say in words what the unique constraint refused: _refuse_taken only sees
-    what this session knows, two people linking one thing race past it."""
-    try:
-        db_session.commit()
-    except IntegrityError:
-        db_session.rollback()
-        raise errors.Invalid(message) from None
 
 
 def _require_stock() -> None:
@@ -106,7 +94,9 @@ def create_material(camp: Camp, payload: MaterialCreate) -> dict:
             if changes := _relink(existing, item.id):
                 audit.record(camp_id=camp.id, entity_type=EntityType.material,
                              entity_id=existing.id, action=AuditAction.update, changes=changes)
-                _commit_or_refuse(f"Na věc „{item.name}“ už odkazuje jiný materiál.")
+                # _refuse_taken only sees this session; two people linking one thing race past it.
+                with errors.unique_or_invalid(f"Na věc „{item.name}“ už odkazuje jiný materiál."):
+                    db_session.commit()
             return {"material": serialize.material(existing)}
         _refuse_taken(camp.id, item)
     material = Material(camp_id=camp.id, name=name, note=payload.note,
@@ -114,11 +104,8 @@ def create_material(camp: Camp, payload: MaterialCreate) -> dict:
                         url=payload.url if item is None else payload.url or item.url,
                         inventory_item=item)
     db_session.add(material)
-    try:
+    with errors.unique_or_invalid(f"Materiál „{name}“ už v katalogu existuje."):
         db_session.flush()  # assign id; a duplicate normalized_name raises here
-    except IntegrityError:
-        db_session.rollback()
-        raise errors.Invalid(f"Materiál „{name}“ už v katalogu existuje.") from None
     changes = {"name": [None, name]}
     if item is not None:
         changes["inventory_item"] = [None, item.name]
@@ -152,11 +139,8 @@ def update_material(material: Material, payload: MaterialUpdateIn) -> dict:
             changes.update(_relink(material, payload.inventory_item_id))
     if not changes:
         return {"material": serialize.material(material)}
-    try:
+    with errors.unique_or_invalid(f"Materiál „{material.name}“ už v katalogu existuje."):
         db_session.flush()
-    except IntegrityError:
-        db_session.rollback()
-        raise errors.Invalid(f"Materiál „{material.name}“ už v katalogu existuje.") from None
     audit.record(camp_id=material.camp_id, entity_type=EntityType.material, entity_id=material.id,
                  action=AuditAction.update, changes=changes)
     db_session.commit()

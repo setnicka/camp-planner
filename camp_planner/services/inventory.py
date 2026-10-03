@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 
 from flask import g
 from sqlalchemy import update
-from sqlalchemy.exc import IntegrityError
 
 from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditAction, EntityType
@@ -374,11 +373,8 @@ def create_box(payload: InventoryBoxCreate) -> dict:
     box = InventoryBox(name=name, location=payload.location, note=payload.note,
                        virtual=payload.virtual)
     db_session.add(box)
-    try:
+    with errors.unique_or_invalid(f"Krabice „{name}“ už existuje."):
         db_session.flush()
-    except IntegrityError:
-        db_session.rollback()
-        raise errors.Invalid(f"Krabice „{name}“ už existuje.") from None
     _audit(EntityType.inventory_box, box.id, AuditAction.create, {"name": [None, name]})
     db_session.commit()
     return {"box": serialize.inventory_box(box)}
@@ -389,11 +385,8 @@ def update_box(box: InventoryBox, payload: InventoryBoxUpdateIn) -> dict:
         payload.name = _clean_name(payload.name)
     changes = audit.apply_patch(box, payload, ("name", "location", "note", "virtual"))
     if changes:
-        try:
+        with errors.unique_or_invalid("Krabice s tímto názvem už existuje."):
             db_session.flush()
-        except IntegrityError:
-            db_session.rollback()
-            raise errors.Invalid("Krabice s tímto názvem už existuje.") from None
         _audit(EntityType.inventory_box, box.id, AuditAction.update, changes)
         db_session.commit()
     return {"box": serialize.inventory_box(box)}
@@ -608,11 +601,8 @@ def start_check(payload: InventoryCheckCreate) -> dict:
     check = InventoryCheck(name=_clean_name(payload.name), author=_author(),
                            camp=camp)
     db_session.add(check)
-    try:
+    with errors.unique_or_invalid("Jedna inventura už probíhá."):
         db_session.flush()
-    except IntegrityError:
-        db_session.rollback()
-        raise errors.Invalid("Jedna inventura už probíhá.") from None
     changes = {"name": [None, check.name]}
     if camp is not None:
         changes["camp"] = [None, camp.name]

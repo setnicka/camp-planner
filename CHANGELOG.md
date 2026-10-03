@@ -19,6 +19,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Changed
 
+- API:
+  - A duplicated entry in an activity's orgs or tags gets a 422 response.
 - Timeline:
   - Restyled slot boxes, a lighter grid with the night marked.
   - A selected slot highlights its sibling slots and shows its actions and details panes.

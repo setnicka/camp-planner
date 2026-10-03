@@ -177,6 +177,22 @@ def _json_error(exc: HTTPException):
     return jsonify(ok=False, error=exc.description), exc.code or 500
 
 
+@bp.errorhandler(errors.Invalid)
+def _invalid(exc: errors.Invalid):
+    return jsonify(ok=False, error=str(exc)), 400
+
+
+@bp.errorhandler(errors.Conflict)
+def _conflict(exc: errors.Conflict):
+    """Spectree validates only what a view returns, so tests check these bodies against
+    their HTTP_409 schemas."""
+    return jsonify(ok=False, error=str(exc), **exc.extra), 409
+
+
+def _ok(data: dict):
+    return jsonify(ok=True, **data)
+
+
 # --- helpers -----------------------------------------------------------------
 
 def _forbid(message: str) -> None:
@@ -189,16 +205,6 @@ def _forbid(message: str) -> None:
 def _guard(camp: Camp, *, edit: bool) -> None:
     if not (can_edit(camp) if edit else can_view(camp)):
         _forbid("K této akci nemáte oprávnění.")
-
-
-def _run(fn: Callable[[], dict]):
-    """Call a service, mapping its outcome to the JSON envelope."""
-    try:
-        return jsonify(ok=True, **fn())
-    except errors.Invalid as exc:
-        return jsonify(ok=False, error=str(exc)), 400
-    except errors.Conflict as exc:
-        return jsonify(ok=False, error=str(exc), **exc.extra), 409
 
 
 def _camp(slug: str, *options, edit: bool | None) -> Camp:
@@ -221,21 +227,23 @@ def _activity(activity_id: int, *options, edit: bool | None) -> Activity:
     return activity
 
 
-def _slot(slot_id: int, *, edit: bool) -> Slot:
+# Slots, todos and needs are only ever looked up for writes.
+
+def _slot(slot_id: int) -> Slot:
     slot = get_or_404(Slot, slot_id, description="Slot nenalezen.")
-    _guard(slot.activity.camp, edit=edit)
+    _guard(slot.activity.camp, edit=True)
     return slot
 
 
-def _todo(todo_id: int, *, edit: bool) -> Todo:
+def _todo(todo_id: int) -> Todo:
     todo = get_or_404(Todo, todo_id, description="Úkol nenalezen.")
-    _guard(todo.activity.camp, edit=edit)
+    _guard(todo.activity.camp, edit=True)
     return todo
 
 
-def _need(need_id: int, *, edit: bool) -> MaterialNeed:
+def _need(need_id: int) -> MaterialNeed:
     need = get_or_404(MaterialNeed, need_id, description="Potřeba materiálu nenalezena.")
-    _guard(need.activity.camp, edit=edit)
+    _guard(need.activity.camp, edit=True)
     return need
 
 
@@ -250,14 +258,14 @@ def _material(camp: Camp, material_id: int) -> Material:
 @bp.get("/camps")
 @spec.validate(resp=Response(HTTP_200=CampListEnvelope), tags=["camps"])
 def camp_list():
-    return _run(lambda: {"camps": [serialize.camp(c) for c in camps_service.viewable()]})
+    return _ok({"camps": [serialize.camp(c) for c in camps_service.viewable()]})
 
 
 @bp.get("/camps/<slug>")
 @spec.validate(resp=Response(HTTP_200=CampEnvelope, **_AUTH), tags=["camps"])
 def camp_get(slug: str):
     camp = _camp(slug, edit=False)
-    return _run(lambda: {"camp": serialize.camp(camp)})
+    return _ok({"camp": serialize.camp(camp)})
 
 
 @bp.post("/camps")
@@ -266,14 +274,10 @@ def camp_create():
     if not can_create_camp():
         _forbid("Vytvářet akce může jen administrátor.")
     payload = request.context.json
-
-    def run():
-        camp = camps_service.create_camp(
-            payload.model_dump(exclude={"copy_from", "copy_parts"}),
-            copy_from_slug=payload.copy_from, copy_parts=payload.copy_parts)
-        return {"camp": serialize.camp(camp)}
-
-    return _run(run)
+    camp = camps_service.create_camp(
+        payload.model_dump(exclude={"copy_from", "copy_parts"}),
+        copy_from_slug=payload.copy_from, copy_parts=payload.copy_parts)
+    return _ok({"camp": serialize.camp(camp)})
 
 
 @bp.patch("/camps/<slug>")
@@ -283,12 +287,8 @@ def camp_update(slug: str):
     camp = _camp(slug, edit=True)
     allow_meta = can_edit_camp_meta(camp)
     data = request.context.json.model_dump(exclude_unset=True)
-
-    def run():
-        camps_service.save_camp_settings(camp, data, allow_meta=allow_meta)
-        return {"camp": serialize.camp(camp)}
-
-    return _run(run)
+    camps_service.save_camp_settings(camp, data, allow_meta=allow_meta)
+    return _ok({"camp": serialize.camp(camp)})
 
 
 @bp.delete("/camps/<slug>")
@@ -298,7 +298,7 @@ def camp_delete(slug: str):
     camp = _camp(slug, edit=None)  # admin-gated below
     if not can_edit_camp_meta(camp):
         _forbid("Mazat akce může jen administrátor.")
-    return _run(lambda: camps_service.delete_camp(camp))
+    return _ok(camps_service.delete_camp(camp))
 
 
 # --- api tokens (camp-scoped bearer tokens; managed only by a real user) ------
@@ -320,7 +320,7 @@ def _api_token(token_id: int) -> ApiToken:
 def token_list(slug: str):
     _no_api_token()
     camp = _camp(slug, edit=True)
-    return _run(lambda: {"tokens": [serialize.api_token(t) for t in api_tokens.list_for_camp(camp)]})
+    return _ok({"tokens": [serialize.api_token(t) for t in api_tokens.list_for_camp(camp)]})
 
 
 @bp.post("/camps/<slug>/tokens")
@@ -330,12 +330,8 @@ def token_create(slug: str):
     _no_api_token()
     camp = _camp(slug, edit=True)
     payload = request.context.json
-
-    def run():
-        token, secret = api_tokens.create(camp, payload.name, payload.role, g.identity.user_id)
-        return {"token": serialize.api_token(token), "secret": secret}
-
-    return _run(run)
+    token, secret = api_tokens.create(camp, payload.name, payload.role, g.identity.user_id)
+    return _ok({"token": serialize.api_token(token), "secret": secret})
 
 
 @bp.delete("/tokens/<int:token_id>")
@@ -343,7 +339,7 @@ def token_create(slug: str):
 def token_revoke(token_id: int):
     _no_api_token()
     token = _api_token(token_id)
-    return _run(lambda: api_tokens.revoke(token))
+    return _ok(api_tokens.revoke(token))
 
 
 # --- Google Calendar sync (connect / disconnect / push) ----------------------
@@ -353,7 +349,7 @@ def token_revoke(token_id: int):
 def google_status(slug: str):
     """Current Google Calendar connection state for the camp."""
     camp = _camp(slug, edit=True)
-    return _run(lambda: {"google": camps_service.google_status(camp)})
+    return _ok({"google": camps_service.google_status(camp)})
 
 
 @bp.put("/camps/<slug>/google")
@@ -361,7 +357,7 @@ def google_status(slug: str):
 def google_connect(slug: str):
     """Connect the camp to a Google calendar by id (verifies access, queues an export)."""
     camp = _camp(slug, edit=True)
-    return _run(lambda: camps_service.set_google_calendar(camp, request.context.json.calendar_id))
+    return _ok(camps_service.set_google_calendar(camp, request.context.json.calendar_id))
 
 
 @bp.delete("/camps/<slug>/google")
@@ -369,7 +365,7 @@ def google_connect(slug: str):
 def google_disconnect(slug: str):
     """Disconnect the camp from Google (leaves the events already in the calendar)."""
     camp = _camp(slug, edit=True)
-    return _run(lambda: camps_service.disconnect_google(camp))
+    return _ok(camps_service.disconnect_google(camp))
 
 
 @bp.post("/camps/<slug>/google/sync")
@@ -377,7 +373,7 @@ def google_disconnect(slug: str):
 def google_sync_now(slug: str):
     """Deliver any queued outbound changes to Google now ("Synchronizovat nyní")."""
     camp = _camp(slug, edit=True)
-    return _run(lambda: {"result": google_sync.drain(camp), "google": camps_service.google_status(camp)})
+    return _ok({"result": google_sync.drain(camp), "google": camps_service.google_status(camp)})
 
 
 @bp.post("/camps/<slug>/google/resync")
@@ -385,7 +381,7 @@ def google_sync_now(slug: str):
 def google_resync(slug: str):
     """Queue every slot for an outbound push ("Znovu synchronizovat vše")."""
     camp = _camp(slug, edit=True)
-    return _run(lambda: {"result": google_sync.resync_all(camp), "google": camps_service.google_status(camp)})
+    return _ok({"result": google_sync.resync_all(camp), "google": camps_service.google_status(camp)})
 
 
 @bp.get("/camps/<slug>/google/pull")
@@ -393,7 +389,7 @@ def google_resync(slug: str):
 def google_pull_preview(slug: str):
     """Compute the reviewable list of changes made in Google ("Načíst změny z Google")."""
     camp = _camp(slug, edit=True)
-    return _run(lambda: google_sync.preview_pull(camp))
+    return _ok(google_sync.preview_pull(camp))
 
 
 @bp.post("/camps/<slug>/google/pull")
@@ -405,7 +401,7 @@ def google_pull_apply(slug: str):
     `rev` (the timeline changed since the preview) yields 409."""
     camp = _camp(slug, edit=True)
     payload = request.context.json
-    return _run(lambda: {
+    return _ok({
         **google_sync.apply_pull(camp, payload.decisions, rev=payload.rev),
         "google": camps_service.google_status(camp),  # fresh status — saves the client a GET
     })
@@ -416,14 +412,14 @@ def google_pull_apply(slug: str):
 def _save_taxonomy(camp: Camp, save_fn: Callable):
     """The items were shape-validated by the schema; the service does the cross-item
     reconcile (raising errors.Invalid on a duplicate or blocked delete)."""
-    return _run(lambda: {"items": save_fn(camp, request.context.json.items)})
+    return _ok({"items": save_fn(camp, request.context.json.items)})
 
 
 @bp.get("/camps/<slug>/categories")
 @spec.validate(resp=Response(HTTP_200=CategoriesEnvelope, **_AUTH), tags=["taxonomy"])
 def categories_get(slug: str):
     camp = _camp(slug, edit=False)
-    return _run(lambda: {"items": taxonomy.categories(camp)})
+    return _ok({"items": taxonomy.categories(camp)})
 
 
 @bp.put("/camps/<slug>/categories")
@@ -437,7 +433,7 @@ def categories_save(slug: str):
 @spec.validate(resp=Response(HTTP_200=OrgsEnvelope, **_AUTH), tags=["taxonomy"])
 def orgs_get(slug: str):
     camp = _camp(slug, edit=False)
-    return _run(lambda: {"items": taxonomy.orgs(camp)})
+    return _ok({"items": taxonomy.orgs(camp)})
 
 
 @bp.put("/camps/<slug>/orgs")
@@ -451,7 +447,7 @@ def orgs_save(slug: str):
 @spec.validate(resp=Response(HTTP_200=TagDefsEnvelope, **_AUTH), tags=["taxonomy"])
 def tags_get(slug: str):
     camp = _camp(slug, edit=False)
-    return _run(lambda: {"items": taxonomy.tags(camp)})
+    return _ok({"items": taxonomy.tags(camp)})
 
 
 @bp.put("/camps/<slug>/tags")
@@ -467,7 +463,7 @@ def tags_save(slug: str):
 @spec.validate(resp=Response(HTTP_200=TimelineOut, **_AUTH), tags=["timeline"])
 def timeline_get(slug: str):
     camp = _camp(slug, *loaders.TIMELINE, edit=False)
-    return _run(lambda: build_timeline(camp))
+    return _ok(build_timeline(camp))
 
 
 @bp.patch("/camps/<slug>/timeline")
@@ -476,7 +472,7 @@ def timeline_get(slug: str):
 def timeline_save(slug: str):
     # Eager-load: save_timeline walks every activity's slots — lazy would be N+1 per save.
     camp = _camp(slug, *loaders.TIMELINE, edit=True)
-    return _run(lambda: slots.save_timeline(camp, request.context.json))
+    return _ok(slots.save_timeline(camp, request.context.json))
 
 
 # --- activities --------------------------------------------------------------
@@ -485,28 +481,28 @@ def timeline_save(slug: str):
 @spec.validate(resp=Response(HTTP_200=ActivityListEnvelope, **_AUTH), tags=["activities"])
 def activity_list(slug: str):
     camp = _camp(slug, *loaders.ACTIVITIES, edit=False)
-    return _run(lambda: {"activities": [serialize.activity(a) for a in camp.activities]})
+    return _ok({"activities": [serialize.activity(a) for a in camp.activities]})
 
 
 @bp.get("/activities/<int:activity_id>")
 @spec.validate(resp=Response(HTTP_200=ActivityEnvelope, **_AUTH), tags=["activities"])
 def activity_get(activity_id: int):
     activity = _activity(activity_id, *loaders.ACTIVITY, edit=False)
-    return _run(lambda: {"activity": serialize.activity(activity)})
+    return _ok({"activity": serialize.activity(activity)})
 
 
 @bp.post("/camps/<slug>/activities")
 @spec.validate(json=ActivityCreate, resp=Response(HTTP_200=ActivityEnvelope, **_AUTH_400), tags=["activities"])
 def activity_create(slug: str):
     camp = _camp(slug, edit=True)
-    return _run(lambda: activities.create_activity(camp, request.context.json))
+    return _ok(activities.create_activity(camp, request.context.json))
 
 
 @bp.patch("/activities/<int:activity_id>")
 @spec.validate(json=ActivityUpdate, resp=Response(HTTP_200=ActivityEnvelope, **_AUTH_400), tags=["activities"])
 def activity_update(activity_id: int):
     activity = _activity(activity_id, *loaders.ACTIVITY, edit=True)
-    return _run(lambda: activities.update_activity(activity, request.context.json))
+    return _ok(activities.update_activity(activity, request.context.json))
 
 
 @bp.delete("/activities/<int:activity_id>")
@@ -514,7 +510,7 @@ def activity_update(activity_id: int):
 def activity_delete(activity_id: int):
     """Delete an activity; refused (400) while it still has slots on the timeline."""
     activity = _activity(activity_id, edit=True)
-    return _run(lambda: activities.delete_activity(activity))
+    return _ok(activities.delete_activity(activity))
 
 
 @bp.post("/activities/<int:source_id>/merge")
@@ -524,7 +520,7 @@ def activity_merge(source_id: int):
     deleted. Both must belong to the same camp."""
     source = _activity(source_id, edit=True)
     target = _activity(request.context.json.into, edit=None)  # service enforces same-camp
-    return _run(lambda: activities.merge_activities(source, target))
+    return _ok(activities.merge_activities(source, target))
 
 
 @bp.put("/activities/<int:activity_id>/orgs")
@@ -532,14 +528,14 @@ def activity_merge(source_id: int):
 def activity_orgs(activity_id: int):
     """Set the activity's garant/helper orgs (each org carries a role)."""
     activity = _activity(activity_id, edit=True)
-    return _run(lambda: activities.set_orgs(activity, request.context.json))
+    return _ok(activities.set_orgs(activity, request.context.json))
 
 
 @bp.put("/activities/<int:activity_id>/tags")
 @spec.validate(json=TagsIn, resp=Response(HTTP_200=TagsEnvelope, **_AUTH_400), tags=["activities"])
 def activity_tags(activity_id: int):
     activity = _activity(activity_id, edit=True)
-    return _run(lambda: activities.set_tags(activity, request.context.json))
+    return _ok(activities.set_tags(activity, request.context.json))
 
 
 @bp.patch("/activities/<int:activity_id>/tags/<int:tag_id>")
@@ -551,7 +547,7 @@ def activity_tag_value(activity_id: int, tag_id: int):
     link = next((t for t in activity.tags if t.tag_id == tag_id), None)
     if link is None:
         abort(404, "Tag není na této aktivitě použit.")
-    return _run(lambda: activities.set_tag_value(link, request.context.json))
+    return _ok(activities.set_tag_value(link, request.context.json))
 
 
 # --- slots -------------------------------------------------------------------
@@ -564,8 +560,8 @@ def activity_tag_value(activity_id: int, tag_id: int):
 @spec.validate(json=SlotUpdateIn, resp=Response(HTTP_200=SlotEnvelope, **_AUTH_400), tags=["timeline"])
 def update_slot(slot_id: int):
     """Set which orgs attend this slot and/or its display-name override."""
-    slot = _slot(slot_id, edit=True)
-    return _run(lambda: slots.update_slot(slot, request.context.json))
+    slot = _slot(slot_id)
+    return _ok(slots.update_slot(slot, request.context.json))
 
 
 # --- materials ---------------------------------------------------------------
@@ -576,7 +572,7 @@ def update_slot(slot_id: int):
 @spec.validate(resp=Response(HTTP_200=MaterialListEnvelope, **_AUTH), tags=["materials"])
 def material_list(slug: str):
     camp = _camp(slug, *loaders.MATERIALS, edit=False)
-    return _run(lambda: materials.list_materials(camp))
+    return _ok(materials.list_materials(camp))
 
 
 @bp.get("/camps/<slug>/materials/overview")
@@ -585,14 +581,14 @@ def material_overview(slug: str):
     """Camp-wide materials page: every catalog material with the activity needs using it
     (the frontend computes per-unit sums)."""
     camp = _camp(slug, *loaders.MATERIALS_OVERVIEW, edit=False)
-    return _run(lambda: materials.list_materials_overview(camp))
+    return _ok(materials.list_materials_overview(camp))
 
 
 @bp.post("/camps/<slug>/materials")
 @spec.validate(json=MaterialCreate, resp=Response(HTTP_200=MaterialEnvelope, **_AUTH_400), tags=["materials"])
 def material_create(slug: str):
     camp = _camp(slug, edit=True)
-    return _run(lambda: materials.create_material(camp, request.context.json))
+    return _ok(materials.create_material(camp, request.context.json))
 
 
 @bp.patch("/camps/<slug>/materials/<int:material_id>")
@@ -601,7 +597,7 @@ def material_update(slug: str, material_id: int):
     """Edit a catalog material (name / default unit / note / url)."""
     camp = _camp(slug, edit=True)
     material = _material(camp, material_id)
-    return _run(lambda: materials.update_material(material, request.context.json))
+    return _ok(materials.update_material(material, request.context.json))
 
 
 @bp.post("/camps/<slug>/materials/<int:source_id>/merge")
@@ -611,7 +607,7 @@ def material_merge(slug: str, source_id: int):
     camp = _camp(slug, edit=True)
     source = _material(camp, source_id)
     target = _material(camp, request.context.json.into)
-    return _run(lambda: materials.merge_materials(camp, source, target))
+    return _ok(materials.merge_materials(camp, source, target))
 
 
 @bp.delete("/camps/<slug>/materials/<int:material_id>")
@@ -620,28 +616,28 @@ def material_delete(slug: str, material_id: int):
     """Delete a catalog material; refused (400) while activities still use it."""
     camp = _camp(slug, edit=True)
     material = _material(camp, material_id)
-    return _run(lambda: materials.delete_material(material))
+    return _ok(materials.delete_material(material))
 
 
 @bp.post("/activities/<int:activity_id>/materials")
 @spec.validate(json=MaterialNeedAddIn, resp=Response(HTTP_200=MaterialNeedEnvelope, **_AUTH_400), tags=["materials"])
 def material_need_add(activity_id: int):
     activity = _activity(activity_id, edit=True)
-    return _run(lambda: materials.add_need(activity, request.context.json))
+    return _ok(materials.add_need(activity, request.context.json))
 
 
 @bp.patch("/material-needs/<int:need_id>")
 @spec.validate(json=MaterialNeedUpdateIn, resp=Response(HTTP_200=MaterialNeedEnvelope, **_AUTH_400), tags=["materials"])
 def material_need_update(need_id: int):
-    need = _need(need_id, edit=True)
-    return _run(lambda: materials.update_need(need, request.context.json))
+    need = _need(need_id)
+    return _ok(materials.update_need(need, request.context.json))
 
 
 @bp.delete("/material-needs/<int:need_id>")
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH), tags=["materials"])
 def material_need_delete(need_id: int):
-    need = _need(need_id, edit=True)
-    return _run(lambda: materials.delete_need(need))
+    need = _need(need_id)
+    return _ok(materials.delete_need(need))
 
 
 # --- todos -------------------------------------------------------------------
@@ -651,28 +647,28 @@ def material_need_delete(need_id: int):
 def todo_overview(slug: str):
     """Camp-wide TODO overview: every activity's todos, each carrying its activity."""
     camp = _camp(slug, *loaders.TODOS_OVERVIEW, edit=False)
-    return _run(lambda: todos.list_todos_overview(camp))
+    return _ok(todos.list_todos_overview(camp))
 
 
 @bp.post("/activities/<int:activity_id>/todos")
 @spec.validate(json=TodoCreate, resp=Response(HTTP_200=TodoEnvelope, **_AUTH_400), tags=["todos"])
 def todo_create(activity_id: int):
     activity = _activity(activity_id, edit=True)
-    return _run(lambda: todos.create_todo(activity, request.context.json))
+    return _ok(todos.create_todo(activity, request.context.json))
 
 
 @bp.patch("/todos/<int:todo_id>")
 @spec.validate(json=TodoUpdate, resp=Response(HTTP_200=TodoEnvelope, **_AUTH_400), tags=["todos"])
 def todo_update(todo_id: int):
-    todo = _todo(todo_id, edit=True)
-    return _run(lambda: todos.update_todo(todo, request.context.json))
+    todo = _todo(todo_id)
+    return _ok(todos.update_todo(todo, request.context.json))
 
 
 @bp.delete("/todos/<int:todo_id>")
 @spec.validate(resp=Response(HTTP_200=DeletedEnvelope, **_AUTH), tags=["todos"])
 def todo_delete(todo_id: int):
-    todo = _todo(todo_id, edit=True)
-    return _run(lambda: todos.delete_todo(todo))
+    todo = _todo(todo_id)
+    return _ok(todos.delete_todo(todo))
 
 
 # --- audit log (read-only history) -------------------------------------------
@@ -685,18 +681,14 @@ def audit_list(slug: str):
     high-level structural changes only."""
     camp = _camp(slug, edit=False)
     q = request.context.query
-
-    def run():
-        res = audit.list_audit(
-            camp, activity_id=q.activity_id, entity_type=q.entity_type,
-            entity_id=q.entity_id, camp_level=q.camp_level, before=q.before, limit=q.limit)
-        # Link activity/material entries to their pages — only on cross-entity (whole-camp)
-        # feeds; within one activity's or one row's thread the target never varies.
-        if q.activity_id is None and q.entity_id is None:
-            _link_audit_entities(camp, res["entries"])
-        return res
-
-    return _run(run)
+    res = audit.list_audit(
+        camp, activity_id=q.activity_id, entity_type=q.entity_type,
+        entity_id=q.entity_id, camp_level=q.camp_level, before=q.before, limit=q.limit)
+    # Link activity/material entries to their pages — only on cross-entity (whole-camp)
+    # feeds; within one activity's or one row's thread the target never varies.
+    if q.activity_id is None and q.entity_id is None:
+        _link_audit_entities(camp, res["entries"])
+    return _ok(res)
 
 
 def _link_audit_entities(camp: Camp, entries: list[dict]) -> None:
@@ -765,7 +757,7 @@ def _check(check_id: int, *, edit: bool) -> InventoryCheck:
 def inventory_box_state(box_id: int):
     """A box's current state: contents, the running check's observations and progress."""
     box = _box(box_id, *loaders.INVENTORY_BOX, edit=False)
-    return _run(lambda: inventory.box_state(box))
+    return _ok(inventory.box_state(box))
 
 
 @bp.get("/inventory/boxes/<int:box_id>/history")
@@ -773,7 +765,7 @@ def inventory_box_state(box_id: int):
 def inventory_box_history(box_id: int):
     """What the finished checks said about the box's current contents."""
     box = _box(box_id, *loaders.INVENTORY_BOX_ITEMS, edit=False)
-    return _run(lambda: inventory.box_history(box))
+    return _ok(inventory.box_history(box))
 
 
 @bp.get("/inventory/items")
@@ -781,7 +773,7 @@ def inventory_box_history(box_id: int):
 def inventory_item_list():
     """The things a camp material can stand for: every live item, with its box."""
     _inventory_guard(edit=False)
-    return _run(inventory.pick_items)
+    return _ok(inventory.pick_items())
 
 
 @bp.post("/inventory/boxes")
@@ -789,7 +781,7 @@ def inventory_item_list():
                resp=Response(HTTP_200=InventoryBoxEnvelope, **_AUTH_400), tags=["inventory"])
 def inventory_box_create():
     _inventory_guard(edit=True)
-    return _run(lambda: inventory.create_box(request.context.json))
+    return _ok(inventory.create_box(request.context.json))
 
 
 @bp.patch("/inventory/boxes/<int:box_id>")
@@ -797,7 +789,7 @@ def inventory_box_create():
                resp=Response(HTTP_200=InventoryBoxEnvelope, **_AUTH_400), tags=["inventory"])
 def inventory_box_update(box_id: int):
     box = _box(box_id, edit=True)
-    return _run(lambda: inventory.update_box(box, request.context.json))
+    return _ok(inventory.update_box(box, request.context.json))
 
 
 @bp.delete("/inventory/boxes/<int:box_id>")
@@ -805,7 +797,7 @@ def inventory_box_update(box_id: int):
 def inventory_box_delete(box_id: int):
     """Delete an empty box; refused (400) while anything is in it."""
     box = _box(box_id, *loaders.INVENTORY_BOX_ITEMS, edit=True)
-    return _run(lambda: inventory.delete_box(box))
+    return _ok(inventory.delete_box(box))
 
 
 @bp.post("/inventory/items")
@@ -814,7 +806,7 @@ def inventory_box_delete(box_id: int):
 def inventory_item_create():
     """Add a thing to a box. During a check it counts as observed right away."""
     _inventory_guard(edit=True)
-    return _run(lambda: inventory.create_item(request.context.json))
+    return _ok(inventory.create_item(request.context.json))
 
 
 @bp.patch("/inventory/items/<int:item_id>")
@@ -824,7 +816,7 @@ def inventory_item_update(item_id: int):
     """Edit a thing. A new box_id is a move; count and unit are refused (400) while a
     check runs, they are the check's to write."""
     item = _item(item_id)
-    return _run(lambda: inventory.update_item(item, request.context.json))
+    return _ok(inventory.update_item(item, request.context.json))
 
 
 @bp.post("/inventory/items/<int:item_id>/discard")
@@ -832,7 +824,7 @@ def inventory_item_update(item_id: int):
 def inventory_item_discard(item_id: int):
     """Retire a thing: it leaves the boxes but keeps its history."""
     item = _item(item_id)
-    return _run(lambda: inventory.discard_item(item))
+    return _ok(inventory.discard_item(item))
 
 
 @bp.post("/inventory/items/<int:item_id>/restore")
@@ -841,7 +833,7 @@ def inventory_item_discard(item_id: int):
 def inventory_item_restore(item_id: int):
     """Bring a retired thing back into a box."""
     item = _item(item_id)
-    return _run(lambda: inventory.restore_item(item, request.context.json))
+    return _ok(inventory.restore_item(item, request.context.json))
 
 
 @bp.delete("/inventory/items/<int:item_id>")
@@ -852,7 +844,7 @@ def inventory_item_delete(item_id: int):
     For mistakes; retiring it (POST …/discard) is what "we no longer have it" means.
     """
     item = _item(item_id)
-    return _run(lambda: inventory.delete_item(item))
+    return _ok(inventory.delete_item(item))
 
 
 @bp.post("/inventory/items/<int:item_id>/photos")
@@ -864,7 +856,7 @@ def inventory_item_photos(item_id: int):
     blueprint hook before it is read.
     """
     item = _item(item_id)
-    return _run(lambda: inventory.add_photos(item, [f for f in request.files.getlist("photos") if f]))
+    return _ok(inventory.add_photos(item, [f for f in request.files.getlist("photos") if f]))
 
 
 @bp.delete("/inventory/photos/<int:photo_id>")
@@ -872,7 +864,7 @@ def inventory_item_photos(item_id: int):
 def inventory_photo_delete(photo_id: int):
     """Remove a photo; answers with the item it belonged to."""
     photo = _photo(photo_id)
-    return _run(lambda: inventory.delete_photo(photo))
+    return _ok(inventory.delete_photo(photo))
 
 
 @bp.post("/inventory/photos/<int:photo_id>/title")
@@ -880,7 +872,7 @@ def inventory_photo_delete(photo_id: int):
 def inventory_photo_title(photo_id: int):
     """Make this photo the item's title photo (first in the list)."""
     photo = _photo(photo_id)
-    return _run(lambda: inventory.set_title_photo(photo))
+    return _ok(inventory.set_title_photo(photo))
 
 
 @bp.post("/inventory/checks")
@@ -889,7 +881,7 @@ def inventory_photo_title(photo_id: int):
 def inventory_check_start():
     """Open an inventory check. Refused (400) while another one is running."""
     _inventory_guard(edit=True)
-    return _run(lambda: inventory.start_check(request.context.json))
+    return _ok(inventory.start_check(request.context.json))
 
 
 @bp.get("/inventory/checks/<int:check_id>/preview")
@@ -898,7 +890,7 @@ def inventory_check_start():
 def inventory_check_preview(check_id: int):
     """What completing the check would do right now."""
     check = _check(check_id, edit=False)
-    return _run(lambda: inventory.preview_check(check))
+    return _ok(inventory.preview_check(check))
 
 
 @bp.post("/inventory/checks/<int:check_id>/complete")
@@ -907,7 +899,7 @@ def inventory_check_preview(check_id: int):
 def inventory_check_complete(check_id: int):
     """Write every observation into its item and freeze the check. 409 once it is."""
     check = _check(check_id, edit=True)
-    return _run(lambda: inventory.complete_check(check))
+    return _ok(inventory.complete_check(check))
 
 
 @bp.delete("/inventory/checks/<int:check_id>")
@@ -918,7 +910,7 @@ def inventory_check_cancel(check_id: int):
     Finished ones are history and cannot be deleted (400).
     """
     check = _check(check_id, edit=True)
-    return _run(lambda: inventory.cancel_check(check))
+    return _ok(inventory.cancel_check(check))
 
 
 @bp.put("/inventory/boxes/<int:box_id>/records/<int:item_id>")
@@ -932,7 +924,7 @@ def inventory_record_upsert(box_id: int, item_id: int):
     """
     box = _box(box_id, *loaders.INVENTORY_BOX, edit=True)
     item = _item(item_id)
-    return _run(lambda: inventory.upsert_record(box, item, request.context.json))
+    return _ok(inventory.upsert_record(box, item, request.context.json))
 
 
 @bp.delete("/inventory/boxes/<int:box_id>/records/<int:item_id>")
@@ -941,4 +933,4 @@ def inventory_record_delete(box_id: int, item_id: int):
     """Forget the observation: the item goes back to unchecked."""
     box = _box(box_id, *loaders.INVENTORY_BOX, edit=True)
     item = _item(item_id)
-    return _run(lambda: inventory.delete_record(box, item))
+    return _ok(inventory.delete_record(box, item))

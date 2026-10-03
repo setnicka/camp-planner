@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
 
-from sqlalchemy.exc import IntegrityError
-
 from camp_planner.extensions import db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Category, Tag, TagKind
@@ -98,11 +96,10 @@ def _reconcile(
     if before != after:
         audit.record(camp_id=camp.id, entity_type=entity_type, entity_id=None,
                      action=AuditAction.update, changes={"items": [before, after]})
-    try:
+    # Unique-constraint backstop (race / in-place swap).
+    with errors.unique_or_invalid(
+            "Uložení selhalo – některá hodnota se opakuje. Zkuste to prosím znovu."):
         db_session.commit()
-    except IntegrityError:  # unique-constraint backstop (race / in-place swap)
-        db_session.rollback()
-        raise errors.Invalid("Uložení selhalo – některá hodnota se opakuje. Zkuste to prosím znovu.") from None
 
 
 # Appliers just write to the ORM row; the schema already validated the fields.

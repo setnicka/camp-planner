@@ -15,6 +15,7 @@ from camp_planner.extensions import db
 from camp_planner.models.camp import Camp, Category
 from camp_planner.models.google import GoogleSyncOp
 from camp_planner.models.slot import Slot, SlotRole
+from camp_planner.schemas import GooglePullConflictOut
 from camp_planner.services import camps as camps_service
 from camp_planner.services import google_client, google_sync
 
@@ -855,6 +856,8 @@ def test_apply_pull_stale_rev_conflicts(client, seeded, gcal):
                        json={"rev": stale_rev, "decisions": [{"key": tc_key, "action": "apply"}]},
                        headers=editor(seeded["slug"]))
     assert resp.status_code == 409  # stale rev rejected; nothing applied
+    # The errorhandler's body skips spectree's response validation.
+    assert GooglePullConflictOut.model_validate(resp.get_json()).rev == body["rev"] + 1
     db.session.expire_all()
     assert db.session.get(Slot, slot.id).start_at == datetime(2026, 7, 4, 14, 0)
 
