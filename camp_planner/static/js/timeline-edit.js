@@ -8,7 +8,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
-  const { el, api, withId, canHover, openModal, chipGroup, toast, toastNext, plural } = window.cpDom;
+  const { el, api, withId, canHover, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -435,26 +435,22 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function openSlotType(item) {
     const current = creates.has(String(item.id)) ? creates.get(String(item.id)).role : (item.role || "main");
     const roles = chipGroup(Object.entries(ROLE_LABEL), { selected: current });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Uložit");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Typ slotu"),
-      el("div", { class: "cp-pane" }, roles.node),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", () => { close(); changeSlotType(item, roles.get()); });
+    formModal({
+      title: "Typ slotu",
+      pane: el("div", { class: "cp-pane" }, roles.node),
+      onSubmit: (close) => { close(); changeSlotType(item, roles.get()); },
+    });
   }
 
   // --- floating action bar (timeline.js): this mode's actions -----------------------
   setBarActions((it) => {
     const saved = it.slotId != null;   // attendees and a name override need a saved slot id
     return editing ? [
-      saved && { label: "✎ Upravit slot", onClick: () => openSlotEdit(it) },
+      saved && { label: "✎ Upravit slot", onClick: () => openSlotDialog(it, true) },
       { label: "↺ Typ slotu", onClick: () => openSlotType(it) },
       { label: "🗑 Smazat blok", danger: true, onClick: deleteSelected },
     ] : [
-      saved && { label: "Přiřadit orgy", onClick: () => openSlotOrgs(it) },
+      saved && { label: "Přiřadit orgy", onClick: () => openSlotDialog(it, false) },
       { label: "ℹ️ Detail", onClick: () => openDetail(it) },
     ];
   });
@@ -470,38 +466,24 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     });
   }
 
-  // --- slot attendees (who staffs this block) --------------------------------
-  // Shared dialog (cpSlotOrgsEdit) — same window as the activity detail page. The PATCH is a
-  // standalone commit (not part of the move/create/delete batch; doesn't touch timeline_rev);
-  // on save we re-render the slot's segments and refresh the display-filter dim.
-  function openSlotOrgs(item) {
-    const slotId = item.slotId;
-    window.cpSlotOrgsEdit({
-      orgs: payload.orgs,
-      selected: (item._seg && item._seg.attending) || [],
-      url: withId(EDIT.slot, slotId),
-      onSaved: (_orgs, ids) => {
-        rerenderSegments(slotId, (seg) => { seg.attending = ids; });
-        applyHeights();   // attendees changed → refresh the display filter's dim (e.g. an "attending:" filter)
-        showBar();        // and the card
-      },
-    });
-  }
-
-  // --- slot edit in edit mode (name override + attendees, shared dialog) ------
-  // Standalone PATCH (like the attendees one — not part of the batch, doesn't touch
-  // timeline_rev). An empty name clears the override → the slot shows the activity title.
-  function openSlotEdit(item) {
+  // --- slot attendees, and in edit mode the name override ---------------------
+  // The shared dialog (cpSlotOrgsEdit) of the activity detail page. Its PATCH is a standalone
+  // commit (not part of the move/create/delete batch; doesn't touch timeline_rev). An empty
+  // name clears the override, so the slot shows the activity title.
+  function openSlotDialog(item, withName) {
     const slotId = item.slotId;
     const seg = item._seg || {};
     window.cpSlotOrgsEdit({
       orgs: payload.orgs,
       selected: seg.attending || [],
       url: withId(EDIT.slot, slotId),
-      withName: true, name: seg.override_name || "", namePlaceholder: seg.title || "",
+      ...(withName && { withName, name: seg.override_name || "", namePlaceholder: seg.title || "" }),
       onSaved: (_orgs, ids, overrideName) => {
-        rerenderSegments(slotId, (s) => { s.attending = ids; s.override_name = overrideName; });
-        applyHeights();   // attendees changed → refresh the display filter's dim
+        rerenderSegments(slotId, (s) => {
+          s.attending = ids;
+          if (withName) s.override_name = overrideName;
+        });
+        applyHeights();   // attendees changed → refresh the display filter's dim (e.g. an "attending:" filter)
         showBar();        // and the card
       },
     });
