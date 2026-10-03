@@ -109,7 +109,6 @@
   {{ js('js/history-feed.js') }}
   {{ js('js/settings.js') }}
   {% if google_data.status.enabled and google_data.may_edit %}
-    {{ js('js/fuzzy.js') }}
     {{ js('js/google-sync.js') }}
   {% endif %}
   {% if tokens_data.may_edit %}

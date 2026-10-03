@@ -55,19 +55,9 @@
   color: var(--cp-text);
 }
 
-/* the connect button (content.css only styles .cp-primary inside forms/modals) */
-.cp-google .cp-primary {
-  font: inherit;
-  padding: 0.3rem 0.8rem;
-  border: 1px solid var(--cp-accent);
-  background: var(--cp-accent);
-  color: var(--cp-text-inverse);
-  font-weight: 600;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.cp-google .cp-primary:disabled { opacity: .5; cursor: default; }
-.cp-google .cp-primary:hover:not(:disabled) { filter: brightness(1.06); }
+/* the shared button recipe (components.css) at the tab's tighter metrics */
+.cp-google .cp-primary, .cp-google .cp-cancel { padding: 0.3rem 0.8rem; border-radius: 5px; }
+.cp-google .cp-primary { font-weight: 600; }
 
 .cp-google-pending { color: var(--cp-warning-text); }
 .cp-google-error {
@@ -136,12 +126,3 @@
 .cp-google-pick-search { padding: 0.6rem 0.9rem 0; }
 
 .cp-google-review-actions { margin-top: 0.7rem; display: flex; gap: 0.5rem; }
-.cp-google-review-actions .cp-primary {
-  font: inherit; padding: 0.3rem 0.8rem; border: 1px solid var(--cp-accent);
-  background: var(--cp-accent); color: var(--cp-text-inverse); font-weight: 600; border-radius: 5px; cursor: pointer;
-}
-.cp-google-review-actions .cp-primary:disabled { opacity: .5; cursor: default; }
-.cp-google-review-actions .cp-cancel {
-  font: inherit; padding: 0.3rem 0.8rem; border: 1px solid var(--cp-border);
-  background: var(--cp-surface); color: var(--cp-text); border-radius: 5px; cursor: pointer;
-}

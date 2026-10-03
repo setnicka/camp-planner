@@ -105,6 +105,27 @@
   {%- endif %}
 {% endmacro %}
 
+{# Both shells: the no-script notice and the flashed messages, above the content. #}
+{% macro flashes() %}
+<noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul class="cp-flashes">
+      {% for category, message in messages %}<li class="cp-flash-{{ category }}">{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+{% endmacro %}
+
+{# Both shells: the section-tab strip and the theme switch scripts; a pinned theme leaves
+   the switch nothing to wire. #}
+{% macro shell_scripts(force_theme=none) %}
+<script src="{{ url_for('main.static', filename='js/header.js') }}" defer></script>
+{%- if not force_theme %}
+<script src="{{ url_for('main.static', filename='js/theme.js') }}" defer></script>
+{%- endif %}
+{% endmacro %}
+
 {% macro errors_list(errors) %}
   {% if errors %}
     <ul class="cp-flashes">{% for e in errors %}<li class="cp-flash-error">{{ e }}</li>{% endfor %}</ul>

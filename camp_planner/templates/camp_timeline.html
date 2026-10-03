@@ -98,8 +98,7 @@
   {# shared helpers, for the editing modules and the iCal export modal #}
   {{ js('js/dom.js') }}
   {% if can_edit(camp) %}
-  {# editor-only: fuzzy search + the editing module, before timeline.js so it can call them #}
-  {{ js('js/fuzzy.js') }}
+  {# editor-only: the editing modules, before timeline.js so it can call them #}
   {{ js('js/slot-orgs.js') }}
   {{ js('js/activity-picker.js') }}
   {{ js('js/timeline-edit.js') }}

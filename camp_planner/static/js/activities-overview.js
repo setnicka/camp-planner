@@ -13,7 +13,7 @@
   const dataEl = document.getElementById("cp-overview-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, swatch, dash, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup, orgInitials } = window.cpDom;
+  const { el, api, withId, swatch, dash, submit, formModal, chipGroup, mergePicker, filterSlider, orgFilterHead, toast, plural, freezeColumns, actionGroup, orgInitials, joinNodes } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
@@ -112,11 +112,9 @@
   const orgSpan = (cls, initials) => orgInitials(initials, orgName.get(initials), cls);
   function orgCell(r) {
     if (!r.garants.length && !r.helpers.length) return el("td", null, dash());
-    const td = el("td", { class: "cp-ov-orgs" });
-    const parts = r.garants.map((i) => orgSpan("cp-ov-garant", i))
-      .concat(r.helpers.map((i) => orgSpan("cp-ov-helper", i)));
-    parts.forEach((p, i) => { if (i) td.append(", "); td.append(p); });
-    return td;
+    return el("td", { class: "cp-ov-orgs" }, ...joinNodes([
+      ...r.garants.map((i) => orgSpan("cp-ov-garant", i)),
+      ...r.helpers.map((i) => orgSpan("cp-ov-helper", i))]));
   }
 
   function progressCell(c) {
@@ -150,10 +148,9 @@
       { label: "⤳", title: "Sloučit s jinou aktivitou", onClick: () => openMerge(r) },
       // An activity with placed slots cannot go (the api refuses too): greyed, saying why on
       // hover or tap.
-      slotCount(r)
-        ? { label: "✕", title: "Smazat aktivitu", danger: true,
-            disabled: "Nelze smazat – aktivita má naplánované sloty. Nejprve je odeber z timeline." }
-        : { label: "✕", title: "Smazat aktivitu", danger: true, onClick: (e) => deleteActivity(r, e.currentTarget) },
+      { label: "✕", title: "Smazat aktivitu", danger: true,
+        disabled: slotCount(r) && "Nelze smazat – aktivita má naplánované sloty. Nejprve je odeber z timeline.",
+        onClick: (e) => deleteActivity(r, e.currentTarget) },
     ]));
   }
 
@@ -338,15 +335,14 @@
     renderTableBody();
   }
 
-  // A header whose label is a sort toggle. Registers its arrow indicator for in-place updates.
-  // In chronological mode the header keeps its normal look but no longer sorts (setSort no-ops,
-  // and arrowFor drops the arrow since no column owns the order).
-  function sortHead(label, key, extraClass) {
+  // A header label that is a sort toggle. Registers its arrow indicator for in-place updates.
+  // In chronological mode it keeps its normal look but no longer sorts (setSort no-ops, and
+  // arrowFor drops the arrow since no column owns the order).
+  function sortBtn(label, key) {
     const arrow = el("span", { class: "cp-th-arrow" }, arrowFor(key));
     sortArrows.set(key, arrow);
-    const btn = el("button", { type: "button", class: "cp-th-sort" }, label, arrow);
-    btn.addEventListener("click", () => setSort(key));
-    return el("th", { class: extraClass || null }, btn);
+    return el("button", { type: "button", class: "cp-th-sort", title: "Seřadit", onclick: () => setSort(key) },
+      label, arrow);
   }
 
   const onFilterChange = () => { writeHash(); renderTableBody(); };
@@ -382,16 +378,9 @@
       (v) => { if (v) filter.tags.set(tag.id, v); else filter.tags.delete(tag.id); },
       onFilterChange);
 
-    let titleNode;
-    if (tag.kind === "check" || tag.kind === "progress") {
-      const key = "tag:" + tag.id + ":" + tag.kind;
-      const arrow = el("span", { class: "cp-th-arrow" }, arrowFor(key));
-      sortArrows.set(key, arrow);
-      titleNode = el("button", { type: "button", class: "cp-th-sort", title: "Seřadit" }, tag.name, arrow);
-      titleNode.addEventListener("click", () => setSort(key));
-    } else {
-      titleNode = el("span", { class: "cp-th-label" }, tag.name);
-    }
+    const titleNode = tag.kind === "check" || tag.kind === "progress"
+      ? sortBtn(tag.name, "tag:" + tag.id + ":" + tag.kind)
+      : el("span", { class: "cp-th-label" }, tag.name);
     return el("th", { class: "cp-ov-tag", title: tag.name }, titleNode, slider);
   }
 
@@ -416,15 +405,13 @@
   // --- actions ---------------------------------------------------------------
   function deleteActivity(r, btn) {
     if (!confirm("Smazat aktivitu „" + r.title + "“?")) return;
-    btn.disabled = true;
-    api("DELETE", withId(U.activityItem, r.id))
-      .then(() => {
-        const i = ROWS.findIndex((x) => x.id === r.id);
-        if (i >= 0) ROWS.splice(i, 1);
-        renderTableBody();
-        toast("Smazáno");
-      })
-      .catch((e) => { btn.disabled = false; toast(e.message, true); });
+    submit(btn, async () => {
+      await api("DELETE", withId(U.activityItem, r.id));
+      const i = ROWS.findIndex((x) => x.id === r.id);
+      if (i >= 0) ROWS.splice(i, 1);
+      renderTableBody();
+      toast("Smazáno");
+    });
   }
 
   // Merge this activity INTO another (picked, fuzzy). The server moves todos/slots/needs and
@@ -451,7 +438,7 @@
     }
     sortArrows.clear();
     const headRow = el("tr", null,
-      sortHead("Název", "title"), categoryHead(), orgsHead(),
+      el("th", null, sortBtn("Název", "title")), categoryHead(), orgsHead(),
       progressHead("Úkoly", "todosState", {
         has: "Filtr: jen s úkoly", unfinished: "Filtr: jen s nedokončenými úkoly",
         done: "Filtr: jen s hotovými úkoly", none: "Filtr: jen bez úkolů" }),
@@ -464,13 +451,11 @@
     // Chronological mode prepends a time column (the leading ordering key).
     if (chrono) headRow.prepend(el("th", { class: "cp-ov-time" }, el("span", { class: "cp-th-label" }, "Čas")));
 
-    // Segmented sort-mode control: column-sorting vs chronological (day-grouped) mode.
-    const segBtn = (label, mode) => {
-      const b = el("button", { type: "button", class: "cp-seg-btn" + (chrono === mode ? " on" : "") }, label);
-      b.addEventListener("click", () => setChrono(mode));
-      return b;
-    };
-    const seg = el("div", { class: "cp-seg", role: "group" }, segBtn("Tabulka všech", false), segBtn("Chronologicky", true));
+    // Sort mode: column sorting vs chronological (day-grouped).
+    const seg = actionGroup([
+      { label: "Tabulka všech", active: !chrono, onClick: () => setChrono(false) },
+      { label: "Chronologicky", active: chrono, onClick: () => setChrono(true) },
+    ]);
 
     const reset = el("button", { type: "button", class: "cp-mini" }, "Zrušit filtry");
     reset.addEventListener("click", resetFilters);

@@ -2,22 +2,9 @@
  * from content.css and components.css; only the full-width table, the in-header sort/filter
  * controls, and the status columns live here (this file loads only on the overview page). */
 
-/* The table centres within the page. Its floor is the normal page width (so a narrow table
-   doesn't shrink to a small centred block on this full-width page), and it stretches out toward
-   the full window only when the columns need the room (then .cp-table's 46rem cap is lifted).
-   On viewports narrower than the page width the floor drops to 100% so nothing overflows.
-   The mount holds the toolbar + table, so both share the table's width and stay aligned. */
-#cp-overview {
-  width: fit-content;
-  /* match the content column of a normal page: its border-box main is --cp-page-width wide
-     including --cp-page-pad each side, so the (unpadded) table floor is that minus the padding. */
-  min-width: min(100%, calc(var(--cp-page-width) - 2 * var(--cp-page-pad)));
-  max-width: 100%;
-  margin: 0 auto;
-}
+/* #cp-overview's centring and the table shape are shared with the TODO overview
+   (components.css); the table lifts .cp-table's 46rem cap to fill it. */
 .cp-ov-table { width: 100%; max-width: none; }
-.cp-ov-table th { vertical-align: bottom; }
-.cp-ov-table td { vertical-align: top; }
 
 .cp-ov-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.4rem 1rem; margin-bottom: 0.5rem; }
 .cp-ov-count { font-size: 12px; }
@@ -38,7 +25,6 @@
 .cp-ov-act { color: var(--cp-muted); font-size: 12px; }   /* activity title in parens after a slot's override name */
 
 /* --- in-header sort + filter controls (cp-th-* primitives live in components.css) --- */
-.cp-ov-table thead th { padding-bottom: 0.4rem; }
 .cp-ov-tag .cp-th-sort { text-align: center; }
 
 /* --- status columns -------------------------------------------------------- */
@@ -66,5 +52,4 @@
 .cp-ov-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--cp-success); }
 .cp-ov-bar-num { position: relative; font-size: 11px; font-variant-numeric: tabular-nums;
   color: var(--cp-text-inverse); text-shadow: 0 1px 1px var(--cp-shadow-2); }
-.cp-ov-empty { text-align: center; padding: 1rem; }
 /* .cp-seg in-row action groups live in components.css (shared with the detail + materials pages) */

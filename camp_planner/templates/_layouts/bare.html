@@ -1,4 +1,4 @@
-{% from "_macros.html" import brand, theme_switch, css -%}
+{% from "_macros.html" import brand, theme_switch, css, flashes, shell_scripts -%}
 {# Embedded mode: emit the camp-nav band (grey "Camp Planner" brand + the camp heading) and the
    content; the host supplies the surrounding chrome and links css/content.css. A host can instead
    pass its own base_template to wrap our pages. Only the account controls stay standalone-only
@@ -14,17 +14,7 @@
   {% block cp_nav %}{% endblock %}
   {{ theme_switch(force_theme) }}
 </nav>
-<noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    <ul class="cp-flashes">
-      {% for category, message in messages %}<li class="cp-flash-{{ category }}">{{ message }}</li>{% endfor %}
-    </ul>
-  {% endif %}
-{% endwith %}
+{{ flashes() }}
 {% block content %}{% endblock %}
 {% block cp_scripts %}{% endblock %}
-<script src="{{ url_for('main.static', filename='js/header.js') }}" defer></script>
-{%- if not force_theme %}
-<script src="{{ url_for('main.static', filename='js/theme.js') }}" defer></script>
-{%- endif %}
+{{ shell_scripts(force_theme) }}

@@ -5,7 +5,7 @@
 "use strict";
 
 window.cpActivityPicker = (function () {
-  const { el, api, canHover, swatch, openModal, chipGroup, keyList, toast } = window.cpDom;
+  const { el, api, canHover, swatch, openModal, submit, chipGroup, keyList, toast, fuzzyFilter } = window.cpDom;
   let cache = null;   // [{id, title, category_id}, …], lazy-loaded once per page
 
   async function fetchActivities(url) {
@@ -59,9 +59,7 @@ window.cpActivityPicker = (function () {
       const recentSet = new Set(q ? [] : recentIds());
       let acts;
       if (q) {
-        acts = window.cpFuzzy
-          ? window.cpFuzzy.filter(q, all, (a) => a.title)               // diacritics-folded fuzzy
-          : all.filter((a) => a.title.toLowerCase().includes(q.toLowerCase()));
+        acts = fuzzyFilter(q, all, (a) => a.title);
       } else {
         const byId = Object.fromEntries(all.map((a) => [a.id, a]));     // only the recents path needs it
         const recent = [...recentSet].map((id) => byId[id]).filter(Boolean);
@@ -83,22 +81,21 @@ window.cpActivityPicker = (function () {
     }
     search.addEventListener("input", () => renderList(search.value));
 
-    async function createActivity() {
+    function createActivity() {
       const title = nameInput.value.trim();
       if (!title) { nameInput.focus(); return; }
       const categoryId = cats.get();
       if (categoryId == null) { toast("Vyberte kategorii.", true); return; }
-      createBtn.disabled = true;
-      try {
+      submit(createBtn, async () => {
         const json = await api("POST", createUrl, { title, category_id: categoryId });
         const a = { id: json.activity.id, title: json.activity.title, category_id: json.activity.category_id };
         if (cache) cache.unshift(a);
         finish(a);
         toast("Aktivita vytvořena");
-      } catch (e) { toast(e.message, true); createBtn.disabled = false; }
+      });
     }
     createBtn.addEventListener("click", createActivity);
-    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") createActivity(); });
+    nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !createBtn.disabled) createActivity(); });
 
     // tabs
     const tabExisting = el("button", { type: "button", class: "cp-tab on" }, "Existující");

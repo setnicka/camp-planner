@@ -234,18 +234,18 @@
 @media (hover: hover) { .cp-cat-chip.on:hover { filter: brightness(1.12); }   /* clicking again deselects */ }
 .cp-cat-chip .cp-swatch { width: 14px; height: 14px; margin: 0; }
 
-/* --- modal buttons (content.css only styles .cp-primary/.cp-cancel under forms) --- */
-.cp-modal .cp-primary, .cp-modal .cp-cancel {
+/* --- primary / secondary buttons: in modals, and at their own metrics outside them (the
+   Google tab, the description editor) --- */
+.cp-primary, .cp-cancel {
   font: inherit; padding: 0.45rem 0.9rem; border-radius: 6px; cursor: pointer;
   border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text);
 }
-.cp-modal .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
-.cp-modal .cp-primary:disabled, .cp-modal .cp-cancel:disabled,
-.cp-modal .cp-primary[aria-disabled="true"] { opacity: .5; cursor: default; }
-@media (hover: hover) { .cp-modal .cp-primary:hover:not(:disabled), .cp-modal .cp-cancel:hover:not(:disabled) { filter: brightness(1.06); } }
+.cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); }
+.cp-primary:disabled, .cp-cancel:disabled, .cp-primary[aria-disabled="true"] { opacity: .5; cursor: default; }
+@media (hover: hover) { .cp-primary:hover:not(:disabled), .cp-cancel:hover:not(:disabled) { filter: brightness(1.06); } }
 /* colour variants — defined AFTER .cp-primary so they win at equal specificity */
-.cp-modal .cp-warn-btn { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
-.cp-modal .cp-danger-btn { background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
+.cp-warn-btn { background: var(--cp-warning); border-color: var(--cp-warning); color: var(--cp-warning-on); }
+.cp-danger-btn { background: var(--cp-danger); border-color: var(--cp-danger); color: var(--cp-text-inverse); }
 /* Leading the footer, a destructive button keeps its distance from the others. */
 .cp-modal-foot > .cp-danger-btn:first-child { margin-right: auto; }
 
@@ -376,15 +376,26 @@ a.cp-stock-place { color: var(--cp-accent-text); text-decoration: none; }
 .cp-todo-has-note > td { border-bottom: 0; }
 .cp-todo-note-row > td { padding-top: 0; }
 .cp-todo-note { white-space: pre-wrap; color: var(--cp-muted); padding-left: 1.7rem; }   /* render line breaks; align under the title */
-/* table shape — shared by both pages (the overview adds full-width stretch in todos.css) */
-.cp-todo-table th { vertical-align: bottom; }
-.cp-todo-table td { vertical-align: top; }
-.cp-todo-table thead th { padding-bottom: 0.4rem; }
+/* table shape, shared with the activity overview (the overview pages add the full-width
+   stretch in their own CSS) */
+.cp-todo-table th, .cp-ov-table th { vertical-align: bottom; }
+.cp-todo-table td, .cp-ov-table td { vertical-align: top; }
+.cp-todo-table thead th, .cp-ov-table thead th { padding-bottom: 0.4rem; }
 /* toolbar above the table (count + optional reset / notes toggle); count pushes the rest right */
 .cp-todo-toolbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
 .cp-todo-count { font-size: 12px; margin-left: auto; }
 .cp-todo-notes-toggle { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 13px; cursor: pointer; }
-.cp-todo-empty { text-align: center; padding: 1rem; }
+.cp-todo-empty, .cp-ov-empty { text-align: center; padding: 1rem; }
+/* The activity and TODO overviews centre their table, floored at the normal page width
+   (a normal page's main is --cp-page-width including its padding), stretching toward the
+   window only when the columns need the room. The mount holds the toolbar too, so both
+   share the table's width. */
+#cp-overview, #cp-todos {
+  width: fit-content;
+  min-width: min(100%, calc(var(--cp-page-width) - 2 * var(--cp-page-pad)));
+  max-width: 100%;
+  margin: 0 auto;
+}
 .cp-todo-add { margin-top: 0.6rem; }
 .cp-due-ok { color: var(--cp-success-text); }    /* days remaining */
 .cp-due-late { color: var(--cp-danger-text); }  /* overdue */

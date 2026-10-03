@@ -27,6 +27,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   cached old files with the new ones.
 - API: a 422 for a repeated item in a list points at the list field.
 - History: an import from Google records only what it changed, as a manual edit does.
+- The activity dialogs ask before discarding edits and save on Enter.
 
 ### Fixed
 
@@ -34,6 +35,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   the API also lists its responsible orgs.
 - Embedded: an `AUTH_LOGIN_ENDPOINT` key in the host's config no longer redirects the
   planner's sign-in.
+- Pressing Enter twice in the new-activity or new-token dialog no longer submits it twice.
 
 ## [0.4.0] - 2026-09-27
 

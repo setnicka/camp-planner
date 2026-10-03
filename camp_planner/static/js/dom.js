@@ -275,9 +275,7 @@ window.cpDom = (function () {
     const keys = new Map(items.map((it) => [it, keyOf(it)]));
     function rerender() {
       const q = search.value.trim();
-      const matches = q && window.cpFuzzy
-        ? window.cpFuzzy.filter(q, items, (it) => keys.get(it))
-        : items;
+      const matches = fuzzyFilter(q, items, (it) => keys.get(it));
       // Every group gets its own row budget, filled in match order: over a shared cap the
       // first group could take the whole list and the rest would drop out without a word.
       const runs = new Map();
@@ -706,6 +704,18 @@ window.cpDom = (function () {
     return el("span", { ...(cls ? { class: cls } : {}), "data-cp-hint": "", title: name || "" }, initials);
   }
 
+  // `sep` between the nodes, ready to spread into el() ("Á, L").
+  const joinNodes = (nodes, sep = ", ") => nodes.flatMap((n, i) => (i ? [sep, n] : [n]));
+
+  // Multi-select chips over the camp's orgs; an empty roster says where orgs come from.
+  const NO_ORGS = "Žádní orgové – přidejte je v nastavení akce.";
+  function orgChips(orgs, selected) {
+    const group = chipGroup(orgs.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
+      { multi: true, selected });
+    if (!orgs.length) group.node.append(el("div", { class: "cp-muted" }, NO_ORGS));
+    return group;
+  }
+
   // "4 ks" / "4" / "hodně" / "": count and unit are independent, either may be missing.
   function amountText(count, unit) {
     const parts = [];
@@ -717,9 +727,36 @@ window.cpDom = (function () {
   // Several amounts of one thing as one text ("3 ks, 2 balení"), in the order given.
   const amountList = (list) => list.map((a) => amountText(a.amount, a.unit)).join(", ");
 
-  // Fold case and diacritics, so á sorts next to a. The app's one fold rule: fuzzy.js
+  // Fold case and diacritics, so á sorts next to a. The app's one fold rule: fuzzyFilter
   // matches on it and byName orders by it.
   const czechKey = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+
+  // The pickers' filter: items whose keyFn(item) holds the query as an in-order subsequence
+  // ("papir" finds "Papír"), best first; an empty query keeps the list. A contiguous hit
+  // beats a scattered one, earlier and tighter is better; runs and word starts score extra.
+  function fuzzyScore(q, text) {
+    const t = czechKey(text);
+    const idx = t.indexOf(q);
+    if (idx !== -1) return 1000 - idx * 2 - (t.length - q.length);
+    let from = 0, total = 0, prev = -2, streak = 0;
+    for (const c of q) {
+      const at = t.indexOf(c, from);
+      if (at === -1) return -1;
+      streak = at === prev + 1 ? streak + 1 : 0;
+      total += 1 + streak * 2 + (at === 0 || /[\s\-_.,/]/.test(t[at - 1]) ? 4 : 0);
+      prev = at;
+      from = at + 1;
+    }
+    return total;
+  }
+  function fuzzyFilter(query, list, keyFn) {
+    const q = czechKey(query).trim();
+    if (!q) return list.slice();
+    return list.map((item) => ({ item, sc: fuzzyScore(q, keyFn(item)) }))
+      .filter((r) => r.sc >= 0)
+      .sort((a, b) => b.sc - a.sc)
+      .map((r) => r.item);
+  }
 
   // Order names the way the server does (models.common.czech_sort_key): the folded key,
   // then the plain name so a and á keep one order; the caller adds the id after it, as
@@ -743,8 +780,8 @@ window.cpDom = (function () {
   }
 
   return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText, amountList,
-           czechKey, byName, reveal,
+           czechKey, fuzzyFilter, byName, reveal,
            thumb, lightbox, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,
-           plural, tabHash, freezeColumns, segBtn, actionGroup, orgInitials };
+           plural, tabHash, freezeColumns, segBtn, actionGroup, orgInitials, joinNodes, NO_ORGS, orgChips };
 })();
