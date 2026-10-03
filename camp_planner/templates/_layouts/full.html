@@ -1,4 +1,4 @@
-{% from "_macros.html" import brand, csrf, theme_switch, css -%}
+{% from "_macros.html" import brand, csrf, theme_switch, css, flashes, shell_scripts -%}
 <!doctype html>
 {# "auto" (not a missing attribute) is what opts us into prefers-color-scheme: this shell
    owns the page background, so following the OS is safe here. See content.css. #}
@@ -47,20 +47,10 @@
     </details>
     {% endif %}
   </header>
-  <noscript><p class="cp-noscript">Camp Planner potřebuje zapnutý JavaScript.</p></noscript>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <ul class="cp-flashes">
-        {% for category, message in messages %}<li class="cp-flash-{{ category }}">{{ message }}</li>{% endfor %}
-      </ul>
-    {% endif %}
-  {% endwith %}
+  {{ flashes() }}
   <main class="{% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
   <footer class="cp-footer">Camp Planner v{{ app_version }}</footer>
-  <script src="{{ url_for('main.static', filename='js/header.js') }}" defer></script>
-  {%- if not force_theme %}
-  <script src="{{ url_for('main.static', filename='js/theme.js') }}" defer></script>
-  {%- endif %}
+  {{ shell_scripts(force_theme) }}
   {% block cp_scripts %}{% endblock %}
 </body>
 </html>

@@ -17,7 +17,7 @@
   btn.addEventListener("click", async () => {
     const name = root.dataset.campName;
     if (!window.confirm(`Opravdu trvale smazat akci „${name}“? Tuto akci nelze vrátit.`)) return;
-    btn.disabled = true;
+    btn.disabled = true;   // not cpDom.submit: it would re-enable the button during the navigation
     try {
       await api("DELETE", root.dataset.deleteUrl);
       toastNext("Akce byla smazána.");      // survives the navigation below

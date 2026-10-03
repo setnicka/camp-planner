@@ -117,15 +117,11 @@
 /* make the "Upravit popis" button stand out: accent outline that fills on hover */
 .cp-desc-edit { border-color: var(--cp-accent); color: var(--cp-accent-text); font-weight: 600; }
 .cp-desc-edit:hover { background: var(--cp-accent); color: var(--cp-text-inverse); }
-/* Uložit / Zrušit at the right end of the editor toolbar (outside a modal, so styled here) */
+/* Uložit / Zrušit at the right end of the editor toolbar: the shared button recipe
+   (components.css), smaller */
 .cp-mde-actions { margin-left: auto; display: flex; gap: 0.4rem; }
-.cp-mde-actions button {
-  font: inherit; font-size: 13px; padding: 0.25rem 0.75rem; border-radius: 5px; cursor: pointer;
-  border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text);
-}
-.cp-mde-actions .cp-primary { background: var(--cp-accent); border-color: var(--cp-accent); color: var(--cp-text-inverse); font-weight: 600; }
-.cp-mde-actions .cp-primary:disabled { opacity: .5; cursor: default; }
-.cp-mde-actions .cp-primary:hover:not(:disabled), .cp-mde-actions .cp-cancel:hover { filter: brightness(1.06); }
+.cp-mde-actions button { font-size: 13px; padding: 0.25rem 0.75rem; border-radius: 5px; }
+.cp-mde-actions .cp-primary { font-weight: 600; }
 /* editor toolbar — flat icon buttons, attached flush to the editor (modern-editor look) */
 .cp-mde-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 2px;

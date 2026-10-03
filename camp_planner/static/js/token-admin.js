@@ -9,7 +9,7 @@
   const dataEl = document.getElementById("cp-tokens-data");
   if (!root || !dataEl) return;
 
-  const { el, api, asInstant, toast, flash, openModal, withId } = window.cpDom;
+  const { el, api, asInstant, submit, flash, openModal, withId } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const URLS = DATA.urls;
   const ROLE_LABEL = Object.fromEntries(DATA.roles);
@@ -33,9 +33,8 @@
     const role = el("select");
     DATA.roles.forEach(([value, label]) => role.add(new Option(label, value)));
     const btn = el("button", { type: "button" }, "Vytvořit token");
-    const submit = () => createToken(name, role, btn);
-    btn.addEventListener("click", submit);
-    name.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    btn.addEventListener("click", () => createToken(name, role, btn));
+    name.addEventListener("keydown", (e) => { if (e.key === "Enter") btn.click(); });   // a disabled btn ignores it
     return el("div", { class: "cp-token-new" },
       el("div", { class: "cp-form cp-form-inline" },
         el("label", null, "Název", name),
@@ -47,20 +46,15 @@
         "). Tajný klíč se zobrazí jen jednou po vytvoření."));
   }
 
-  async function createToken(name, role, btn) {
+  function createToken(name, role, btn) {
     const nm = name.value.trim();
     if (!nm) { name.focus(); return; }
-    btn.disabled = true;
-    try {
+    submit(btn, async () => {
       const json = await api("POST", URLS.list, { name: nm, role: role.value });
       tokens.push(json.token);
       render();
       showSecret(json.token, json.secret);
-    } catch (e) {
-      toast(e.message, true);
-    } finally {
-      btn.disabled = false;
-    }
+    });
   }
 
   function listView() {
@@ -87,18 +81,14 @@
       el("td", { class: "cp-actions" }, del));
   }
 
-  async function revoke(t, btn) {
+  function revoke(t, btn) {
     if (!window.confirm(`Zrušit token „${t.name}“? Skripty, které ho používají, ztratí přístup.`)) return;
-    btn.disabled = true;
-    try {
+    submit(btn, async () => {
       await api("DELETE", withId(URLS.item, t.id));
       tokens = tokens.filter((x) => x.id !== t.id);
       render();
       flash(flashArea, `Token „${t.name}“ zrušen.`);
-    } catch (e) {
-      toast(e.message, true);
-      btn.disabled = false;
-    }
+    });
   }
 
   // One-time reveal of the secret: a read-only field + copy button. Once the modal closes

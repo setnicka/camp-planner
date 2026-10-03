@@ -28,6 +28,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   - Unified toolbar above the grid, the filters above it.
   - Mobile friendly view: day opens zoomed in, the filters and the help fold
     away, and a slot drags after a long press.
+- The activity dialogs ask before discarding edits, and save on Enter.
 - History: an import from Google records only what it changed.
 - Static file URLs carry the file's mtime, so after a deploy a browser can't mix
   cached old files with new ones.
@@ -39,6 +40,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Embedded:
   - A host's `AUTH_LOGIN_ENDPOINT` config key no longer redirects the planner's
     sign-in.
+- A second Enter in the new-activity or new-token dialog no longer submits it twice.
 
 ## [0.4.0] - 2026-09-27
 

@@ -9,10 +9,15 @@ window.cpInventory = (function () {
   const { el, api, asInstant, amountText, czechKey, formModal, lightbox, openModal,
           searchPicker, submit, thumb: domThumb, toast, withId, actionGroup: domActionGroup } = window.cpDom;
 
-  function amountEl(count, unit) {
+  // With onClick, the amount is the button that edits it (`name` tells a screen reader
+  // whose). The empty dash keeps the amount class, so it sits (and aligns) as an amount.
+  function amountEl(count, unit, onClick, name) {
     const text = amountText(count, unit);
-    // The empty dash keeps the amount class, so it sits (and aligns) as an amount.
-    return el("span", { class: "cp-inv-amount" + (text ? "" : " cp-dim") }, text || "—");
+    const cls = "cp-inv-amount" + (text ? "" : " cp-dim");
+    return onClick
+      ? el("button", { type: "button", class: cls + " cp-inv-amount-btn", title: "Upravit počet",
+                       "aria-label": "Upravit počet – " + name, onclick: onClick }, text || "—")
+      : el("span", { class: cls }, text || "—");
   }
 
   const recordUrl = (urls, boxId, itemId) => withId(urls.record, boxId, itemId);

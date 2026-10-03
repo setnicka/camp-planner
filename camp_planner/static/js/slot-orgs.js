@@ -8,10 +8,8 @@
 "use strict";
 
 window.cpSlotOrgsEdit = function ({ orgs, selected, url, withName, name, namePlaceholder, onSaved }) {
-  const { el, api, chipGroup, formModal, toast } = window.cpDom;
-  const group = chipGroup(orgs.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
-    { multi: true, selected: selected || [] });
-  if (!orgs.length) group.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
+  const { el, api, orgChips, formModal, toast } = window.cpDom;
+  const group = orgChips(orgs, selected);
   const nameInput = withName
     ? el("input", { type: "text", class: "cp-modal-name", maxlength: 255,
         placeholder: namePlaceholder || "", value: name || "" })

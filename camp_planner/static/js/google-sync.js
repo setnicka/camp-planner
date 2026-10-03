@@ -12,7 +12,7 @@
   const dataEl = document.getElementById("cp-google-data");
   if (!root || !dataEl) return;
 
-  const { el, api, toast, flash, swatch, searchPicker, openModal, plural } = window.cpDom;
+  const { el, api, toast, flash, swatch, searchPicker, openModal, chipGroup, plural } = window.cpDom;
   const DATA = JSON.parse(dataEl.textContent);
   const URLS = DATA.urls;
   const body = root.querySelector("[data-google-body]");
@@ -204,17 +204,12 @@
         catBtn.replaceChildren(swatch(c ? c.color : null), el("span", null, c ? c.label : "bez kategorie"));
       };
       catBtn.addEventListener("click", () => {
-        let close;
         const opts = [["", null, "bez kategorie"], ...categories.map((c) => [c.id, c.color, c.label])];
-        const chips = opts.map(([id, color, label]) => {
-          const chip = el("button", { type: "button", class: "cp-cat-chip" + (id === catId ? " on" : "") },
-            swatch(color), " " + label);
-          chip.addEventListener("click", () => { catId = id; renderCatBtn(); close(); });
-          return chip;
-        });
-        close = openModal(el("div", { class: "cp-modal cp-google-pick-modal" },
-          el("div", { class: "cp-modal-head" }, "Vyberte kategorii"),
-          el("div", { class: "cp-cat-chips cp-google-pick-body" }, ...chips)));
+        const chips = chipGroup(opts.map(([id, color, label]) => [id, swatch(color), " " + label]),
+          { selected: catId, onChange: () => { catId = chips.get(); renderCatBtn(); close(); } });
+        chips.node.classList.add("cp-google-pick-body");
+        const close = openModal(el("div", { class: "cp-modal cp-google-pick-modal" },
+          el("div", { class: "cp-modal-head" }, "Vyberte kategorii"), chips.node));
       });
       renderCatBtn();
       controls.push(catBtn);

@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-materials-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, dash, actionGroup, formModal, mergePicker, searchPicker, orgFilterHead, chipGroup, toast, orgInitials, amountText, amountList, fmtNum, czechKey, segBtn, reveal } = window.cpDom;
+  const { el, api, withId, dash, submit, actionGroup, formModal, mergePicker, searchPicker, orgFilterHead, orgChips, toast, orgInitials, joinNodes, amountText, amountList, fmtNum, czechKey, segBtn, reveal } = window.cpDom;
   const stock = window.cpStock;
   const DATA = JSON.parse(dataEl.textContent);
   const U = DATA.urls;
@@ -249,12 +249,7 @@
   function orgsCell(m) {
     const orgs = m.orgs || [];
     if (!orgs.length) return dash();
-    const wrap = el("span");
-    orgs.forEach((o, i) => {
-      if (i) wrap.append(", ");
-      wrap.append(orgInitials(o.initials, orgName.get(o.org_id)));
-    });
-    return wrap;
+    return el("span", null, ...joinNodes(orgs.map((o) => orgInitials(o.initials, orgName.get(o.org_id)))));
   }
 
   // Rebuild one material's <tbody> (summary row + needs) in place (totals/readiness recompute).
@@ -287,10 +282,9 @@
       { label: "✎", title: "Upravit", onClick: () => openMaterialEdit(m) },
       { label: "⤳", title: "Sloučit s jiným", onClick: () => openMaterialMerge(m) },
       // Greyed while activities use it, saying why (the server refuses the same way).
-      m.usages.length
-        ? { label: "✕", title: "Smazat", danger: true,
-            disabled: "Používají ho aktivity – nejdřív ho slučte s jiným, nebo ho z aktivit odeberte." }
-        : { label: "✕", title: "Smazat", danger: true, onClick: (e) => deleteMaterial(m, e.currentTarget) },
+      { label: "✕", title: "Smazat", danger: true,
+        disabled: m.usages.length && "Používají ho aktivity – nejdřív ho slučte s jiným, nebo ho z aktivit odeberte.",
+        onClick: (e) => deleteMaterial(m, e.currentTarget) },
     ])));
     // toggle expand on a row click — but not when clicking the name link or an action button
     tr.addEventListener("click", (e) => {
@@ -462,9 +456,7 @@
     strat.value = m.sum_strategy || "sum";
 
     const acq = chipInput(m.acquisition_labels || [], catalogLabels());
-    const orgGroup = chipGroup(ORGS.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
-      { multi: true, selected: (m.orgs || []).map((o) => o.org_id) });
-    if (!ORGS.length) orgGroup.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
+    const orgGroup = orgChips(ORGS, (m.orgs || []).map((o) => o.org_id));
     const link = hasStock ? linkField(m) : null;
 
     formModal({
@@ -506,17 +498,14 @@
 
   function deleteMaterial(m, btn) {
     if (!confirm("Smazat „" + m.name + "“ z katalogu?")) return;
-    btn.disabled = true;   // guard against a double-click while the request is in flight
-    // the server rejects (400) a material still used by activities → surfaced as an error toast
-    api("DELETE", withId(U.materialItem, m.id))
-      .then(() => {
-        const i = MATS.findIndex((x) => x.id === m.id);
-        if (i >= 0) MATS.splice(i, 1);
-        expanded.delete(m.id); rowEls.delete(m.id);
-        renderTable();
-        toast("Smazáno");
-      })
-      .catch((e) => { btn.disabled = false; toast(e.message, true); });
+    submit(btn, async () => {
+      await api("DELETE", withId(U.materialItem, m.id));
+      const i = MATS.findIndex((x) => x.id === m.id);
+      if (i >= 0) MATS.splice(i, 1);
+      expanded.delete(m.id); rowEls.delete(m.id);
+      renderTable();
+      toast("Smazáno");
+    });
   }
 
   // Merge this material INTO another (picked from the rest of the catalog, fuzzy). The server

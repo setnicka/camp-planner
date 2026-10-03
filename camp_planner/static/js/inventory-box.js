@@ -373,14 +373,8 @@
 
   // The amount doubles as the button that fixes it; during a check the count belongs to
   // the observation controls, so there it is plain text again.
-  function amountControl(item) {
-    if (!mayEdit || checking()) return inv.amountEl(item.count, item.unit);
-    const text = amountText(item.count, item.unit);
-    return el("button", { type: "button", title: "Upravit počet",
-      class: "cp-inv-amount cp-inv-amount-btn" + (text ? "" : " cp-dim"),
-      "aria-label": "Upravit počet – " + item.name,
-      onclick: () => editItemAmount(item) }, text || "—");
-  }
+  const amountControl = (item) => inv.amountEl(item.count, item.unit,
+    mayEdit && !checking() && (() => editItemAmount(item)), item.name);
 
   // What the row says beside the name: what the check is doing to the thing, and failing
   // that its master state. A revived row does not add "vyřazeno", because "vrací se

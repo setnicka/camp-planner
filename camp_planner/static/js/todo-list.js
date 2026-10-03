@@ -12,7 +12,7 @@
 "use strict";
 
 window.cpTodoList = function (opts) {
-  const { el, api, withId, dash, formModal, orgFilterHead, chipGroup, toast, plural, freezeColumns, actionGroup, orgInitials } = window.cpDom;
+  const { el, api, withId, dash, submit, formModal, orgFilterHead, orgChips, toast, plural, freezeColumns, actionGroup, orgInitials, joinNodes } = window.cpDom;
   const mount = opts.mount;
   const TODOS = opts.todos;                 // mutated in place (push/splice/assign)
   const ORGS = opts.orgs || [];             // [{id, initials, name}] — filter + edit picker
@@ -76,27 +76,21 @@ window.cpTodoList = function (opts) {
 
   function orgsCell(t) {
     if (!t.orgs.length) return el("td", null, dash());
-    const td = el("td", { class: "cp-todo-orgs" });
-    t.orgs.forEach((o, i) => {
-      if (i) td.append(", ");
-      td.append(orgInitials(o.initials, orgName.get(o.org_id)));
-    });
-    return td;
+    return el("td", { class: "cp-todo-orgs" },
+      ...joinNodes(t.orgs.map((o) => orgInitials(o.initials, orgName.get(o.org_id)))));
   }
 
   function actionsCell(t) {
     return el("td", { class: "cp-actions" }, actionGroup([
       { label: "✎", title: "Upravit", onClick: () => openForm(t) },
-      { label: "✕", title: "Smazat", danger: true, onClick: async (e) => {
+      { label: "✕", title: "Smazat", danger: true, onClick: (e) => {
         if (!confirm("Smazat úkol „" + t.title + "“?")) return;
-        const del = e.currentTarget;
-        del.disabled = true;
-        try {
+        submit(e.currentTarget, async () => {
           await api("DELETE", withId(U.item, t.id));
           const i = TODOS.findIndex((x) => x.id === t.id);
           if (i >= 0) TODOS.splice(i, 1);
           refresh(); toast("Smazáno");
-        } catch (err) { del.disabled = false; toast(err.message, true); }
+        });
       } },
     ]));
   }
@@ -265,9 +259,7 @@ window.cpTodoList = function (opts) {
     note.value = seed.note || "";
     const due = el("input", { type: "date" });
     if (seed.due_date) due.value = seed.due_date;
-    const group = chipGroup(ORGS.map((o) => [o.id, el("b", null, o.initials), " " + o.name]),
-      { multi: true, selected: (seed.orgs || []).map((o) => o.org_id) });
-    if (!ORGS.length) group.node.append(el("div", { class: "cp-muted" }, "Žádní orgové — přidejte je v nastavení akce."));
+    const group = orgChips(ORGS, (seed.orgs || []).map((o) => o.org_id));
     formModal({
       title: t ? "Upravit úkol" : "Nový úkol",
       okLabel: t ? "Uložit" : "Přidat",

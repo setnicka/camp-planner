@@ -11,7 +11,7 @@
   const dataEl = document.getElementById("cp-activity-data");
   if (!mount || !dataEl) return;
 
-  const { el, api, withId, swatch, openModal, submit, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup, orgInitials, amountText, byName } = window.cpDom;
+  const { el, api, withId, swatch, dash, formModal, searchPicker, chipGroup, toast, tabHash, actionGroup, orgInitials, joinNodes, NO_ORGS, orgChips, amountText, byName } = window.cpDom;
   // html:false escapes raw HTML in the source, so a rendered description can't inject markup.
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
   const stock = window.cpStock;
@@ -85,20 +85,18 @@
   function openIdentityEdit() {
     const title = el("input", { type: "text", class: "cp-modal-name", value: A.title });
     const cats = chipGroup(DATA.categories.map((c) => [c.id, swatch(c.color), c.label]), { selected: A.category_id });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Uložit");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Upravit aktivitu"),
-      el("div", { class: "cp-pane" },
+    formModal({
+      title: "Upravit aktivitu",
+      pane: el("div", { class: "cp-pane" },
         el("label", { class: "cp-field-label" }, "Název"), title,
         el("label", { class: "cp-field-label" }, "Kategorie"), cats.node),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      const t = title.value.trim();
-      if (!t) { title.focus(); return; }
-      submit(ok, async () => { const j = await api("PATCH", U.update, { title: t, category_id: cats.get() }); Object.assign(A, j.activity); close(); renderTitle(); renderHeader(); toast("Uloženo"); });
+      onSubmit: async (close) => {
+        const t = title.value.trim();
+        if (!t) { title.focus(); return; }
+        const j = await api("PATCH", U.update, { title: t, category_id: cats.get() });
+        Object.assign(A, j.activity);
+        close(); renderTitle(); renderHeader(); toast("Uloženo");
+      },
     });
     title.focus();
   }
@@ -120,11 +118,11 @@
     const bar = el("div", { class: "cp-act-bar" });
     const cat = catById[A.category_id];
     bar.append(headerRow("Kategorie",
-      cat ? el("span", { class: "cp-cat-badge" }, swatch(cat.color), cat.label) : el("span", { class: "cp-muted" }, "—")));
+      cat ? el("span", { class: "cp-cat-badge" }, swatch(cat.color), cat.label) : dash()));
     bar.append(headerRow("Orgové", orgsLine(), mayEdit && openOrgsEdit));
     const chips = el("div", { class: "cp-tagchips" });
     if (A.tags.length) A.tags.forEach((t) => chips.append(tagChip(t)));
-    else chips.append(el("span", { class: "cp-muted" }, "—"));
+    else chips.append(dash());
     bar.append(headerRow("Tagy", chips, mayEdit && openTagsEdit));
     const allSlots = A.slots.slice().sort((a, b) => a.start_at.localeCompare(b.start_at));
     const slots = el("div", { class: "cp-slot-list" });
@@ -147,9 +145,7 @@
   // "Á, L", each naming its org (inside the slot chip a tap on the initials then shows the
   // name instead of leaving for the timeline, which the rest of the chip still does).
   const orgFullName = new Map(DATA.orgs.map((o) => [o.id, o.name]));
-  function initialsList(orgs) {
-    return orgs.flatMap((o, i) => [i ? ", " : null, orgInitials(o.initials, orgFullName.get(o.org_id))]).filter(Boolean);
-  }
+  const initialsList = (orgs) => joinNodes(orgs.map((o) => orgInitials(o.initials, orgFullName.get(o.org_id))));
   function orgsLine() {
     const part = (label, role) => {
       const list = A.orgs.filter((o) => o.role === role);
@@ -158,7 +154,7 @@
         el("span", { class: "cp-org-role" }, label), ...initialsList(list));
     };
     const g = part("Garant", "garant"), h = part("Pomocník", "helper");
-    if (!g && !h) return el("span", { class: "cp-muted" }, "—");
+    if (!g && !h) return dash();
     return el("span", { class: "cp-org-line" }, g, h);   // el skips the null part
   }
 
@@ -182,27 +178,24 @@
   }
 
   function openOrgsEdit() {
-    if (!DATA.orgs.length) { toast("Žádní orgové — přidejte je v nastavení akce.", true); return; }
-    const entries = () => DATA.orgs.map((o) => [o.id, el("b", null, o.initials), " " + o.name]);
+    if (!DATA.orgs.length) { toast(NO_ORGS, true); return; }
     const idsWith = (role) => A.orgs.filter((o) => o.role === role).map((o) => o.org_id);
-    const garants = chipGroup(entries(), { multi: true, selected: idsWith("garant") });
-    const helpers = chipGroup(entries(), { multi: true, selected: idsWith("helper") });
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Uložit");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Orgové aktivity"),
-      el("div", { class: "cp-pane" },
+    const garants = orgChips(DATA.orgs, idsWith("garant"));
+    const helpers = orgChips(DATA.orgs, idsWith("helper"));
+    formModal({
+      title: "Orgové aktivity",
+      pane: el("div", { class: "cp-pane" },
         el("label", { class: "cp-field-label" }, "Garanti"), garants.node,
         el("label", { class: "cp-field-label" }, "Pomocníci"), helpers.node),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      const orgs = [
-        ...garants.get().map((id) => ({ org_id: id, role: "garant" })),
-        ...helpers.get().map((id) => ({ org_id: id, role: "helper" })),
-      ];
-      submit(ok, async () => { const j = await api("PUT", U.orgs, { orgs }); A.orgs = j.orgs; close(); renderHeader(); toast("Uloženo"); });
+      onSubmit: async (close) => {
+        const orgs = [
+          ...garants.get().map((id) => ({ org_id: id, role: "garant" })),
+          ...helpers.get().map((id) => ({ org_id: id, role: "helper" })),
+        ];
+        const j = await api("PUT", U.orgs, { orgs });
+        A.orgs = j.orgs;
+        close(); renderHeader(); toast("Uloženo");
+      },
     });
   }
 
@@ -257,19 +250,17 @@
     const value = Object.fromEntries(A.tags.map((t) => [t.tag_id, t.value]));
     const enabled = new Set(A.tags.map((t) => t.tag_id));
     const rows = DATA.tag_defs.map((d) => tagEditRow(d, enabled.has(d.id), value[d.id]));
-    const cancel = el("button", { type: "button", class: "cp-cancel" }, "Zrušit");
-    const ok = el("button", { type: "button", class: "cp-primary" }, "Uložit");
-    const dialog = el("div", { class: "cp-modal cp-modal-wide" },
-      el("div", { class: "cp-modal-head" }, "Tagy aktivity"),
-      el("div", { class: "cp-pane" },
+    formModal({
+      title: "Tagy aktivity",
+      pane: el("div", { class: "cp-pane" },
         el("p", { class: "cp-muted" }, "Zapni tagy zobrazené u této aktivity a nastav jejich hodnoty."),
         el("div", { class: "cp-tagedit-list" }, ...rows.map((r) => r.node))),
-      el("div", { class: "cp-modal-foot" }, cancel, ok));
-    const close = openModal(dialog);
-    cancel.addEventListener("click", close);
-    ok.addEventListener("click", async () => {
-      const tags = rows.map((r) => r.read()).filter((r) => r.enabled).map((r) => ({ tag_id: r.tag_id, value: r.value }));
-      submit(ok, async () => { const j = await api("PUT", U.tags, { tags }); A.tags = j.tags; close(); renderHeader(); toast("Uloženo"); });
+      onSubmit: async (close) => {
+        const tags = rows.map((r) => r.read()).filter((r) => r.enabled).map((r) => ({ tag_id: r.tag_id, value: r.value }));
+        const j = await api("PUT", U.tags, { tags });
+        A.tags = j.tags;
+        close(); renderHeader(); toast("Uloženo");
+      },
     });
   }
 
