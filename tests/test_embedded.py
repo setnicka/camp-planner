@@ -138,9 +138,13 @@ def test_switch_ships_when_the_host_forces_nothing(embedded):
     assert '<div class="cp-embed">' in html
 
 
+def _asset_name(url):   # the file name, the ?v= cache buster dropped
+    return url.split("?", 1)[0].rsplit("/", 1)[-1]
+
+
 def _assets(html):
-    return ([u.rsplit("/", 1)[-1] for u in re.findall(r'<link[^>]*href="([^"]+)"', html)],
-            [u.rsplit("/", 1)[-1] for u in re.findall(r'<script[^>]*src="([^"]+)"', html)])
+    return ([_asset_name(u) for u in re.findall(r'<link[^>]*href="([^"]+)"', html)],
+            [_asset_name(u) for u in re.findall(r'<script[^>]*src="([^"]+)"', html)])
 
 
 def test_embedded_pages_ship_their_own_css_js_and_csrf_token(embedded):
