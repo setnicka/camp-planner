@@ -15,7 +15,9 @@ from pydantic_core import to_jsonable_python
 from sqlalchemy import and_, or_
 
 from camp_planner.extensions import db, db_session
+from camp_planner.models.activity import Activity
 from camp_planner.models.audit import AuditAction, AuditLog, EntityType
+from camp_planner.models.material import Material
 from camp_planner.services import errors, serialize
 
 if TYPE_CHECKING:
@@ -136,13 +138,9 @@ def _names(camp: Camp, model, name_col, ids: set[int]) -> dict[int, str]:
 def activity_titles(camp: Camp, ids: set[int]) -> dict[int, str]:
     """{id: title} of still-existing activities — links an entry's own activity (create/delete/
     merge) and labels the parent activity of per-activity detail entries (slot/todo/…)."""
-    from camp_planner.models.activity import Activity
-
     return _names(camp, Activity, Activity.title, ids)
 
 
 def material_names(camp: Camp, ids: set[int]) -> dict[int, str]:
     """{id: name} of still-existing catalog materials — links/labels an entry's own material."""
-    from camp_planner.models.material import Material
-
     return _names(camp, Material, Material.name, ids)

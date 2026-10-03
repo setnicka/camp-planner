@@ -28,6 +28,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   - Unified toolbar above the grid, the filters above it.
   - Mobile friendly view: day opens zoomed in, the filters and the help fold
     away, and a slot drags after a long press.
+- History: an import from Google records only what it changed.
 - Static file URLs carry the file's mtime, so after a deploy a browser can't mix
   cached old files with new ones.
 

@@ -22,6 +22,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import current_app
 
+from camp_planner.models.activity import OrgRole
+from camp_planner.models.common import czech_sort_key
 from camp_planner.services import errors
 
 if TYPE_CHECKING:
@@ -76,16 +78,12 @@ def client():
 
 def initials_csv(initials: list[str]) -> str:
     """Czech-sorted, comma-joined initials — the DESCRIPTION (attendants) wire format."""
-    from camp_planner.models.common import czech_sort_key  # noqa: PLC0415
-
     return ", ".join(sorted(initials, key=czech_sort_key))
 
 
 def format_location(garants: list[str], helpers: list[str]) -> str:
     """The LOCATION wire format: the garants joined by '+' as the first comma item, then
     each helper as its own comma item — e.g. "K+M, P". Each group is czech-sorted."""
-    from camp_planner.models.common import czech_sort_key  # noqa: PLC0415
-
     g = sorted(garants, key=czech_sort_key)
     h = sorted(helpers, key=czech_sort_key)
     parts = (["+".join(g)] if g else []) + h
@@ -99,8 +97,6 @@ def event_body(slot: Slot) -> dict:
     - description ← the slot's attendant orgs (initials)
     - colorId     ← the activity's category colour snapped to the palette (omitted if none)
     start/end are the slot's naive local times tagged with the camp tz."""
-    from camp_planner.models.activity import OrgRole  # noqa: PLC0415
-
     activity = slot.activity
     camp = activity.camp
     garants = [a.org.initials for a in activity.assignments if a.role == OrgRole.garant]
@@ -140,7 +136,7 @@ def nearest_hex(target: str | None, options: dict) -> object | None:
 # We deliberately do NOT use colors().get(): its "event" palette returns the *older* pastel
 # backgrounds (e.g. Peacock = #46d6db), which don't match what users see, so snapping an
 # exact modern color like #039BE5 would miss and land on a neighbour (e.g. Blueberry).
-_EVENT_COLORS = {
+EVENT_COLORS = {
     "1": "#7986CB",   # Lavender
     "2": "#33B679",   # Sage
     "3": "#8E24AA",   # Grape
@@ -155,24 +151,10 @@ _EVENT_COLORS = {
 }
 
 
-def color_palette() -> dict[str, str]:
-    """Google's fixed event-color palette as {colorId: hex}, matching the modern UI swatches."""
-    return _EVENT_COLORS
-
-
-def nearest_color_id(hex_color: str | None) -> str | None:
-    """The Google event colorId whose swatch is closest to an arbitrary hex color."""
-    return nearest_hex(hex_color, color_palette())
-
-
-def color_id_to_hex(color_id: str | None) -> str | None:
-    return color_palette().get(color_id) if color_id else None
-
-
 def event_color_id(activity) -> str | None:
     """colorId for an activity's event: its category color snapped to the palette (or None)."""
     cat = activity.category
-    return nearest_color_id(cat.color) if cat is not None and cat.color else None
+    return nearest_hex(cat.color, EVENT_COLORS) if cat is not None else None
 
 
 def parse_event_times(event: dict, timezone: str) -> tuple[datetime, datetime] | None:

@@ -14,7 +14,7 @@ from camp_planner.models.camp import Camp
 from camp_planner.models.common import slugify
 from camp_planner.schemas import CampUpdate
 from camp_planner.services import audit, errors, google_client, google_sync, taxonomy
-from camp_planner.services.timeline import bump_timeline_rev
+from camp_planner.services.timeline import bump_timeline_rev, camp_window
 
 log = logging.getLogger(__name__)
 
@@ -150,8 +150,7 @@ def _calendar_conflict(calendar_id: str, start, end, exclude_camp_id: int) -> Ca
         db.select(Camp).where(Camp.google_calendar_id == calendar_id, Camp.id != exclude_camp_id)
     ).all()
     for other in others:
-        o_start, o_end = google_sync.camp_window(other.start_date, other.length_days,
-                                                 other.window_start_min)
+        o_start, o_end = camp_window(other.start_date, other.length_days, other.window_start_min)
         if start < o_end and o_start < end:  # half-open intervals overlap
             return other
     return None
@@ -186,7 +185,7 @@ def set_google_calendar(camp: Camp, calendar_id: str) -> dict:
     if calendar_id == camp.google_calendar_id:
         return {"google": google_status(camp)}
 
-    start, end = google_sync.camp_window(camp.start_date, camp.length_days, camp.window_start_min)
+    start, end = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
     conflict = _calendar_conflict(calendar_id, start, end, camp.id)
     if conflict:
         raise errors.Invalid(
@@ -254,7 +253,7 @@ def save_camp_settings(camp: Camp, data: dict, *, allow_meta: bool) -> None:
     # camp on that calendar (checked before applying anything, so a reject leaves it intact).
     if camp.google_calendar_id and any(
             f in data and data[f] != getattr(camp, f) for f in _LAYOUT_FIELDS):
-        start, end = google_sync.camp_window(
+        start, end = camp_window(
             data.get("start_date", camp.start_date),
             data.get("length_days", camp.length_days),
             data.get("window_start_min", camp.window_start_min))
