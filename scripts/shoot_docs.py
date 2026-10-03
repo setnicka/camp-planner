@@ -2,7 +2,7 @@
 """Re-shoot the screenshots embedded in docs/pruvodce.md.
 
 Boots the app against a demo database (see `flask seed-demo`), logs in and captures
-the set. Most shots are taken as the editor account — what an ordinary organiser
+the set. Most shots are taken as the editor account: what an ordinary organiser
 sees; only the admin-gated pages are taken as 'admin', so no screenshot advertises
 a control a normal user does not have.
 
@@ -46,7 +46,7 @@ REPO = Path(__file__).resolve().parent.parent
 CONTEXT = {"viewport": {"width": 1440, "height": 1000}, "device_scale_factor": 2,
            "locale": "cs-CZ"}
 
-# WebP encoding runs off the browser thread — it costs several seconds per run and would
+# WebP encoding runs off the browser thread: it costs several seconds per run and would
 # otherwise sit between shots as dead time. Futures are drained at the end of capture().
 _encoder = ThreadPoolExecutor(4)
 _pending: list[Future] = []
@@ -56,7 +56,7 @@ def wait_for(url: str, timeout: float = 30.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(url, timeout=1):  # noqa: S310 — fixed localhost URL
+            with urllib.request.urlopen(url, timeout=1):  # noqa: S310  (fixed localhost URL)
                 return
         except (urllib.error.URLError, OSError):
             time.sleep(0.25)
@@ -89,7 +89,7 @@ def read_demo(db: Path) -> tuple[dict[str, int], bool]:
         with Session(engine) as session:
             camp = session.scalar(select(Camp).filter_by(slug=SLUG))
             if camp is None:
-                raise SystemExit(f"{db} holds no camp {SLUG!r} — run: "
+                raise SystemExit(f"{db} holds no camp {SLUG!r}; run: "
                                  f"flask --app wsgi seed-demo --out {db}")
             connected = camp.google_calendar_id is not None
             rows = session.execute(
@@ -109,11 +109,11 @@ def login(page, base: str, username: str) -> None:
     # A rejected login re-renders the form; without this the run would yield a full set
     # of screenshots of the login page.
     if "/auth/login" in page.url:
-        raise SystemExit(f"login as {username!r} failed — is this database seeded by seed-demo?")
+        raise SystemExit(f"login as {username!r} failed. Is this database seeded by seed-demo?")
 
 
 def _write_webp(png: bytes, dest: Path) -> None:
-    """Store Playwright's PNG bytes as lossless WebP — identical pixels, roughly a third of
+    """Store Playwright's PNG bytes as lossless WebP: identical pixels, roughly a third of
     the size on flat UI screenshots. Playwright can only write PNG/JPEG itself, so the
     conversion happens here rather than leaving PNGs on disk to clean up. method=4: the
     slowest setting (6) costs ~60 s more per run for ~10 % of file size."""
@@ -140,11 +140,11 @@ def shoot_google_review(page, camp: str, out: Path) -> None:
     pull = page.get_by_role("button", name="Načíst změny z Google")
     pull.wait_for()                     # the tab body renders after an async status fetch
     pull.click()
-    # Either the rendered change list or the explicit no-changes note — never the spinner.
+    # Either the rendered change list or the explicit no-changes note, never the spinner.
     page.locator(".cp-google-review-title, .cp-google-review .cp-muted").first.wait_for(
         timeout=60000)
     if not page.locator(".cp-google-review-title").count():
-        raise SystemExit("calendar pull found no divergences — restage them before shooting")
+        raise SystemExit("calendar pull found no divergences; restage them before shooting")
     shoot(page, out, "10-google-nacteni.webp", selector=".cp-google")
 
 
@@ -161,24 +161,24 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
 
         login(page, base, EDITOR_USER)
 
-        # 01 — timeline.
+        # 01: timeline.
         page.goto(camp)
         page.wait_for_selector(".vis-timeline")
         shoot(page, out, "01-timeline.webp")
 
-        # 03 — activity detail: prep/main/cleanup slots, Markdown, material, todos, tags, history.
+        # 03: activity detail (prep/main/cleanup slots, Markdown, material, todos, tags, history).
         page.goto(f"{camp}/activities/{ids[HERO_ACTIVITY]}")
         page.wait_for_selector(".cp-act-title")
         page.wait_for_timeout(600)               # history feed arrives over the API
         shoot(page, out, "03-detail-aktivity.webp")
 
-        # 12 — the same activity's change history, while the page (and its already-fetched
+        # 12: the same activity's change history, while the page (and its already-fetched
         # history feed) is still loaded.
         page.get_by_role("button", name="Historie změn").click()
         page.wait_for_selector(".cp-hist-entry", timeout=15000)
         shoot(page, out, "12-historie-zmen.webp")
 
-        # 04 / 05 / 06 — the table pages.
+        # 04 / 05 / 06: the table pages.
         # Both list views run to thousands of pixels; the top screenful is what the guide
         # needs, so these two are viewport shots rather than full-page ones.
         page.goto(f"{camp}/activities")
@@ -196,51 +196,51 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
         page.wait_for_selector("table, .cp-todo")
         shoot(page, out, "06-ukoly.webp")
 
-        # 07 — settings, on the taxonomy tab. The pane body is JS-rendered, so wait for
+        # 07: settings, on the taxonomy tab. The pane body is JS-rendered, so wait for
         # its table, not just the server-rendered tab bar.
         page.goto(f"{camp}/detail")
         page.wait_for_selector("[data-tax-body] table")
         shoot(page, out, "07-nastaveni.webp")
 
-        # 08 — one activity, eight slots, each named by its topic (override_name).
+        # 08: one activity, eight slots, each named by its topic (override_name).
         # Over three slots the list collapses behind a toggle; expand it so all eight show.
         page.goto(f"{camp}/activities/{ids[SLOTS_ACTIVITY]}")
         page.wait_for_selector(".cp-slotchip")
         page.locator(".cp-slot-toggle").click()
         shoot(page, out, "08-sloty-nazvy.webp", selector=".cp-act-bar")
 
-        # 09 — the shared slot dialog (name + who staffs the block).
+        # 09: the shared slot dialog (name + who staffs the block).
         page.locator(".cp-slot-edit").first.click()
         page.wait_for_selector(".cp-modal-overlay")
         shoot(page, out, "09-orgove-slotu.webp", selector=".cp-modal-overlay > *")
         page.keyboard.press("Escape")
 
-        # 10 — inbound review. Needs a calendar that differs from the DB, i.e.
+        # 10: inbound review. Needs a calendar that differs from the DB, i.e.
         # `seed-demo --calendar` plus a push plus manually staged divergences.
         if google:
             shoot_google_review(page, camp, out)
         else:
-            print("  10-google-nacteni.webp skipped — demo seeded without --calendar")
+            print("  10-google-nacteni.webp skipped (demo seeded without --calendar)")
 
-        # 13 — the warehouse map: boxes grouped by the shelf they stand on.
+        # 13: the warehouse map (boxes grouped by the shelf they stand on).
         page.goto(f"{base}/inventory")
         page.wait_for_selector(".cp-inv-tile-name")
         shoot(page, out, "13-sklad-prehled.webp")
 
-        # 14 — one box: photos, other names, notes and the last checks' columns.
+        # 14: one box (photos, other names, notes and the last checks' columns).
         page.get_by_role("link", name="Papírnictví").click()
         page.wait_for_selector(".cp-inv-item-name")
         page.get_by_role("button", name="Historie").click()
         page.wait_for_selector(".cp-inv-hist-head")
         shoot(page, out, "14-sklad-krabice.webp")
 
-        # 15 — a thing's dialog: every field and its photos in one place.
+        # 15: a thing's dialog (every field and its photos in one place).
         page.get_by_title("Upravit", exact=True).first.click()
         page.wait_for_selector(".cp-modal-overlay")
         shoot(page, out, "15-sklad-vec.webp", selector=".cp-modal-overlay > *")
         page.keyboard.press("Escape")
 
-        # 16 / 17 — a check in progress, started here rather than seeded (the demo database
+        # 16 / 17: a check in progress, started here rather than seeded (the demo database
         # keeps only finished ones) and cancelled again below, so the run can repeat.
         page.goto(f"{base}/inventory/checks")
         page.get_by_role("button", name="Zahájit inventuru").click()
@@ -261,7 +261,7 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
         page.get_by_role("button", name="Zrušit inventuru").click()
         page.get_by_role("button", name="Zahájit inventuru").wait_for()
 
-        # 11 — the same timeline in the dark theme. The switch sits in the account
+        # 11: the same timeline in the dark theme. The switch sits in the account
         # menu now, so the menu has to be opened for it and closed again before the shot.
         page.goto(camp)
         page.wait_for_selector(".vis-timeline")
@@ -270,7 +270,7 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
         page.keyboard.press("Escape")
         shoot(page, out, "11-tmavy-rezim.webp")
 
-        # 02 — creating a camp is admin-only. A fresh context, not a logout: it drops the
+        # 02: creating a camp is admin-only. A fresh context, not a logout: it drops the
         # session cookie *and* the localStorage theme the dark-mode shot just set.
         ctx.close()
         page = browser.new_context(**CONTEXT).new_page()
@@ -290,7 +290,7 @@ def capture(base: str, out: Path, ids: dict[str, int], google: bool) -> None:
 
 
 def check_guide_refs(out: Path) -> None:
-    """Warn (not fail — the Google shot is legitimately optional) when the shot set and
+    """Warn (not fail: the Google shot is legitimately optional) when the shot set and
     the images pruvodce.md embeds drift apart."""
     guide = REPO / "docs/pruvodce.md"
     referenced = set(re.findall(r"screenshots/([\w.-]+\.webp)", guide.read_text()))
@@ -311,7 +311,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if not args.db.exists():
-        raise SystemExit(f"{args.db} not found — run: flask --app wsgi seed-demo --out {args.db}")
+        raise SystemExit(f"{args.db} not found; run: flask --app wsgi seed-demo --out {args.db}")
 
     proc = spawn_server(args.db, args.port, args.media)
     base = f"http://127.0.0.1:{args.port}"

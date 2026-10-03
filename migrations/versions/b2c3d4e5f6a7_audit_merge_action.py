@@ -20,7 +20,7 @@ branch_labels = None
 depends_on = None
 
 # audit_action is a non-native (CHECK-constrained) enum, so widening it means rewriting the
-# CHECK — batch_alter_table recreates the table with the new allowed set on every backend.
+# CHECK: batch_alter_table recreates the table with the new allowed set on every backend.
 _OLD = sa.Enum('create', 'update', 'delete', name='audit_action', native_enum=False)
 _NEW = sa.Enum('create', 'update', 'delete', 'merge', name='audit_action', native_enum=False)
 

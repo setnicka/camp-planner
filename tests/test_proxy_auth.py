@@ -1,4 +1,4 @@
-"""Proxy-auth header parsing — focus on the X-Remote-Name charset round-trip.
+"""Proxy-auth header parsing, focused on the X-Remote-Name charset round-trip.
 
 HTTP headers carry only latin-1, but org display names are UTF-8 (Czech
 diacritics), so the proxy percent-encodes X-Remote-Name and ProxyProvider

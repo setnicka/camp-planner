@@ -1,7 +1,7 @@
-// Camp Planner — activity detail page (Phase 3).
+// Camp Planner: activity detail page (Phase 3).
 //
 // Renders one activity from the JSON the server inlined in #cp-activity-data and edits
-// it in place via the /api endpoints — no reloads. Layout: title, a header block
+// it in place via the /api endpoints, no reloads. Layout: title, a header block
 // (category / orgs / tags-as-chips), then tabs (description / todos / materials). Edit
 // affordances appear only when data.may_edit; the api re-checks server-side.
 "use strict";
@@ -26,7 +26,7 @@
   let activeTab = TAB.initial || "description";
   let descEdit = null;                      // {cm, fit, dirty} while the description editor is open
   let titleHost, headerHost, tabbarHost;    // stable region nodes, assigned once in buildShell()
-  const panes = {};                         // { description, todos, materials, history } — built once, shown/hidden by tab
+  const panes = {};                         // { description, todos, materials, history }, built once, shown/hidden by tab
 
   // --- small helpers ---------------------------------------------------------
   const clampPct = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
@@ -59,7 +59,7 @@
     return chip;
   }
 
-  // shared slot-edit dialog (cpSlotOrgsEdit) — same modal as the timeline editor, here with
+  // shared slot-edit dialog (cpSlotOrgsEdit), same modal as the timeline editor, here with
   // the name-override field too (the timeline editor has a separate name dialog).
   function openSlotOrgs(s) {
     window.cpSlotOrgsEdit({
@@ -246,7 +246,7 @@
   }
 
   function openTagsEdit() {
-    if (!DATA.tag_defs.length) { toast("Žádné tagy — vytvořte je v nastavení akce.", true); return; }
+    if (!DATA.tag_defs.length) { toast("Žádné tagy – vytvořte je v nastavení akce.", true); return; }
     const value = Object.fromEntries(A.tags.map((t) => [t.tag_id, t.value]));
     const enabled = new Set(A.tags.map((t) => t.tag_id));
     const rows = DATA.tag_defs.map((d) => tagEditRow(d, enabled.has(d.id), value[d.id]));
@@ -312,7 +312,7 @@
     pane.append(body);
   }
 
-  // In-place Markdown editor — the shared cpMarkdownEdit module (md-editor.js);
+  // In-place Markdown editor: the shared cpMarkdownEdit module (md-editor.js);
   // here we just wire its save to the activity PATCH and keep the tab marker in sync.
   function startDescEdit(pane) {
     descEdit = window.cpMarkdownEdit({
@@ -335,7 +335,7 @@
   // The TODO tab reuses the shared cpTodoList component (same as the camp-wide TODO overview),
   // here scoped to this one activity: no activity column / filter / sort, and no "Zrušit filtry"
   // button (only two filters). Filter state persists in the URL hash after the tab token
-  // (#todos&done=1 — hashPrefix keeps the tab segment intact). Built once; it mutates A.todos in
+  // (#todos&done=1; hashPrefix keeps the tab segment intact). Built once; it mutates A.todos in
   // place and onChange() keeps the tab label's done/total counts current (renderTabbar reads A.todos).
   function renderTodosPane() {
     window.cpTodoList({
@@ -403,7 +403,7 @@
   }
 
   function openNeedEdit(n) {
-    // shared dialog (cpMaterialNeedEdit) — same edit window as the camp-wide materials overview
+    // shared dialog (cpMaterialNeedEdit), same edit window as the camp-wide materials overview
     window.cpMaterialNeedEdit({
       title: n.material.name, need: n, defaultUnit: n.material.unit,
       url: withId(U.needItem, n.id),
@@ -541,7 +541,7 @@
   // --- change history ("Historie změn") --------------------------------------
   // The feed itself is the shared cpHistoryFeed module; here we just mount it into
   // panes.history filtered to this activity. showActivePane() reloads it on every open so
-  // edits made elsewhere on the page — and by Google sync — show up without a full reload.
+  // edits made elsewhere on the page (and by Google sync) show up without a full reload.
   let historyFeed = null;
 
   function renderHistoryPane() {
@@ -557,7 +557,7 @@
   // --- render ----------------------------------------------------------------
   // Build the page once into stable region nodes, then let each region refresh on its own.
   // An open description editor lives in panes.description and is only ever rebuilt by its
-  // own Save/Cancel — never by a tab switch, tag/org edit, or todo/material change.
+  // own Save/Cancel, never by a tab switch, tag/org edit, or todo/material change.
   function buildShell() {
     titleHost = el("div");
     headerHost = el("div");

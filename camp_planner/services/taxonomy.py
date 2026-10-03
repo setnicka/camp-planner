@@ -1,7 +1,7 @@
 """Per-camp taxonomy management: categories, orgs, tags.
 
 Each list is saved as a whole: the client PUTs the desired list and the server
-reconciles it against the current rows — update matched ids, create id-less items,
+reconciles it against the current rows: update matched ids, create id-less items,
 delete the rest. Plus a copy-from-another-camp helper. None of this bumps timeline_rev.
 """
 
@@ -62,7 +62,7 @@ def _reconcile(
     display: Callable, block_delete: Callable | None = None,
 ) -> None:
     """Sync `current` rows to match `items` (schema-validated models, in final order).
-    Raises errors.Invalid on a duplicate or a blocked delete (no rollback — request
+    Raises errors.Invalid on a duplicate or a blocked delete (no rollback: request
     teardown discards the uncommitted session).
 
     unique_of(obj) is the row's unique value (an in-list repeat → dup_msg). display(obj) is
@@ -166,7 +166,7 @@ COPY_PARTS = ("categories", "orgs", "tags")
 
 def copy_into(dest: Camp, source: Camp, *, parts=None) -> None:
     """Seed a new camp's taxonomies from `source`: copy the chosen `parts` (subset of
-    COPY_PARTS; None = all). `dest` is assumed empty. Does not commit — the caller
+    COPY_PARTS; None = all). `dest` is assumed empty. Does not commit; the caller
     owns the transaction."""
     parts = set(COPY_PARTS if parts is None else parts)
     if "categories" in parts:

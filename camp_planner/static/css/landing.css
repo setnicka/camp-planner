@@ -1,9 +1,9 @@
-/* Landing page (camp list) — page-scoped, loaded only on index.html. Shared atoms
+/* Landing page (camp list): page-scoped, loaded only on index.html. Shared atoms
  * (.cp-muted) and the design tokens come from content.css, loaded alongside. */
 
 .cp-landing-new { margin: 0 0 1.2rem; }
 
-/* "+ Vytvořit akci" — an accent-filled action, matching the form buttons. */
+/* "+ Vytvořit akci": an accent-filled action, matching the form buttons. */
 .cp-new-camp {
   font: inherit;
   padding: 0.4rem 0.9rem;

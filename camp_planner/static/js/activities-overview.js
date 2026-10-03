@@ -1,8 +1,8 @@
-// Camp Planner — camp-wide activity overview / status page (Phases 5+6).
+// Camp Planner: camp-wide activity overview / status page (Phases 5+6).
 //
 // Renders every activity (from the JSON the server inlined in #cp-overview-data) in one
 // table: category, orgs, todo/material progress, a column per pinned tag, and slot counts.
-// Filtering and sorting are driven entirely from the column headers — each header carries its
+// Filtering and sorting are driven entirely from the column headers: each header carries its
 // own sort toggle and/or filter control. Delete and merge go to the /api endpoints; merge
 // reloads (the server moves slots/needs across activities). Edit affordances appear only when
 // data.may_edit; the api re-checks server-side.
@@ -20,8 +20,8 @@
   const ROWS = DATA.activities;             // mutated in place (delete splices; merge reloads)
   const CATEGORIES = DATA.categories;
   const ORGS = DATA.orgs;
-  const PINNED = DATA.pinned_tags;          // [{id, name, kind}] — table columns + filter/sort
-  const CAMP = DATA.camp;                   // {start_date, length_days, window_start_min} — chrono day math
+  const PINNED = DATA.pinned_tags;          // [{id, name, kind}]; table columns + filter/sort
+  const CAMP = DATA.camp;                   // {start_date, length_days, window_start_min}; chrono day math
 
   const clampPct = (v) => Math.max(0, Math.min(100, parseInt(v, 10) || 0));
   const slotCount = (r) => r.slots.length;                                    // any placed slot (any role)
@@ -34,13 +34,13 @@
   // --- camp-day math (chronological mode) ------------------------------------
   // Group main slots into camp days the same way the timeline does: a day is a 24h window
   // anchored at window_start_min (not midnight), so a night program past midnight stays on
-  // its day's row. Times are naive wall-clock — no timezone conversion (see models/slot.py).
+  // its day's row. Times are naive wall-clock: no timezone conversion (see models/slot.py).
   const DAY_MIN = 1440;
   const CZ_WEEKDAYS = ["Neděle", "Pondělí", "Úterý", "Středa", "Čtvrtek", "Pátek", "Sobota"]; // getUTCDay: 0=Ne
   const [SD_Y, SD_M, SD_D] = CAMP.start_date.split("-").map(Number);
   const ORIGIN = Date.UTC(SD_Y, SD_M - 1, SD_D);                             // midnight of start_date, as UTC ms
-  // Camp-day index (0..length_days-1) for a naive ISO datetime. Parse the parts — never
-  // `new Date(str)`, which would apply the browser timezone — into minutes from the camp origin,
+  // Camp-day index (0..length_days-1) for a naive ISO datetime. Parse the parts (never
+  // `new Date(str)`, which would apply the browser timezone) into minutes from the camp origin,
   // then bucket by the 24h window anchored at window_start_min. Clamped to the span so every main
   // slot lands on a real divider (matches the segment clamping in services/timeline.py).
   function dayOf(iso) {
@@ -50,7 +50,7 @@
     const abs = Math.round((Date.UTC(y, mo - 1, d) - ORIGIN) / 86400000) * DAY_MIN + hh * 60 + mm;
     return Math.max(0, Math.min(CAMP.length_days - 1, Math.floor((abs - CAMP.window_start_min) / DAY_MIN)));
   }
-  // Full-width day-divider label, e.g. "Čtvrtek 9. 7." — parse as UTC so the weekday can't roll.
+  // Full-width day-divider label, e.g. "Čtvrtek 9. 7."; parse as UTC so the weekday can't roll.
   function dayLabel(i) {
     const dt = new Date(ORIGIN + i * 86400000);
     return CZ_WEEKDAYS[dt.getUTCDay()] + " " + dt.getUTCDate() + ". " + (dt.getUTCMonth() + 1) + ".";
@@ -61,7 +61,7 @@
   // --- column-filter states ---------------------------------------------------
   // One table per filterable column kind, in slider order: [value, symbol, test]. Header
   // symbols, row filtering and hash validation all read these, so a state exists in exactly
-  // one place. Tooltips are keyed by value (below) rather than positional — Czech declension
+  // one place. Tooltips are keyed by value (below) rather than positional: Czech declension
   // makes them per-column ("jen s úkoly" / "jen s materiálem"), so they can't live here.
   const PROGRESS_STATES = [                                 // tested against a {done, total}
     ["has", "∃", (c) => c.total > 0],
@@ -207,7 +207,7 @@
     if (filter.garantsOnly) p.set("garants", "1");
     for (const [id, state] of filter.tags) p.set("tag" + id, state);
     if (chrono) p.set("chrono", "1");
-    // Persist the column sort even while chronological — so switching back (incl. after a reload)
+    // Persist the column sort even while chronological, so switching back (incl. after a reload)
     // restores it rather than snapping to the default title order.
     if (sortKey !== "title" || sortDir !== 1) { p.set("sort", sortKey); if (sortDir !== 1) p.set("dir", "-1"); }
     return p.toString();
@@ -328,7 +328,7 @@
 
   // --- header controls (sort + filter live in the column headers) ------------
   function setSort(key) {
-    if (chrono) return;   // chronological mode owns the ordering — column sorting is disabled
+    if (chrono) return;   // chronological mode owns the ordering; column sorting is disabled
     if (key === sortKey) sortDir = -sortDir; else { sortKey = key; sortDir = 1; }   // re-click reverses
     sortArrows.forEach((span, k) => { span.textContent = arrowFor(k); });
     writeHash();
@@ -364,7 +364,7 @@
   }
 
   function orgsHead() {
-    // "jen garant" — restrict the org match to garant assignments (ignore helpers)
+    // "jen garant": restrict the org match to garant assignments (ignore helpers)
     return orgFilterHead({
       orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange,
       extra: { label: "jen garant", checked: filter.garantsOnly, set: (v) => { filter.garantsOnly = v; } },
@@ -385,7 +385,7 @@
   }
 
   // "Zrušit filtry" clears only the filters; the sort mode (a column or chronological) is left
-  // as-is — the segmented control is the only way in/out of chronological mode.
+  // as-is: the segmented control is the only way in/out of chronological mode.
   function resetFilters() {
     filter.categoryId = null; filter.todosState = null; filter.materialsState = null;
     filter.orgIds.clear(); filter.tags.clear(); filter.garantsOnly = false;
@@ -418,7 +418,7 @@
   // deletes the source, so we reload rather than reconcile the table locally.
   function openMerge(r) {
     const others = ROWS.filter((x) => x.id !== r.id);
-    if (!others.length) { toast("Není do čeho slučovat — v akci je jen tahle aktivita.", true); return; }
+    if (!others.length) { toast("Není do čeho slučovat – v akci je jen tahle aktivita.", true); return; }
     mergePicker({
       title: "Sloučit „" + r.title + "“ do…",
       hint: "Úkoly, sloty a materiál se přesunou do vybrané aktivity (množství stejného materiálu " +
@@ -433,7 +433,7 @@
   // --- shell -----------------------------------------------------------------
   function buildShell() {
     if (!ROWS.length) {
-      mount.replaceChildren(el("p", { class: "cp-muted" }, "Zatím žádné aktivity — vytvoř je z timeline."));
+      mount.replaceChildren(el("p", { class: "cp-muted" }, "Zatím žádné aktivity – vytvoř je z timeline."));
       return;
     }
     sortArrows.clear();
@@ -472,8 +472,8 @@
     const table = el("table", { class: "cp-table cp-ov-table cp-sticky-head" }, el("thead", null, headRow), tbody);
     mount.replaceChildren(toolbar, table, hint);
     // Paint the full (unfiltered) set first so the frozen column widths fit the widest content,
-    // then apply any active filter. Pinning the widths up front stops later filtered re-renders —
-    // which show only the matching rows — from reflowing the columns. In chronological mode the
+    // then apply any active filter. Pinning the widths up front stops later filtered re-renders
+    // (which show only the matching rows) from reflowing the columns. In chronological mode the
     // full set is every main slot expanded into its own row.
     tbody.replaceChildren(...measureRows());
     freezeColumns(table, headRow);

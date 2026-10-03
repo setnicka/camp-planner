@@ -1,4 +1,4 @@
-/* Camp settings page — taxonomy tabs. Tab bar/panes are shared primitives from
+/* Camp settings page: taxonomy tabs. Tab bar/panes are shared primitives from
    components.css; this file only adds the per-pane edit toolbar. */
 
 /* Cap the pane to the table's own max-width (.cp-table is 46rem) so the right-aligned
@@ -8,7 +8,7 @@
 .cp-edit-toolbar { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
 
 /* "Upravit parametry" navigates to the edit page but should wear the .cp-edit-toggle
-   button chrome — reset the default anchor underline/colour so it matches. */
+   button chrome; reset the default anchor underline/colour so it matches. */
 a.cp-edit-toggle { display: inline-block; text-decoration: none; }
 
 /* change-history pane: the mode toggle is the shared .cp-seg; only its spacing + hint here */

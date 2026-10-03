@@ -149,7 +149,7 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
     """Merge `source` into `target`: source's needs move over, then source is deleted.
     A need with no unit override keeps its effective unit (source's default is pinned
     if the defaults differ). If an activity uses both, source's amount is added to the
-    existing need — but only if their effective units match; a mismatch fails the whole
+    existing need, but only if their effective units match; a mismatch fails the whole
     merge so the operator can align the units manually and retry."""
     if source.id == target.id:
         raise errors.Invalid("Nelze sloučit materiál sám se sebou.")

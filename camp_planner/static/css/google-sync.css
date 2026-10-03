@@ -1,4 +1,4 @@
-/* Google Calendar connection panel — page-scoped to the camp settings page.
+/* Google Calendar connection panel: page-scoped to the camp settings page.
  * Loaded only on camp_detail.html when the feature is configured. Shared atoms
  * (.cp-section, .cp-mini, .cp-danger, .cp-flash, .cp-seg) come from components/content.css. */
 
@@ -66,7 +66,7 @@
 }
 .cp-google-error-detail { margin-top: 0.25rem; font-family: monospace; font-size: 0.85em; word-break: break-word; }
 
-/* Foreign-slot warning atop the review list — a caution, not an error: amber, not red. */
+/* Foreign-slot warning atop the review list. A caution, not an error: amber, not red. */
 .cp-google-foreign { background: var(--cp-warning-subtle); border-color: var(--cp-warning); color: var(--cp-warning-text); }
 
 /* --- inbound review (inline, below the buttons) --- */

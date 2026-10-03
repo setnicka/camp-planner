@@ -2,7 +2,7 @@
 //
 // Lists are rendered read-only from the JSON embedded in #cp-tax-data. The pencil
 // (data-edit-toggle) flips a section into edit mode: rename inline, add rows,
-// delete, and — for categories/tags — drag to reorder. "Uložit" PUTs the whole
+// delete, and (for categories/tags) drag to reorder. "Uložit" PUTs the whole
 // desired list to the REST endpoint; the server reconciles and returns the saved
 // list (with real ids), then we re-render read-only and show a flash.
 "use strict";
@@ -14,7 +14,7 @@
   const DATA = JSON.parse(dataEl.textContent);
   const KIND_LABEL = Object.fromEntries(DATA.tag_kinds); // value -> czech label
 
-  // Edit mode batches rows until "Uložit" — warn before a reload/navigation discards them.
+  // Edit mode batches rows until "Uložit"; warn before a reload/navigation discards them.
   let editingPanes = 0;
   window.addEventListener("beforeunload", (e) => {
     if (editingPanes) { e.preventDefault(); e.returnValue = ""; }

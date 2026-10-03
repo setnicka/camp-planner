@@ -280,7 +280,7 @@ def test_page_carries_csrf_refresh_meta(client, seeded):
 
 def test_theme_switch_is_rendered_and_follows_the_os(client):
     """Default deployment: the visitor chooses, so the switch and its script ship. The
-    shell opts into prefers-color-scheme with "auto" — it owns the page background."""
+    shell opts into prefers-color-scheme with "auto": it owns the page background."""
     html = client.get("/").get_data(as_text=True)
     assert '<html lang="cs" data-cp-theme="auto">' in html
     assert "data-cp-theme-switch" in html

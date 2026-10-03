@@ -1,4 +1,4 @@
-"""Slots — the time spans of the activities + orgs mapping."""
+"""Slots: the time spans of the activities + orgs mapping."""
 
 from __future__ import annotations
 

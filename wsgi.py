@@ -16,7 +16,7 @@ app = create_app()
 
 # BEHIND_PROXY=1: trust one hop of X-Forwarded-* (incl. X-Forwarded-Prefix) so the
 # app generates correct URLs when served behind a reverse proxy under a path.
-# Opt-in on purpose — on a directly exposed process these headers are client-
+# Opt-in on purpose: on a directly exposed process these headers are client-
 # controlled and would let anyone spoof the host/path of generated URLs. Proxy
 # auth mode (camp_planner/auth/proxy.py) sits behind a proxy by definition, so
 # such deployments set this. See docs/DEPLOYMENT.md.

@@ -1,4 +1,4 @@
-// Camp Planner — camp-wide TODO overview page. Thin host: parse the server-inlined JSON and
+// Camp Planner: camp-wide TODO overview page. Thin host: parse the server-inlined JSON and
 // hand it to the shared cpTodoList component (activity column + filter/sort enabled, filter
 // state persisted in the URL hash). All rendering and mutation live in todo-list.js.
 "use strict";

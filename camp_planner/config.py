@@ -34,7 +34,7 @@ fk = table_name
 def index_name(name: str) -> str:
     """Prefix an auto-generated index name to match the prefixed table it indexes:
     index_name("ix_camps_slug") -> "ix_<prefix>camps_slug". (Auto names embed the
-    table name right after "ix_"; explicitly-named indexes aren't prefixed — pass
+    table name right after "ix_"; explicitly-named indexes aren't prefixed; pass
     them as plain literals.) Used by migrations to mirror what the models produce."""
     return f"ix_{table_name(name[3:])}"
 
@@ -138,7 +138,7 @@ class ProductionConfig(Config):
         Config.init_app(app)
         if app.config["SECRET_KEY"] == _INSECURE_DEFAULT_SECRET:
             raise RuntimeError(
-                "SECRET_KEY is not set — with the built-in default, session cookies "
+                "SECRET_KEY is not set: with the built-in default, session cookies "
                 "and CSRF tokens are forgeable. Set the SECRET_KEY environment "
                 "variable (e.g. python -c 'import secrets; print(secrets.token_hex(32))')."
             )

@@ -6,7 +6,7 @@ boundary is sliced into one segment per day-row it touches, carrying continuatio
 flags.
 
 IMPORTANT: slot datetimes are naive local values. All math here is pure calendar
-arithmetic on those values — do NOT convert through ZoneInfo. camp.timezone is
+arithmetic on those values; do NOT convert through ZoneInfo. camp.timezone is
 display metadata only; introducing tz conversion would reintroduce the DST shifts
 the model deliberately avoids.
 """

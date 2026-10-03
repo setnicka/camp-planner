@@ -137,7 +137,7 @@ def test_timeline_create_rejects_end_before_start(client, seeded):
 
 
 def test_timeline_save_requires_rev(client, seeded):
-    # rev is the optimistic lock — omitting it must be a validation error, not a
+    # rev is the optimistic lock: omitting it must be a validation error, not a
     # silent lock bypass
     resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={"moves": []}, headers=ADMIN)
     assert resp.status_code == 422
@@ -155,7 +155,7 @@ def test_timeline_save_force_overrides_stale_rev(client, seeded):
 
 def test_timeline_save_rejects_slot_outside_camp_days(client, seeded):
     """A slot outside the camp window would persist but never render (slice_segments
-    clamps it away) — an invisible slot no UI could reach. Camp: 2026-07-04 + 3 days,
+    clamps it away), an invisible slot no UI could reach. Camp: 2026-07-04 + 3 days,
     window 04:00 → valid range 07-04T04:00 .. 07-07T04:00."""
     slug, aid = seeded["slug"], seeded["activity_id"]
     url = f"/api/camps/{slug}/timeline"
@@ -180,7 +180,7 @@ def test_timeline_save_rejects_slot_outside_camp_days(client, seeded):
 
 
 def test_timeline_span_seconds_are_dropped(client, seeded):
-    # sub-minute times would render truncated and never round-trip — normalized away
+    # sub-minute times would render truncated and never round-trip, hence normalized away
     rev = _get(client, f"/api/camps/{seeded['slug']}/timeline")["camp"]["rev"]
     resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={
         "rev": rev,
@@ -193,7 +193,7 @@ def test_timeline_span_seconds_are_dropped(client, seeded):
 
 
 def test_timeline_save_query_count_is_flat(client, seeded):
-    # the save path is eager-loaded (loaders.TIMELINE) — queries per save must not
+    # the save path is eager-loaded (loaders.TIMELINE): queries per save must not
     # grow with the number of activities/slots (N+1 regression guard)
     slug = seeded["slug"]
     url = f"/api/camps/{slug}/timeline"
@@ -230,7 +230,7 @@ def test_activity_create_requires_title(client, seeded):
 
 def test_patch_explicit_null_on_required_field_is_400(client, seeded):
     """Patch schemas type required fields as `X | None` ("absent = unchanged"), so an
-    explicitly sent null passes validation — apply_patch must reject it (400), not let
+    explicitly sent null passes validation, so apply_patch must reject it (400), not let
     it hit the NOT NULL column (500)."""
     slug, aid = seeded["slug"], seeded["activity_id"]
 
@@ -436,7 +436,7 @@ def test_slot_override_name_set_clear_and_combined(client, seeded):
     assert _json(resp)["override_name"] == "Hra"
     assert [o["initials"] for o in _json(resp)["orgs"]] == ["K"]
 
-    # explicit null org_ids means "unchanged" (only [] clears) — attendees survive
+    # explicit null org_ids means "unchanged" (only [] clears): attendees survive
     resp = client.patch(f"/api/slots/{slot_id}", json={"org_ids": None, "override_name": "Jiná"}, headers=ADMIN)
     assert _json(resp)["override_name"] == "Jiná"
     assert [o["initials"] for o in _json(resp)["orgs"]] == ["K"]
@@ -657,7 +657,7 @@ def test_camp_create_starts_empty(client, app):
     assert resp.status_code == 200
     camp = _json(resp)["camp"]
     assert camp["slug"] == "letni-tabor" and camp["length_days"] == 5
-    # no default categories — a fresh camp starts empty
+    # no default categories: a fresh camp starts empty
     tl = _get(client, f"/api/camps/{camp['slug']}/timeline")
     assert tl["categories"] == []
 
@@ -1002,7 +1002,7 @@ def test_audit_entity_type_filter(client, seeded):
 
     mats = _get(client, f"/api/camps/{slug}/audit?entity_type=material")["entries"]
     assert mats and all(e["entity_type"] == "material" for e in mats)
-    # the enum validates the filter value — an unknown one is a 422, not a silent empty list
+    # the enum validates the filter value: an unknown one is a 422, not a silent empty list
     assert client.get(f"/api/camps/{slug}/audit?entity_type=bogus", headers=ADMIN).status_code == 422
 
 
@@ -1059,7 +1059,7 @@ def test_audit_full_feed_prefixes_detail_entries_with_activity(client, seeded):
     todo = next(e for e in entries if e["entity_type"] == "todo")
     assert todo["activity_title"] == "Akce"
     assert todo["activity_url"].endswith(f"/activities/{aid}")
-    # an activity-level entry is its own subject — no parent-activity prefix
+    # an activity-level entry is its own subject, no parent-activity prefix
     act = next(e for e in entries if e["entity_type"] == "activity")
     assert act["activity_title"] is None
 

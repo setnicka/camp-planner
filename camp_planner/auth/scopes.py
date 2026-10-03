@@ -1,7 +1,7 @@
 """Resolve camp slugs to camp ids.
 
 External identity sources (proxy headers, embedded callback) reference camps by
-slug — the stable identifier a host knows, decoupled from our internal ids. This
+slug: the stable identifier a host knows, decoupled from our internal ids. This
 maps those slugs to the ids the permission model uses. (The standalone DB and CLI
 are already id-based and don't need it.)
 """

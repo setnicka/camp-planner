@@ -47,10 +47,12 @@ node --check camp_planner/static/js/X.js  # JS has no test runner, syntax-check 
 ## Language & style
 
 - All user-facing strings are Czech; the day-grid editor is called „rozvrh“, not „osa“.
-- Sort names with `czech_sort_key` server-side, `localeCompare(s, "cs")` client-side.
-- Czech text uses the en dash (–); the em dash is banned everywhere, including comments,
-  docstrings and commit messages. The one exception is the empty-value glyph (`cpDom.dash()`
-  and its copies): a symbol, not text.
+- Sort names with `czech_sort_key` server-side; client-side use `cpDom.byName` where a list
+  re-sorted after an edit must keep the server's order, else `localeCompare(s, "cs")`.
+- Czech text uses the en dash (–). The em dash is banned in code, comments, docstrings,
+  messages, commit messages and Czech text; English documentation (README, docs/, this
+  file) may use it. Exempt as symbols, not text: the empty-value glyph (`cpDom.dash()` and
+  its copies), placeholder frames („— vyberte —“) and the name separator in a dialog title.
 - Comments, changelog and commit messages stay terse: keep the non-obvious why, drop the
   derivation. Commit messages are self-contained (no references to uncommitted docs or
   review-finding numbers). Czech documentation never addresses the reader in second person.

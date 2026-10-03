@@ -21,7 +21,7 @@ def test_activity_overview_serializes_slots(app, seeded):
     """activity_overview exposes every slot (role + span + override_name), time-ordered, so the
     overview can derive per-role counts and the chronological sort's main-slot rows client-side."""
     a = db.session.get(Activity, seeded["activity_id"])
-    db.session.add_all([   # main + prep slots added out of order — Activity.slots time-orders them
+    db.session.add_all([   # main + prep slots added out of order; Activity.slots time-orders them
         Slot(activity_id=a.id, role=SlotRole.main, override_name="Odpolední",
              start_at=datetime(2026, 7, 5, 14, 0), end_at=datetime(2026, 7, 5, 15, 0)),
         Slot(activity_id=a.id, role=SlotRole.main,
@@ -63,7 +63,7 @@ def test_activity_slots_relationship_is_time_ordered(app, seeded):
 
 
 def test_activity_lists_are_deterministically_ordered(app, seeded):
-    """serialize.activity() sorts the relationships that carry no SQL order — the detail page
+    """serialize.activity() sorts the relationships that carry no SQL order: the detail page
     renders them as-is. Orgs and materials are Czech-collated (Č next to C, not after Z as its
     code point would put it), tags follow the curated Tag.sort_order."""
     camp_id, a_id = seeded["camp_id"], seeded["activity_id"]

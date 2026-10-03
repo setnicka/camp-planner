@@ -110,7 +110,7 @@ def register_cli(app: Flask) -> None:
     ) -> None:
         """Create a standalone-auth user (with optional role grants)."""
         if db_session.scalar(db.select(User).filter_by(username=username)):
-            click.echo(f"User {username!r} already exists — aborting.")
+            click.echo(f"User {username!r} already exists; aborting.")
             return
         user = User(username=username, display_name=display_name or username, is_admin=admin)
         user.set_password(password)
@@ -173,7 +173,7 @@ def register_cli(app: Flask) -> None:
     @api_token.command("list")
     @click.option("--camp", "slug", default=None, help="Only this camp's tokens.")
     def api_token_list(slug: str | None) -> None:
-        """List tokens (name, camp, role, creator, last used) — never the secret."""
+        """List tokens (name, camp, role, creator, last used), never the secret."""
         query = db.select(ApiToken).order_by(ApiToken.name)
         if slug:
             query = query.filter_by(camp_id=_camp_by_slug(slug).id)
@@ -234,7 +234,7 @@ def register_cli(app: Flask) -> None:
         """Deliver queued outbound changes to Google Calendar.
 
         Single-pass by default (drain once and exit). With --loop SECONDS it runs as a
-        long-lived scheduler process — start exactly one such process alongside the web
+        long-lived scheduler process; start exactly one such process alongside the web
         workers; running it inside gunicorn would fire once per worker.
         """
         if interval is None:
@@ -248,7 +248,7 @@ def register_cli(app: Flask) -> None:
         while True:
             try:
                 _sync_once(slug, quiet_idle=True)
-            except Exception as exc:  # noqa: BLE001 — sidecar must survive a transient failure
+            except Exception as exc:  # noqa: BLE001  (sidecar must survive a transient failure)
                 click.echo(f"{datetime.now():%Y-%m-%d %H:%M:%S} sync pass failed, "
                            f"retrying next interval: {exc}", err=True)
             finally:

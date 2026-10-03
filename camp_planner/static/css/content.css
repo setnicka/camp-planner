@@ -5,7 +5,7 @@
  * (nav, body reset, flashes) lives in standalone.css. */
 
 /* ===========================================================================
- * PALETTE — the single source of every colour; no literal outside this block
+ * PALETTE: the single source of every colour; no literal outside this block
  * (enforced by tests/test_css_palette.py).
  *
  * Three paths: light (default), dark via prefers-color-scheme where a shell
@@ -13,79 +13,79 @@
  * attribute works on any ancestor; the :has() arms lift the tokens to :root
  * because cpDom mounts modals/toasts on document.body, outside the wrapper.
  * "auto" is opt-in, not the default: following the OS is only sound where we
- * own the page background — embedded we don't. See docs/DEPLOYMENT.md §2.
+ * own the page background; embedded we don't. See docs/DEPLOYMENT.md §2.
  *
  * The dark values appear twice (CSS cannot OR a media query with a selector;
- * resolving in JS would flash white before theme.js ran) — a test keeps the
+ * resolving in JS would flash white before theme.js ran). A test keeps the
  * copies identical.
  *
  * Text pairs clear 4.5:1 and boundaries 3:1 in both themes, except
  * --cp-border/--cp-border-strong as input boundaries: reaching 3:1 visibly
- * restyles every input, table rule and card — left as a separate decision.
+ * restyles every input, table rule and card; left as a separate decision.
  * =========================================================================== */
 :root,
 [data-cp-theme="light"] {
-  /* — surfaces: page, cards, and a 3-step fill scale (base / hover / pressed) — */
+  /* --- surfaces: page, cards, and a 3-step fill scale (base / hover / pressed) --- */
   --cp-bg: #ffffff;
   --cp-surface: #ffffff;
   --cp-surface-2: #f3f4f6;       /* subtle filled panel (tabs, code, toolbars) */
   --cp-surface-3: #e6e9ef;       /* hover on a --cp-surface-2 element */
 
-  /* — text — */
+  /* --- text --- */
   --cp-text: #333333;
   --cp-text-strong: #1a1a1a;
   --cp-muted: #666666;
   --cp-text-dim: #9aa3b2;        /* decoration only (grid lines, ticks, swatch
-                                    fallback) — too faint for text in light mode */
+                                    fallback), too faint for text in light mode */
   --cp-text-inverse: #ffffff;    /* text on a solid accent/danger/success fill */
 
-  /* — borders — */
+  /* --- borders --- */
   --cp-border: #e0e0e0;          /* meaningful: inputs, cards, buttons */
   --cp-border-subtle: #f0f0f0;   /* decorative hairlines between rows */
   --cp-border-strong: #cccccc;
 
-  /* — accent (one blue; the former green #0b8043 now lives on as success) — */
+  /* --- accent (one blue; the former green #0b8043 now lives on as success) --- */
   --cp-accent: #1565c0;          /* solid fill + active borders */
   --cp-accent-text: #1565c0;     /* accent as text/icon on a page background */
   --cp-accent-wash: #f1f5fc;     /* hover tint */
   --cp-accent-subtle: #e8f0fe;   /* on/active chip tint */
   --cp-accent-glow: rgba(21, 101, 192, .2);
 
-  /* — danger — */
+  /* --- danger --- */
   --cp-danger: #c5221f;
   --cp-danger-soft: #cf3f3a;     /* softer red for marker fills (✗ badges, bars) */
   --cp-danger-subtle: #fdecea;
   --cp-danger-mark: #fbddd8;     /* inline <del> highlight in a word diff */
   --cp-danger-text: #c5221f;
 
-  /* — success (the old brand green) — */
+  /* --- success (the old brand green) --- */
   --cp-success: #257a3e;
   --cp-success-subtle: #e7f4ec;
   --cp-success-mark: #c8ebd3;
   --cp-success-text: #216b2b;
 
-  /* — warning (amber needs *dark* text on its solid, hence --cp-warning-on) — */
+  /* --- warning (amber needs *dark* text on its solid, hence --cp-warning-on) --- */
   --cp-warning: #c8820a;
   --cp-warning-on: #2b2100;
   --cp-warning-subtle: #fff8e1;
   --cp-warning-mark: #fff3bf;    /* row-arrival flash */
   --cp-warning-text: #8a6d00;
 
-  /* — violet solid (merge actions) — */
+  /* --- violet solid (merge actions) --- */
   --cp-violet: #6f42c1;
 
-  /* — focus, shadows, scrims — */
+  /* --- focus, shadows, scrims --- */
   --cp-shadow-1: rgba(0, 0, 0, .15);
   --cp-shadow-2: rgba(0, 0, 0, .3);
   --cp-shadow-3: rgba(0, 0, 0, .45);   /* floating controls over the busy timeline */
   --cp-scrim: rgba(0, 0, 0, .4);          /* modal backdrop */
   --cp-scrim-deep: rgba(0, 0, 0, .88);    /* photo lightbox: the dialog under it must vanish */
 
-  /* — timeline chrome — */
+  /* --- timeline chrome --- */
   --cp-nowline: #ea4335;
   --cp-selected-edge: #ffffff;   /* selected slot's edge: page colour (light), text colour (dark) */
   /* Night overlay; JS ramps only the alpha (1 = night, 0 = day). Dark mode needs a
-     lighter tone — keep it indigo (R≈G): pushed light enough it turns azure, i.e. water. */
+     lighter tone; keep it indigo (R≈G): pushed light enough it turns azure, i.e. water. */
   --cp-daynight-rgb: 24 34 62;
   --cp-daynight-max: .8;   /* peak night shading; the moon motif marks the night anyway */
   --cp-night-motif: rgba(255, 255, 255, .35);   /* crescents and stars over the night shading */
@@ -94,7 +94,7 @@
   --cp-seam: rgba(255, 255, 255, .85);    /* dashed cut edge of a continued span */
   --cp-nowline-halo: rgba(255, 255, 255, .57);
 
-  /* — form controls — */
+  /* --- form controls --- */
   --cp-track: #868fa0;                    /* switch track, off */
   --cp-knob: #ffffff;
 
@@ -104,7 +104,7 @@
   --cp-tag-val-l: 92%;
   --cp-tag-fg-l: 28%;
 
-  /* — layout (not colour) — */
+  /* --- layout (not colour) --- */
   --cp-page-width: 75rem;   /* default centered page width (~1200px); wide pages (timeline) opt out */
   --cp-page-pad: 1rem;      /* horizontal padding of the standalone <main> */
 }
@@ -219,7 +219,7 @@
 
 /* color-scheme (form controls, scrollbars) follows the palette, but only on an element
    carrying data-cp-theme: embedded, :root is the *host's* document. Not on the :has()
-   arms — those only lift tokens; the body-level portals get their scheme from the
+   arms: those only lift tokens; the body-level portals get their scheme from the
    attribute dom.js stamps onto them. */
 [data-cp-theme="light"],
 [data-cp-theme="auto"] { color-scheme: light; }
@@ -236,13 +236,13 @@
 .cp-subtitle { font-size: 0.6em; font-weight: normal; color: var(--cp-muted); }
 
 /* The camp heading (brand + name + section links) lives here (not components.css) so the
-   settings pages and an embedding host — which link only content.css — pick it up too. It is
+   settings pages and an embedding host (which link only content.css) pick it up too. It is
    rendered inline in the standalone header bar (.cp-header, standalone.css) and, when embedded,
    inside the .cp-camp-nav band, which carries the same grey "Camp Planner" brand. */
 .cp-brand { color: var(--cp-muted); font-size: 0.8rem; text-decoration: none; }
 .cp-brand:hover { color: var(--cp-accent-text); }
 .cp-brand-mark { display: none; }   /* the wordmark's stand-in on a phone, see below */
-/* Our output when embedded (page.html wraps it). Carries the theme's own bg/text — the
+/* Our output when embedded (page.html wraps it). Carries the theme's own bg/text: the
    subtree must not pair the host's background with our palette's text. Colour only, no
    layout. isolation: the day/night items are z-index:-1, and a background on a
    non-stacking-context ancestor paints over them (same trap as .vis-timeline in
@@ -321,7 +321,7 @@
 .cp-params td { padding: 0.15rem 0; }
 
 /* Forms. .cp-form is a 2-column grid; labels are display:contents, so caption and
-   input land in separate columns — captions auto-size to the longest one and every
+   input land in separate columns; captions auto-size to the longest one and every
    input lines up. align-items:baseline keeps a caption level with its input's text
    line even when a hint sits below it. */
 .cp-form { display: grid; grid-template-columns: max-content 1fr; align-items: baseline; gap: 0.6rem 0.8rem; max-width: 36rem; }
@@ -447,7 +447,7 @@ tr.cp-dragging { opacity: 0.5; }
 .cp-flashes .cp-flash-success { background: var(--cp-success-subtle); }
 .cp-flashes .cp-flash-error { background: var(--cp-danger-subtle); }
 
-/* <noscript> banner from the layouts — almost every page renders via JS. */
+/* <noscript> banner from the layouts: almost every page renders via JS. */
 .cp-noscript {
   margin: 0;
   padding: 0.6rem 1rem;
@@ -456,7 +456,7 @@ tr.cp-dragging { opacity: 0.5; }
   border-bottom: 1px solid var(--cp-border);
 }
 
-/* Pill switch — a track with a knob sliding under the selected position. Used by the
+/* Pill switch: a track with a knob sliding under the selected position. Used by the
    colour-theme switch below and by the overview tables' column filters (.cp-th-slider,
    components.css). Lives here, not in components.css: an embedding host links only this
    file. Equal-width buttons, so the knob moves by its own width per --cp-pill-pos step;
@@ -482,13 +482,13 @@ tr.cp-dragging { opacity: 0.5; }
   transition: color 0.18s ease, background-color 0.18s ease;
 }
 /* An inactive position hovers as a ghost of the knob it would become; the active one
-   brightens the knob itself. No underline — this is a control, not a link. */
+   brightens the knob itself. No underline: this is a control, not a link. */
 .cp-pill button:hover:not(.on) { color: var(--cp-text); background: var(--cp-surface-3); }
 .cp-pill button.on { color: var(--cp-text-inverse); }
 .cp-pill:has(button.on:hover) .cp-pill-knob { filter: brightness(1.15); }
 .cp-pill button:focus-visible { outline: 2px solid var(--cp-accent-text); outline-offset: 1px; }
 
-/* Colour-theme switch: three positions, defaulting to the middle one (auto) — that's what
+/* Colour-theme switch: three positions, defaulting to the middle one (auto); that's what
    the CSS alone shows if theme.js never runs. */
 .cp-theme { align-self: center; --cp-pill-n: 3; --cp-pill-pos: 1; }
 .cp-theme[hidden] { display: none; }   /* beat .cp-pill's display:inline-flex */

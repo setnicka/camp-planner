@@ -1,6 +1,6 @@
 // Colour-theme switch (light / auto / dark). Writes data-cp-theme on the embedded wrapper
 // if there is one, else on <html>; only a clicked light/dark is stored. The pre-paint
-// re-apply lives inline in the shells (full.html, page.html) — this file only wires the
+// re-apply lives inline in the shells (full.html, page.html); this file only wires the
 // control. A host pinning
 // the theme in its own markup is invisible to the server, so detect it here and hide:
 // a nearer ancestor beats anything we set, and a dead switch is worse than none.
@@ -34,7 +34,7 @@
     for (const p of document.querySelectorAll(".cp-modal-overlay, #cp-toasts")) {
       p.setAttribute(ATTR, active);
     }
-    if (persist) {   // only a click is a choice — never store the fallback
+    if (persist) {   // only a click is a choice; never store the fallback
       try {
         if (explicit) localStorage.setItem(KEY, mode);
         else localStorage.removeItem(KEY);
@@ -48,7 +48,7 @@
       btn.setAttribute("aria-pressed", on ? "true" : "false");
     }
     // Anything that baked a token into JS-generated markup must re-derive it (the
-    // timeline's day/night overlay does — vis strips var() from an item's style).
+    // timeline's day/night overlay does: vis strips var() from an item's style).
     window.dispatchEvent(new CustomEvent("cp:themechange", { detail: { mode: active } }));
   }
 
@@ -60,7 +60,7 @@
   // Nothing stored yet: standalone follows the OS, embedded stays light. The host's page
   // decides there and we cannot read its background, so defaulting to auto would turn our
   // whole embed dark for every dark-OS visitor without the host asking for it. Choosing
-  // "auto" from the switch still works — that's the visitor overriding, not us guessing.
+  // "auto" from the switch still works; that's the visitor overriding, not us guessing.
   const fallback = target === root ? "auto" : "light";
   let saved = null;
   try {

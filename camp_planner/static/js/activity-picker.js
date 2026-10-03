@@ -1,5 +1,5 @@
-// Camp Planner — activity-picker modal (the timeline editor's "add slot" dialog).
-// Two tabs — pick an existing activity (fuzzy, last-used first) or create a new one —
+// Camp Planner: activity-picker modal (the timeline editor's "add slot" dialog).
+// Two tabs: pick an existing activity (fuzzy, last-used first) or create a new one,
 // plus the slot-role choice. Calls onConfirm(activity, role), or onCancel() when
 // dismissed without a pick. Exposed as window.cpActivityPicker; load after dom.js.
 "use strict";
@@ -28,7 +28,7 @@ window.cpActivityPicker = (function () {
 
     // stays undefined on any dismissal (Escape / backdrop / Zrušit) → onCancel
     let picked;
-    // slot type (role) — applies to both tabs (existing pick or freshly created); main default.
+    // slot type (role): applies to both tabs (existing pick or freshly created); main default.
     const roles = chipGroup(Object.entries(roleLabels), { selected: "main" });
     const finish = (activity) => {
       if (activity) { picked = activity; rememberRecent(activity.id); close(); onConfirm(activity, roles.get()); }

@@ -1,5 +1,5 @@
 /* Camp Planner standalone shell (chrome): body reset, top nav, flash bar, main
- * padding — for full.html, when we own the whole page. An embedding host loads only
+ * padding (for full.html, when we own the whole page). An embedding host loads only
  * content.css, not this. Uses the variables from content.css (loaded alongside). */
 
 body {

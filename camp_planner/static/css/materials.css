@@ -4,7 +4,7 @@
  * generic .cp-pane form rules below scope themselves to it.) */
 
 /* Fixed layout + a <colgroup> (set in JS) keep column widths stable as filtering changes which
-   rows are visible — otherwise auto-layout reflows ("jumps") to the widest visible cell. */
+   rows are visible; otherwise auto-layout reflows ("jumps") to the widest visible cell. */
 .cp-mat-table { max-width: 78rem; table-layout: fixed; }
 /* Phone: six columns don't fit 360px, so the table scrolls sideways inside its wrapper (only
    there: a scroll container would end the sticky head on the desktop). */
@@ -16,7 +16,7 @@
 .cp-mat-table .cp-th-filter { box-sizing: border-box; width: 100%; }   /* label search fills the header */
 
 /* The "Zobrazeno X z Y" + reset toolbar reuses the shared .cp-todo-toolbar / .cp-todo-count
-   (components.css), and the orgs filter reuses .cp-th-dd / .cp-th-pop* — so the materials table
+   (components.css), and the orgs filter reuses .cp-th-dd / .cp-th-pop*, so the materials table
    matches the TODO/activities overviews. */
 
 .cp-mat-row { cursor: pointer; }
@@ -60,7 +60,7 @@
 .cp-acq-cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 
 /* Acquisition label. A scoped "prefix: value" renders as a 2-tone tag colored by the
-   prefix's hue (so same-prefix labels group visually, GitLab-style); display only — the
+   prefix's hue (so same-prefix labels group visually, GitLab-style); display only: the
    table is filtered via the header search box. A plain (no-colon) label is a neutral chip. */
 .cp-mat-tag {
   display: inline-flex; align-items: stretch; border-radius: 4px; overflow: hidden;
@@ -82,7 +82,7 @@
 }
 .cp-chipinput input { flex: 1; min-width: 8rem; border: 0; outline: none; padding: 0.2rem; font: inherit;
   background: none; color: var(--cp-text); }
-/* ✕ remove button living inside a chip's tag — inherits the segment's colour, reddens on hover */
+/* ✕ remove button living inside a chip's tag: inherits the segment's colour, reddens on hover */
 .cp-mat-tag-x {
   border: 0; background: none; cursor: pointer; color: inherit; opacity: 0.55;
   font-size: 10px; line-height: 1; padding: 0 0.1rem 0 0.35rem; align-self: center;
