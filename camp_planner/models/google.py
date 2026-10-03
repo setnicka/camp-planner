@@ -1,6 +1,6 @@
 """Google Calendar sync state: the outbound op queue (outbox).
 
-The per-camp connection itself (calendar id, sync token) lives as columns on Camp;
+The per-camp connection itself (calendar id, last pull time) lives as columns on Camp;
 the per-slot event mapping (google_event_id) lives on Slot. This module only holds the
 outbox: write paths stage a GoogleSyncOp on the session (like audit.record), and
 `services.google_sync.drain` delivers them to Google out of band, so a slow or

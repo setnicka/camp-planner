@@ -62,9 +62,8 @@ def create(camp: Camp, name: str, role: CampRole, created_by: str) -> tuple[ApiT
 
 
 def list_for_camp(camp: Camp) -> list[ApiToken]:
-    return list(db_session.scalars(
-        db.select(ApiToken).filter_by(camp_id=camp.id).order_by(ApiToken.name)
-    ).all())
+    return db_session.scalars(
+        db.select(ApiToken).filter_by(camp_id=camp.id).order_by(ApiToken.name)).all()
 
 
 def revoke(token: ApiToken) -> dict:

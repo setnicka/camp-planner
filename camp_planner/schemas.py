@@ -654,7 +654,7 @@ class TagDefsEnvelope(_Ok):
 
 # --- camps -------------------------------------------------------------------
 
-_SNAP = Literal[5, 10, 15, 30, 60]
+SnapMinutes = Literal[5, 10, 15, 30, 60]
 
 
 class _TzValidated(BaseModel):
@@ -678,7 +678,7 @@ class CampCreate(_TzValidated):
     start_date: date
     length_days: int = Field(ge=1)
     window_start_min: int = Field(default=240, ge=0, le=1439)
-    snap_minutes: _SNAP = 15
+    snap_minutes: SnapMinutes = 15
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     copy_from: str | None = Field(default=None, description="Slug akce, ze které převzít taxonomie.")
@@ -693,7 +693,7 @@ class CampUpdate(_TzValidated):
     start_date: date | None = None
     length_days: int | None = Field(default=None, ge=1)
     window_start_min: int | None = Field(default=None, ge=0, le=1439)
-    snap_minutes: _SNAP | None = None
+    snap_minutes: SnapMinutes | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
 

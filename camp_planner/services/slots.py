@@ -59,7 +59,7 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
             rev=camp.timeline_rev, timeline=build_timeline(camp),
         )
 
-    by_id = {s.id: s for activity in camp.activities for s in activity.slots}
+    by_id = {s.id: s for s in camp.all_slots}
     activity_ids = {activity.id for activity in camp.activities}
 
     def _slot(slot_id: int) -> Slot:

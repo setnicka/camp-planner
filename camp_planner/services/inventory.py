@@ -68,10 +68,6 @@ def _sorted_boxes(*options) -> list[InventoryBox]:
     return by_name(boxes)
 
 
-def _check_out(check: InventoryCheck | None) -> dict | None:
-    return serialize.inventory_check(check) if check is not None else None
-
-
 def _box_name(row) -> str | None:
     """A box name for an audit entry: the item's or the record's, None when it has none
     (a retired thing, or a box deleted after the observation)."""
@@ -152,15 +148,6 @@ def _listed_ids(box: InventoryBox,
             | {r.item_id for r in by_box.get(box.id, ())})
 
 
-def _box_items(box: InventoryBox,
-               by_box: dict[int | None, list[InventoryCheckRecord]]) -> dict[int, InventoryItem]:
-    """What a box page lists, by id."""
-    filed = {i.id: i for i in box.items}
-    moved_in = {r.item_id: r for r in by_box.get(box.id, ())}
-    return {item_id: filed[item_id] if item_id in filed else moved_in[item_id].item
-            for item_id in _listed_ids(box, by_box)}
-
-
 def _box_progress(
     box: InventoryBox, records: dict[int, InventoryCheckRecord],
     by_box: dict[int | None, list[InventoryCheckRecord]],
@@ -168,7 +155,10 @@ def _box_progress(
     """A box's listing plus its check progress (checked, total). Its work is what the
     check says is here: a thing moved out stops counting, a thing moved in (or revived
     here) starts."""
-    items = _box_items(box, by_box)
+    filed = {i.id: i for i in box.items}
+    moved_in = {r.item_id: r for r in by_box.get(box.id, ())}
+    items = {item_id: filed[item_id] if item_id in filed else moved_in[item_id].item
+             for item_id in _listed_ids(box, by_box)}
     mine = [i for i in items.values()
             if (records[i.id].box_id if i.id in records else i.box_id) == box.id]
     return items, sum(1 for i in mine if i.id in records), len(mine)
@@ -259,7 +249,7 @@ def overview_data() -> dict:
         "boxes": boxes,
         "discarded": [serialize.inventory_item(i) for i in discarded],
         "revived": revived,
-        "active_check": _check_out(check),
+        "active_check": serialize.inventory_check(check) if check is not None else None,
     }
 
 
@@ -334,7 +324,7 @@ def checks_data() -> dict:
     # No eager legs: _progress loads every box's items.
     records = _records(check)
     return {
-        "active_check": _check_out(check),
+        "active_check": serialize.inventory_check(check) if check is not None else None,
         "progress": _progress(records) if check is not None else [],
         "checks": [serialize.inventory_check(c) for c in _completed_checks()],
         # Newest first: a check follows up on the camp that just ended.

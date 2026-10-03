@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Callable
 from camp_planner.extensions import db_session
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import Category, Tag, TagKind
-from camp_planner.models.common import czech_sort_key, slugify
+from camp_planner.models.common import by_initials, slugify
 from camp_planner.models.org import Org
 from camp_planner.schemas import CategoryOut, OrgOut, TagDefOut
 from camp_planner.services import audit, errors
@@ -40,7 +40,7 @@ def categories(camp: Camp) -> list[dict]:
 
 def orgs(camp: Camp) -> list[dict]:
     return [OrgOut(id=o.id, initials=o.initials, name=o.name).model_dump(mode="json")
-            for o in sorted(camp.orgs, key=lambda o: czech_sort_key(o.initials))]
+            for o in by_initials(camp.orgs)]
 
 
 def tags(camp: Camp) -> list[dict]:

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from camp_planner.models.activity import OrgRole
-from camp_planner.models.common import czech_sort_key
+from camp_planner.models.common import by_initials
 from camp_planner.services import errors
 from camp_planner.services.timeline import NO_CATEGORY, slot_visible
 from camp_planner.version import __version__
@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from camp_planner.models.camp import Camp
-    from camp_planner.models.org import Org
 
 # garant/attending/activity values are ids; category values are keys ('_none' = no category).
 _FILTER_TYPES = ("activity", "category", "garant", "attending")
@@ -71,11 +70,6 @@ def _fold(line: str) -> str:
     return "\r\n ".join(p.decode() for p in parts)
 
 
-def _by_initials(org: Org) -> tuple[str, str]:
-    """The timeline's org order."""
-    return czech_sort_key(org.initials)
-
-
 _UTC_FMT = "%Y%m%dT%H%M%SZ"
 
 
@@ -107,13 +101,11 @@ def build_feed(camp: Camp, filters: dict[str, set]) -> str:
         cat_key = activity.category.key if activity.category else NO_CATEGORY
         if cat_w and cat_key not in cat_w:
             continue
-        garants = [a.org for a in activity.assignments if a.role is OrgRole.garant]
-        helpers = [a.org for a in activity.assignments if a.role is OrgRole.helper]
+        garants = by_initials(a.org for a in activity.assignments if a.role is OrgRole.garant)
+        helpers = by_initials(a.org for a in activity.assignments if a.role is OrgRole.helper)
         # the garant facet spans garants and helpers, like the timeline chips
         if gar_w and not any(o.id in gar_w for o in (*garants, *helpers)):
             continue
-        garants.sort(key=_by_initials)
-        helpers.sort(key=_by_initials)
         base_desc = [label + ": " + ", ".join(o.name for o in group)
                      for label, group in (("Garant", garants), ("Pomocníci", helpers)) if group]
         category = "CATEGORIES:" + _escape(activity.category.label) if activity.category else None
@@ -124,7 +116,7 @@ def build_feed(camp: Camp, filters: dict[str, set]) -> str:
                 continue
             if att_w and not any(a.org_id in att_w for a in slot.assignments):
                 continue
-            attending = sorted((a.org for a in slot.assignments), key=_by_initials)
+            attending = by_initials(a.org for a in slot.assignments)
             desc = base_desc + (["Účast: " + ", ".join(o.name for o in attending)]
                                 if attending else [])
             event = [

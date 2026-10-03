@@ -9,7 +9,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from camp_planner.config import fk, table_name
 from camp_planner.extensions import Base
-from camp_planner.models.common import ExternalIdMixin
 
 if TYPE_CHECKING:
     from camp_planner.models.activity import ActivityAssignment, TodoAssignment
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
     from camp_planner.models.slot import SlotAssignment
 
 
-class Org(ExternalIdMixin, Base):
+class Org(Base):
     """Organizer, a person who can be assigned to activities, configured per camp.
 
     Displayed compactly as initials on the timeline (e.g. K,B,O) and by
@@ -34,6 +33,10 @@ class Org(ExternalIdMixin, Base):
 
     name: Mapped[str] = mapped_column(String(255))
     initials: Mapped[str] = mapped_column(String(16))
+
+    # Integration hook: the org's id in a host system (a string, so a numeric uid or a
+    # textual id); unset when the org isn't linked.
+    external_id: Mapped[str | None] = mapped_column(String(255), index=True)
 
     # Relationships:
     camp: Mapped[Camp] = relationship(back_populates="orgs")
