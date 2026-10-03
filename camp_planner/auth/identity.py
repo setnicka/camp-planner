@@ -74,23 +74,15 @@ def build_identity(
     """Build an Identity, collapsing grants to one per role: ALL wins over id-sets,
     otherwise the id-sets are unioned.
     """
-    collapsed: dict[CampRole, set[int] | _All] = {}
+    collapsed: dict[CampRole, Scope] = {}
     for role, scope in raw_grants or []:
-        current = collapsed.get(role)
-        if current is ALL or scope is ALL:
-            collapsed[role] = ALL
-        elif isinstance(scope, frozenset):
-            ids = current if isinstance(current, set) else set()
-            collapsed[role] = ids | scope
-    grants = tuple(
-        Grant(role, ALL if isinstance(value, _All) else frozenset(value))
-        for role, value in collapsed.items()
-    )
+        current = collapsed.get(role, frozenset())
+        collapsed[role] = ALL if current is ALL or scope is ALL else current | scope
     return Identity(
         user_id=str(user_id),
         display_name=display_name or str(user_id),
         is_admin=is_admin,
-        grants=grants,
+        grants=tuple(Grant(role, scope) for role, scope in collapsed.items()),
     )
 
 

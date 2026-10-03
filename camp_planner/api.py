@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from flask import Blueprint, abort, current_app, g, jsonify, request, url_for
+from flask import Blueprint, abort, g, jsonify, request, url_for
 from spectree import Response, SpecTree
 from werkzeug.exceptions import HTTPException
 
@@ -34,7 +34,6 @@ from camp_planner.auth.permissions import (
     can_view,
     can_view_inventory,
 )
-from camp_planner.auth.token import resolve_identity as _resolve_token_identity
 from camp_planner.extensions import csrf, db, first_or_404, get_or_404
 from camp_planner.models.activity import Activity, Todo
 from camp_planner.models.audit import EntityType
@@ -143,8 +142,8 @@ from camp_planner.version import __version__
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 # CSRF defends cookie auth; Bearer-token requests can't be forged cross-site, so the
-# blueprint is exempted from the automatic check and api_token_auth re-applies it
-# (csrf.protect) only to cookie-authenticated requests.
+# blueprint is exempted from the automatic check and auth.token.authenticate re-applies
+# it (csrf.protect) only to cookie-authenticated requests.
 csrf.exempt(bp)
 
 # OpenAPI generator: scans the spec.validate-decorated views to build the schema +
@@ -176,21 +175,6 @@ _AUTH_400_409 = {"HTTP_409": InventoryConflictOut, **_AUTH_400}
 def _json_error(exc: HTTPException):
     """Render aborts (401/403/404/…) raised inside the API as JSON, not HTML."""
     return jsonify(ok=False, error=exc.description), exc.code or 500
-
-
-def api_token_auth() -> None:
-    """Authenticate a Bearer token (before the session provider resolves identity);
-    for cookie-authenticated requests, enforce CSRF (a no-op on safe methods).
-    Registered by integration._wire_blueprint, which owns the hook order."""
-    identity = _resolve_token_identity()
-    if identity is not None:
-        g.identity = identity   # a token authenticated this request
-        return
-    # Bearer present but unresolved = failed auth → 401, not csrf.protect()'s misleading 400.
-    if request.headers.get("Authorization", "").split(" ", 1)[0].lower() == "bearer":
-        abort(401, "Neplatný nebo odvolaný API token.")
-    if current_app.config.get("WTF_CSRF_ENABLED", True):
-        csrf.protect()          # cookie request → enforce CSRF (no-op on safe methods)
 
 
 # --- helpers -----------------------------------------------------------------

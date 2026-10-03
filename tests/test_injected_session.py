@@ -157,7 +157,7 @@ def test_an_open_transaction_at_request_entry_is_refused(host):
 
 
 def test_the_check_runs_before_the_apis_own_token_hook(admin):
-    """Ordering (see integration._wire_blueprint): a Bearer request makes api_token_auth
+    """Ordering (see integration._wire_blueprint): a Bearer request makes token.authenticate
     query the DB, which autobegins. Were the contract check registered after it, that
     transaction would be ours and every token request would raise."""
     slug = make_camp_embedded(admin)["slug"]

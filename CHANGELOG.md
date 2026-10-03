@@ -30,6 +30,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 - Activity detail: with the warehouse off, a material no longer links to a warehouse box;
   the API also lists its responsible orgs.
+- Embedded: an `AUTH_LOGIN_ENDPOINT` key in the host's config no longer redirects the
+  planner's sign-in.
 
 ## [0.4.0] - 2026-09-27
 

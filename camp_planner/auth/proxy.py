@@ -50,24 +50,19 @@ def _grants_from_tokens(tokens: list[str]) -> list[tuple[CampRole, Scope]]:
 
 
 class ProxyProvider:
-    def __init__(self, dev_user: dict | None = None) -> None:
-        # dev_user: optional local-dev stand-in for the proxy, e.g.
-        #   {"user_id": "dev", "display_name": "Dev", "roles": "admin"}
+    def __init__(self, dev_user: str | None = None) -> None:
+        # dev_user: optional local-dev stand-in for the proxy, "<user_id> [role ...]"
         self._dev_user = dev_user
 
     def load_identity(self) -> Identity:
-        user = request.headers.get("X-Remote-User")
-        if user:
-            user_id = user
-            # Name may be percent-encoded (HTTP headers are latin-1, names aren't).
-            # unquote() is a safe no-op for plain ASCII names without '%'.
-            name_header = request.headers.get("X-Remote-Name")
-            display_name = unquote(name_header) if name_header else name_header
+        # Name may be percent-encoded (HTTP headers are latin-1, names aren't).
+        # unquote() is a safe no-op for plain ASCII names without '%'.
+        display_name = unquote(request.headers.get("X-Remote-Name", ""))
+        user_id = request.headers.get("X-Remote-User")
+        if user_id:
             roles = request.headers.get("X-Remote-Roles", "")
         elif self._dev_user:  # header-less local dev
-            user_id = self._dev_user.get("user_id", "dev")
-            display_name = self._dev_user.get("display_name")
-            roles = self._dev_user.get("roles", "")
+            user_id, _, roles = self._dev_user.partition(" ")
         else:
             return ANONYMOUS
         tokens = roles.split()

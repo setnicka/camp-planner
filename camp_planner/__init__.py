@@ -33,9 +33,6 @@ def create_app(config_name: str | None = None) -> Flask:
     migrate.init_app(app, db, render_as_batch=True)
     csrf.init_app(app)
 
-    # Import models so they're registered on the metadata (migrations / create_all).
-    from camp_planner import models  # noqa: F401
-
     wire_app(app)
     register_cli(app)
 
