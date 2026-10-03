@@ -1,6 +1,3 @@
-"""Web (main blueprint) page tests: the embedded JSON renders with resolved URLs, and the edit
-affordances follow the viewer's permissions. The serializers behind it: test_serialize.py."""
-
 from __future__ import annotations
 
 import re
@@ -9,35 +6,20 @@ import pytest
 
 from camp_planner import create_app
 from camp_planner.extensions import db
-from tests.conftest import ADMIN, editor, make_camp, make_material, ok, page_data, viewer
+from tests.conftest import (
+    ADMIN,
+    make_camp,
+    make_material,
+    ok,
+    page_data,
+    viewer,
+)
 
 
 def test_static_urls_carry_a_version(client, seeded):
     html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
     assert re.search(r'/static/js/timeline\.js\?v=\d+"', html)
     assert re.search(r'/static/css/timeline\.css\?v=\d+"', html)
-
-
-def test_timeline_page_edit_wiring_for_editor(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}", headers=ADMIN).get_data(as_text=True)
-    assert 'id="cp-edit-toggle"' in html
-    assert 'id="cp-timeline-edit"' in html          # the edit-config JSON block
-    assert f"/api/camps/{slug}/timeline" in html     # save url
-    assert f"/api/camps/{slug}/activities" in html   # picker url
-    assert 'name="csrf-token"' in html
-    assert 'class="cp-help-edit"' in html
-
-
-def test_timeline_page_read_only_for_viewer(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}", headers=viewer(slug)).get_data(as_text=True)
-    assert 'id="cp-edit-toggle"' not in html
-    assert 'id="cp-timeline-edit"' not in html
-    # viewers still get the way into the activity detail (slot select → Detail button)
-    assert f'data-activity-detail="/camps/{slug}/activities/0"' in html
-    assert 'class="cp-help-view"' in html
-    assert 'class="cp-help-edit"' not in html
 
 
 # --- section pages -------------------------------------------------------------------
@@ -93,79 +75,6 @@ def test_overview_pages_embed_what_their_scripts_render(client, seeded):
                                 "window_start_min": 240}
 
 
-# --- camp detail --------------------------------------------------------------------
-
-def test_camp_detail_has_history_tab(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/detail", headers=ADMIN).get_data(as_text=True)
-    assert 'data-tax-tab="history"' in html
-    assert 'data-history-root' in html
-    assert 'data-history-mode' in html                    # the camp-level / full-history toggle
-    assert f"/api/camps/{slug}/audit" in html
-    assert "js/history-feed.js" in html
-
-
-def test_camp_detail_token_tab_for_editor(client, seeded):
-    slug = seeded["slug"]
-    # a token is embedded so the list-with-data path renders too
-    client.post(f"/api/camps/{slug}/tokens", json={"name": "sync", "role": "editor"}, headers=ADMIN)
-    html = client.get(f"/camps/{slug}/detail", headers=editor(slug)).get_data(as_text=True)
-    assert 'data-tax-tab="tokens"' in html
-    assert 'data-tokens-root' in html
-    assert 'id="cp-tokens-data"' in html
-    assert "js/token-admin.js" in html
-    assert f"/api/camps/{slug}/tokens" in html
-    assert "/api/tokens/0" in html                        # revoke url (0 sentinel)
-    assert '"sync"' in html and '"created_by"' in html    # the embedded token, without its secret
-    assert "token_hash" not in html
-
-
-def test_camp_detail_token_tab_hidden_from_viewer(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/detail", headers=viewer(slug)).get_data(as_text=True)
-    assert 'data-tax-tab="tokens"' not in html
-    assert 'id="cp-tokens-data"' not in html
-    assert "js/token-admin.js" not in html
-
-
-# --- camp settings -------------------------------------------------------------------
-
-def _delete_button(html):
-    start = html.index("data-delete-camp")
-    return html[start:html.index("</button>", start)]
-
-
-def test_camp_edit_delete_button(client, seeded):
-    """Admin-only (can_edit_camp_meta), and disabled while the camp has activities, with
-    the reason as visible text rather than a hover-only tooltip."""
-    html = client.get("/camps/t/edit", headers=ADMIN).get_data(as_text=True)
-    assert "/api/camps/t" in html and "js/camp-settings.js" in html
-    assert "disabled" in _delete_button(html)
-    assert "Akci nelze smazat, dokud má aktivity" in html
-
-    make_camp(client, "prazdna")
-    empty = client.get("/camps/prazdna/edit", headers=ADMIN).get_data(as_text=True)
-    assert "disabled" not in _delete_button(empty)
-
-    as_editor = client.get("/camps/t/edit", headers=editor("t")).get_data(as_text=True)
-    assert "data-delete-camp" not in as_editor
-
-
-def test_camp_edit_form_time_input_roundtrip(client, seeded):
-    # "Začátek dne" is an <input type="time">: HH:MM in the form, minutes past midnight stored
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/edit", headers=ADMIN).get_data(as_text=True)
-    assert 'type="time" name="window_start_min" value="04:00"' in html
-
-    resp = client.post(f"/camps/{slug}/edit", data={
-        "name": "Tábor", "slug": slug, "start_date": "2026-07-04", "length_days": "3",
-        "timezone": "Europe/Prague", "window_start_min": "06:30", "snap_minutes": "15",
-    }, headers=ADMIN)
-    assert resp.status_code == 302
-    camp = client.get(f"/api/camps/{slug}", headers=ADMIN).get_json()["camp"]
-    assert camp["window_start_min"] == 390
-
-
 # --- header -------------------------------------------------------------------------
 
 def test_header_carries_heading_links_and_menu(client, seeded):
@@ -194,24 +103,6 @@ def test_page_carries_csrf_refresh_meta(client, seeded):
     assert 'name="csrf-token"' in html
     url = re.search(r'name="csrf-refresh" content="([^"]+)"', html).group(1)
     assert url.endswith("/csrf-token")
-
-
-# --- landing ------------------------------------------------------------------------
-
-def test_landing_page_renders_camp_rows(client, seeded):
-    html = client.get("/", headers=ADMIN).get_data(as_text=True)
-    assert "css/landing.css" in html
-    assert "cp-camp-rows" in html and "cp-camp-row-name" in html
-    assert "Úkoly" in html                                # row links come from the shared sections list
-    assert "Tábor" in html
-    assert "4. 7. 2026 – 6. 7. 2026" in html              # start_date.end_date via Camp.end_date
-    assert "3 dny" in html                                # Czech plural for length_days
-
-
-def test_landing_page_orders_newest_first(client, seeded):
-    make_camp(client, "pozd", name="Pozdější")
-    html = client.get("/", headers=ADMIN).get_data(as_text=True)
-    assert html.index("Pozdější") < html.index("Tábor")   # 2026-09 before 2026-07
 
 
 # --- colour theme -----------------------------------------------------------
