@@ -14,15 +14,16 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Callable
 
-from flask import abort, current_app, g, redirect, request, url_for
+from flask import abort, g, redirect, request, url_for
 
 from camp_planner.auth.identity import ALL, CampRole
+from camp_planner.extensions import db, first_or_404, state
+from camp_planner.models.camp import Camp
 
 if TYPE_CHECKING:
     from collections.abc import Container
 
     from camp_planner.auth.identity import Identity, Scope
-    from camp_planner.models.camp import Camp
 
 
 def _identity(explicit: Identity | None) -> Identity:
@@ -91,22 +92,10 @@ def can_manage_users(identity: Identity | None = None) -> bool:
 
 # --- view decorators ---------------------------------------------------------
 
-def _resolve_camp(view_kwargs: dict[str, object]) -> Camp:
-    """Look up the camp a decorated view operates on, from its route kwargs."""
-    from camp_planner.extensions import db, first_or_404, get_or_404
-    from camp_planner.models.camp import Camp
-
-    if "camp_id" in view_kwargs:
-        return get_or_404(Camp, view_kwargs["camp_id"])
-    if "slug" in view_kwargs:
-        return first_or_404(db.select(Camp).filter_by(slug=view_kwargs["slug"]))
-    abort(500)  # decorator applied to a view without a camp_id/slug param
-
-
 def login_redirect():
     """A redirect to this deployment's login page, or None where it has none (embedded, the
     host owns auth). The way back is root-relative: _safe_next refuses anything else."""
-    endpoint = current_app.config.get("AUTH_LOGIN_ENDPOINT")
+    endpoint = state().get("login_endpoint")
     if not endpoint:
         return None
     here = request.script_root + (request.full_path if request.query_string else request.path)
@@ -121,10 +110,11 @@ def _deny():
 
 
 def _camp_guard(check: Callable[[Camp], bool]) -> Callable:
+    """Guard a view routed by <slug> with a camp permission."""
     def decorator(view: Callable) -> Callable:
         @wraps(view)
         def wrapper(*args, **kwargs):
-            camp = _resolve_camp(kwargs)
+            camp = first_or_404(db.select(Camp).filter_by(slug=kwargs["slug"]))
             if not check(camp):
                 return _deny()
             g.camp = camp  # let the view reuse the resolved row instead of re-querying

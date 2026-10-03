@@ -17,13 +17,12 @@ import re
 import warnings
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
-from flask import abort, current_app, g, request
+from flask import abort, g, request
 
 import camp_planner.models  # noqa: F401  (register mappers on the shared Base)
 from camp_planner import features
-from camp_planner.api import api_token_auth
 from camp_planner.api import bp as api_bp
-from camp_planner.auth import permissions
+from camp_planner.auth import permissions, token
 from camp_planner.auth.callback import CallbackProvider
 from camp_planner.auth.identity import ANONYMOUS
 from camp_planner.auth.standalone import StandaloneProvider
@@ -93,11 +92,11 @@ def _check_session_contract() -> None:
 
 
 def _load_identity() -> None:
-    # A Bearer token may already have resolved the identity on the api blueprint
-    # (see api.api_token_auth, which stashes g.api_token); otherwise the configured
-    # provider takes over.
+    # A Bearer token may already have resolved the identity on the api blueprint (see
+    # auth.token.authenticate). Keyed on g.api_token, not g.identity: embedded, g is shared
+    # with the host, which may keep an identity of its own there.
     if g.get("api_token") is None:
-        g.identity = state()["provider"].load_identity() or ANONYMOUS
+        g.identity = state()["provider"].load_identity()
 
 
 def _inject() -> dict[str, Any]:
@@ -113,7 +112,7 @@ def _inject() -> dict[str, Any]:
         "force_theme": state()["force_theme"],
         "identity": g.get("identity", ANONYMOUS),
         # standalone only (we own login/logout); lets templates skip url_for('auth.*').
-        "auth_enabled": bool(current_app.config.get("AUTH_LOGIN_ENDPOINT")),
+        "auth_enabled": bool(state().get("login_endpoint")),
         "can_view": permissions.can_view,
         "can_edit": permissions.can_edit,
         "can_edit_camp_meta": permissions.can_edit_camp_meta,
@@ -144,7 +143,7 @@ def _wire_blueprint(bp: Blueprint) -> None:
     must see the session before anything of ours queries it, a switched off feature
     answers 404 before any auth or validation could tell it exists, the size gate must run
     before csrf.protect() parses a whole multipart body, and _load_identity defers to
-    the token api_token_auth resolves. Hence api.py registers no hook of its own.
+    the identity token.authenticate resolved. Hence api.py registers no hook of its own.
     """
     if bp in _wired:
         return
@@ -153,7 +152,7 @@ def _wire_blueprint(bp: Blueprint) -> None:
     bp.before_request(features.gate)
     if bp is api_bp:
         bp.before_request(_check_request_size)
-        bp.before_request(api_token_auth)
+        bp.before_request(token.authenticate)
     bp.before_request(_load_identity)
     bp.context_processor(_inject)
 
@@ -190,9 +189,8 @@ def _attach(
         "disabled_features": features.parse(disabled_features),
         # None = ours; else a callable giving the host's, normalized once here.
         "session": session if session is None or callable(session) else lambda: session,
+        "login_endpoint": login_endpoint,
     }
-    if login_endpoint:
-        app.config["AUTH_LOGIN_ENDPOINT"] = login_endpoint
     for bp in blueprints:
         _wire_blueprint(bp)
         # A blueprint with its own url_prefix (e.g. the API's /api) nests under the

@@ -93,10 +93,7 @@ class Config:
     AUTH_MODE = os.environ.get("AUTH_MODE", "standalone")
     # Local-dev stand-in for the proxy headers: DEV_USER="<user_id> [role ...]" with the
     # X-Remote-Roles grammar, e.g. DEV_USER="dev admin" or DEV_USER="dev editor:*".
-    _dev_user = os.environ.get("DEV_USER", "").split()
-    DEV_USER: dict | None = (
-        {"user_id": _dev_user[0], "roles": " ".join(_dev_user[1:])} if _dev_user else None
-    )
+    DEV_USER = os.environ.get("DEV_USER", "").strip() or None
     # Base template every page extends; an embedding host can override it.
     BASE_TEMPLATE = os.environ.get("BASE_TEMPLATE", "_layouts/full.html")
     # Force a colour theme ("light" | "dark" | "auto") and drop the switch; unset → the

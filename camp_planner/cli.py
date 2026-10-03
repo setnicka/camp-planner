@@ -6,6 +6,7 @@ from __future__ import annotations
 import getpass
 import time
 from datetime import datetime
+from pathlib import Path
 
 import click
 from flask import Flask, current_app
@@ -13,6 +14,9 @@ from sqlalchemy import make_url
 
 from camp_planner.auth.identity import CampRole
 from camp_planner.extensions import db, db_session
+from camp_planner.models.auth import ApiToken, User, UserCampRole
+from camp_planner.models.camp import Camp
+from camp_planner.services import api_tokens, errors, google_sync
 
 
 def _parse_grant(token: str) -> tuple[CampRole, int | None]:
@@ -40,8 +44,6 @@ def _require_camp(camp_id: int | None) -> None:
     enforces this too, but raising here avoids an ugly IntegrityError)."""
     if camp_id is None:
         return
-    from camp_planner.models.camp import Camp
-
     if db_session.get(Camp, camp_id) is None:
         raise click.BadParameter(f"no camp with id {camp_id}")
 
@@ -72,10 +74,8 @@ def register_cli(app: Flask) -> None:
         Writes a self-contained SQLite file, leaving the configured database alone.
         Schema is created directly (like init-db), so it carries no Alembic stamp.
         """
-        from pathlib import Path
-
+        # Lazy: a large module only this command needs.
         from camp_planner.demo_data import ADMIN_USER, EDITOR_USER, PASSWORD, SLUG, build
-        from camp_planner.services import errors
 
         try:
             counts = build(out, seed, calendar_id, media_dir)
@@ -109,8 +109,6 @@ def register_cli(app: Flask) -> None:
         grants: tuple[str, ...], password: str,
     ) -> None:
         """Create a standalone-auth user (with optional role grants)."""
-        from camp_planner.models.auth import User, UserCampRole
-
         if db_session.scalar(db.select(User).filter_by(username=username)):
             click.echo(f"User {username!r} already exists — aborting.")
             return
@@ -119,10 +117,8 @@ def register_cli(app: Flask) -> None:
         parsed = [_parse_grant(g) for g in grants]
         for _, camp_id in parsed:
             _require_camp(camp_id)
+        user.camp_roles = [UserCampRole(camp_id=camp_id, role=role) for role, camp_id in parsed]
         db_session.add(user)
-        db_session.flush()
-        for role, camp_id in parsed:
-            db_session.add(UserCampRole(user_id=user.id, camp_id=camp_id, role=role))
         db_session.commit()
         scope = "admin" if admin else (", ".join(grants) or "no grants")
         click.echo(f"Created user {username!r} ({scope}).")
@@ -132,8 +128,6 @@ def register_cli(app: Flask) -> None:
     @click.argument("grant", metavar="ROLE:SCOPE")
     def grant_role(username: str, grant: str) -> None:
         """Add a per-camp grant to an existing user, e.g. editor:12 or viewer:*."""
-        from camp_planner.models.auth import User, UserCampRole
-
         user = db_session.scalar(db.select(User).filter_by(username=username))
         if user is None:
             click.echo(f"No such user {username!r}.")
@@ -150,9 +144,7 @@ def register_cli(app: Flask) -> None:
         db_session.commit()
         click.echo(f"Granted {grant} to {username!r}.")
 
-    def _camp_by_slug(slug: str):
-        from camp_planner.models.camp import Camp
-
+    def _camp_by_slug(slug: str) -> Camp:
         camp = db_session.scalar(db.select(Camp).filter_by(slug=slug))
         if camp is None:
             raise click.BadParameter(f"no camp with slug {slug!r}")
@@ -169,8 +161,6 @@ def register_cli(app: Flask) -> None:
     @click.option("--created-by", default=None, help="Recorded creator (default: OS user).")
     def api_token_create(name: str, slug: str, role: str, created_by: str | None) -> None:
         """Create a token and print its secret once."""
-        from camp_planner.services import api_tokens, errors
-
         camp = _camp_by_slug(slug)
         try:
             _, secret = api_tokens.create(camp, name, CampRole(role),
@@ -184,8 +174,6 @@ def register_cli(app: Flask) -> None:
     @click.option("--camp", "slug", default=None, help="Only this camp's tokens.")
     def api_token_list(slug: str | None) -> None:
         """List tokens (name, camp, role, creator, last used) — never the secret."""
-        from camp_planner.models.auth import ApiToken
-
         query = db.select(ApiToken).order_by(ApiToken.name)
         if slug:
             query = query.filter_by(camp_id=_camp_by_slug(slug).id)
@@ -202,9 +190,6 @@ def register_cli(app: Flask) -> None:
     @click.option("--camp", "slug", default=None, help="Camp slug (needed if the name isn't unique).")
     def api_token_revoke(name: str, slug: str | None) -> None:
         """Revoke (delete) a token by name (names are unique per camp)."""
-        from camp_planner.models.auth import ApiToken
-        from camp_planner.services import api_tokens
-
         query = db.select(ApiToken).filter_by(name=name)
         if slug:
             query = query.filter_by(camp_id=_camp_by_slug(slug).id)
@@ -223,9 +208,6 @@ def register_cli(app: Flask) -> None:
         is timestamped. With quiet_idle (the --loop sidecar) a camp that delivered nothing is not
         logged, so an idle loop stays silent; a one-shot run reports every camp. Returns the number
         of connected camps considered. Caller owns the app context."""
-        from camp_planner.models.camp import Camp
-        from camp_planner.services import google_sync
-
         query = db.select(Camp).where(Camp.google_calendar_id.is_not(None))
         if slug:
             query = query.filter_by(slug=slug)
