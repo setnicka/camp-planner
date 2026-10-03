@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from camp_planner import create_app
 from camp_planner.extensions import db
+from camp_planner.auth.identity import CampRole
 from camp_planner.models.auth import ApiToken
+from camp_planner.models.camp import Camp
 from camp_planner.services import api_tokens
 from tests.conftest import ADMIN, editor, make_camp, viewer
 
@@ -77,13 +79,6 @@ def test_revoke_removes_the_token(client, seeded):
 
 # --- Bearer authentication ------------------------------------------------------------
 
-def test_invalid_bearer_is_401_not_csrf_400(client, seeded):
-    slug = seeded["slug"]
-    # a presented-but-unknown token on a write is a failed auth (401), not a CSRF 400
-    resp = client.patch(f"/api/camps/{slug}", json={"length_days": 5}, headers=_bearer("cp_nope"))
-    assert resp.status_code == 401
-
-
 def test_token_authenticates_scoped_to_its_camp(client, seeded):
     slug = seeded["slug"]
     secret = _create(client, slug, role="editor").get_json()["secret"]
@@ -92,7 +87,7 @@ def test_token_authenticates_scoped_to_its_camp(client, seeded):
     got = client.get(f"/api/camps/{slug}", headers=_bearer(secret))
     assert got.status_code == 200 and got.get_json()["camp"]["slug"] == slug
 
-    # and it can mutate (editor) without an X-CSRFToken header — CSRF is cookie-only
+    # and it can mutate (editor)
     patched = client.patch(f"/api/camps/{slug}", json={"length_days": 5}, headers=_bearer(secret))
     assert patched.status_code == 200 and patched.get_json()["camp"]["length_days"] == 5
 
@@ -146,11 +141,10 @@ def test_last_used_at_is_set_and_throttled(app, client, seeded):
     assert token.last_used_at == first   # not rewritten on every call
 
 
-# --- CSRF interaction for cookie (non-token) requests ---------------------------------
+# --- CSRF: cookie requests only -------------------------------------------------------
 
-def test_cookie_mutation_still_requires_csrf():
-    """The exemption is for token requests only; a cookie-authed API mutation without an
-    X-CSRFToken header is still rejected."""
+def test_csrf_guards_cookie_requests_only():
+    """The suite runs with CSRF off, so the bearer exemption is only testable here."""
     app = create_app("testing")
     app.config["WTF_CSRF_ENABLED"] = True
     with app.app_context():
@@ -158,8 +152,19 @@ def test_cookie_mutation_still_requires_csrf():
     c = app.test_client()
     body = {"name": "T", "slug": "t", "start_date": "2026-07-01", "length_days": 3,
             "timezone": "Europe/Prague", "window_start_min": 240, "snap_minutes": 15}
-    resp = c.post("/api/camps", json=body, headers=ADMIN)
-    assert resp.status_code == 400 and "csrf" in resp.get_json()["error"].lower()
+
+    missing = c.post("/api/camps", json=body, headers=ADMIN)   # the 400 shape the client detects
+    assert missing.status_code == 400 and "csrf" in missing.get_json()["error"].lower()
+    token = c.get("/csrf-token", headers=ADMIN).get_json()["csrf_token"]
+    assert c.post("/api/camps", json=body, headers={**ADMIN, "X-CSRFToken": token}).status_code == 200
+
+    with app.app_context():
+        camp = db.session.scalar(db.select(Camp))
+        _token, secret = api_tokens.create(camp, "sync", CampRole.editor, "tester")
+    patch = {"length_days": 4}
+    assert c.patch("/api/camps/t", json=patch, headers=_bearer(secret)).status_code == 200
+    # a presented but unknown token is a failed auth, not a CSRF 400
+    assert c.patch("/api/camps/t", json=patch, headers=_bearer("cp_nope")).status_code == 401
 
 
 # --- CLI ------------------------------------------------------------------------------

@@ -701,11 +701,14 @@ def test_status_endpoint_requires_edit(client, seeded, gcal):
 
 def test_connect_and_sync_via_api(client, seeded, gcal):
     slug = seeded["slug"]
+    _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
+    db.session.commit()
     resp = client.put(f"/api/camps/{slug}/google", json={"calendar_id": CAL}, headers=editor(slug))
     assert resp.status_code == 200 and resp.get_json()["google"]["connected"] is True
 
     resp = client.post(f"/api/camps/{slug}/google/sync", headers=editor(slug))
-    assert resp.status_code == 200 and resp.get_json()["result"]["failed"] == 0
+    assert resp.status_code == 200
+    assert resp.get_json()["result"]["pushed"] == 1 and resp.get_json()["result"]["failed"] == 0
 
 
 def test_resync_via_api(client, seeded, gcal):
@@ -1169,8 +1172,7 @@ def test_preview_changes_sorted_by_start(client, seeded, gcal):
 
     body = client.get(f"/api/camps/{seeded['slug']}/google/pull",
                       headers=editor(seeded["slug"])).get_json()
-    starts = [c["new_start"] for c in body["changes"]]
-    assert starts == sorted(starts)
+    assert [c["summary"] for c in body["changes"]] == ["První", "Druhá", "Třetí"]
 
 
 def test_import_new_event_seeds_orgs(client, seeded, gcal):
