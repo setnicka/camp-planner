@@ -84,10 +84,44 @@
   const dayOf = (t) => Math.floor((t - winStart) / DAY_MS);
   const inCamp = (day) => day >= 0 && day < camp.length_days;
 
+  // --- shared with the iCal export (window.cpTimelineKit) ---------------------
+
+  // The category of an uncategorised slot (its segments carry cat_key "_none").
+  const NO_CATEGORY = { key: "_none", label: "Bez kategorie", color: "#9e9e9e" };
+
+  // Org chips that cycle garant/pomocník → účast na slotu → off, and a label naming the
+  // active relation. A click calls onChange(f), f = { type: "garant" | "attending", id }
+  // or null; set(f) shows a state set from outside.
+  const ORG_MODE = { garant: "garant/pomocník", attending: "účast na slotu" };
+  function orgCycle(orgs, onChange) {
+    let cur = null;
+    const label = el("span", { class: "cp-tl-orgmode" });
+    const chips = orgs.map((o) => el("button", { type: "button", class: "cp-tl-chip", title: o.name,
+      onclick: () => {
+        const next = cur?.id !== o.id ? { type: "garant", id: o.id }
+          : cur.type === "garant" ? { type: "attending", id: o.id } : null;
+        set(next);
+        onChange(next);
+      } }, o.initials));
+    function set(f) {
+      cur = f;
+      chips.forEach((c, i) => {
+        const on = !!f && f.id === orgs[i].id;
+        c.classList.toggle("on", on);
+        c.classList.toggle("mode-garant", on && f.type === "garant");          // reddish
+        c.classList.toggle("mode-attending", on && f.type === "attending");    // blueish
+      });
+      label.textContent = f ? ORG_MODE[f.type] : "";
+      label.className = "cp-tl-orgmode" + (f ? " mode-" + f.type : "");
+    }
+    set(null);
+    return { node: el("div", { class: "cp-tl-fgroup" }, ...chips, label), set };
+  }
+  window.cpTimelineKit = { NO_CATEGORY, orgCycle };
+
   // --- per-category colours + legend ----------------------------------------
 
-  const cats = payload.categories.slice();
-  cats.push({ key: "_none", label: "Bez kategorie", color: "#9e9e9e" });
+  const cats = [...payload.categories, NO_CATEGORY];
   const styleRules = cats
     .map((c) => `#cp-timeline .vis-item.cat-${c.key}{background-color:${c.color};color:${textColor(c.color)}}`)
     .join("");
@@ -101,14 +135,14 @@
   // The legend doubles as the category filter: each entry is a button carrying its
   // "category:<key>" token (setupFilter wires the clicks). A "Bez kategorie" entry is
   // added only when some slot is uncategorised.
-  const legend = document.createElement("div");
-  legend.className = "cp-tl-legend";
-  const legendItem = (key, color, text) =>
-    `<button type="button" class="cp-tl-legend-item" data-filter="category:${key}" title="Filtrovat podle kategorie">` +
-    `<i style="background:${color}"></i>${escapeHtml(text)}</button>`;
-  legend.innerHTML = `<span class="cp-tl-filter-label">Kategorie:</span>` +
-    payload.categories.map((c) => legendItem(c.key, c.color, c.label)).join("") +
-    (payload.segments.some((s) => s.cat_key === "_none") ? legendItem("_none", "#9e9e9e", "Bez kategorie") : "");
+  const legendItem = (c) => el("button",
+    { type: "button", class: "cp-tl-legend-item", "data-filter": "category:" + c.key,
+      title: "Filtrovat podle kategorie" },
+    el("i", { style: "background:" + c.color }), c.label);
+  const legend = el("div", { class: "cp-tl-legend" },
+    el("span", { class: "cp-tl-filter-label" }, "Kategorie:"),
+    ...payload.categories.map(legendItem),
+    payload.segments.some((s) => s.cat_key === "_none") ? legendItem(NO_CATEGORY) : null);
   const filtersEl = document.querySelector(".cp-tl-filters");
   filtersEl.querySelector(".cp-tl-facets").append(legend);
 
@@ -557,37 +591,28 @@
 
   // --- filter control (clickable legend + org chips + activity picker) -------
   // The category facet IS the legend (wired here). After it come an activity picker (long list
-  // → a select) and the org initial-chips, each facet a group that wraps whole. Each org chip
-  // cycles garant/pomocník → účast na slotu → off (a trailing label names the active relation).
+  // → a select) and the org initial-chips (orgCycle), each facet a group that wraps whole.
   // Only one facet is active at a time; every state is a "type:value" token, also the #filter=
   // hash payload, so applying / reading / deep-linking share one mapping.
-  const ORG_MODE = { garant: "garant/pomocník", attending: "účast na slotu" };
   // Rebuilds the activity-dependent facets from payload.segments; reassigned by setupFilter
   // and called by rehydrate after a save (a new activity may have appeared). No-op until then.
   let refreshFilterFacets = () => {};
   (function setupFilter() {
     const orgs = payload.orgs.slice().sort((a, b) => a.initials.localeCompare(b.initials, "cs"));
-    const actMap = new Map();
-    payload.segments.forEach((s) => { if (!actMap.has(s.activity_id)) actMap.set(s.activity_id, s.title); });
-    const activities = [...actMap.entries()].sort((a, b) => a[1].localeCompare(b[1], "cs"));
-
     const facets = [];   // the picker and org groups, after the legend
     const group = (cls, ...kids) => el("div", { class: "cp-tl-fgroup " + cls }, ...kids);
-    const fLabel = (text) => Object.assign(document.createElement("span"), { className: "cp-tl-filter-label", textContent: text });
+    const fLabel = (text) => el("span", { class: "cp-tl-filter-label" }, text);
 
     // The current time in the camp timezone (in the toolbar), with the tz name in small grey,
     // only when that differs from the viewer's own, i.e. when the wall clock is ambiguous.
     // Intl does the tz math.
-    let clock = null;
     let browserTz = "";
     try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_e) { /* leave "" */ }
     if (camp.timezone && camp.timezone !== browserTz) {
-      clock = document.createElement("span");
-      clock.className = "cp-tl-clock";
-      clock.title = "Aktuální čas v časovém pásmu tábora";
-      const clockTime = Object.assign(document.createElement("b"), { className: "cp-tl-clock-time" });
-      clock.append("🕒 ", clockTime, Object.assign(document.createElement("span"),
-        { className: "cp-tl-clock-tz", textContent: camp.timezone }));
+      const clockTime = el("b", { class: "cp-tl-clock-time" });
+      document.querySelector(".cp-tl-view")?.append(
+        el("span", { class: "cp-tl-clock", title: "Aktuální čas v časovém pásmu tábora" },
+          "🕒 ", clockTime, el("span", { class: "cp-tl-clock-tz" }, camp.timezone)));
       const opts = { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
       let fmt;
       try { fmt = new Intl.DateTimeFormat("cs-CZ", { timeZone: camp.timezone, ...opts }); }
@@ -597,14 +622,11 @@
       setInterval(tickClock, 1000);
     }
 
-    let actSel = null;
-    if (activities.length) {
-      actSel = document.createElement("select");
-      actSel.className = "cp-tl-select";
-      actSel.add(new Option("– vybrat hru –", ""));
-      activities.forEach(([id, title]) => actSel.add(new Option(title, `activity:${id}`)));
-      facets.push(group("cp-tl-fact", fLabel("Hra:"), actSel));
-    }
+    // an activity is in the filter exactly when it has a segment; refreshFilterFacets fills it
+    const actSel = payload.segments.length
+      ? el("select", { class: "cp-tl-select" }, new Option("– vybrat hru –", ""))
+      : null;
+    if (actSel) facets.push(group("cp-tl-fact", fLabel("Hra:"), actSel));
 
     // shown only while a filter is on, its room kept so nothing reflows; at the end of the
     // org chips, in the room their last line leaves
@@ -613,36 +635,18 @@
     const fClear = document.getElementById("cp-filter-clear");   // beside the toggle on a phone
     fClear?.addEventListener("click", () => apply("", true));
 
-    // org chips (each org listed once); click cycles garant → účast → off
-    const orgChips = [];
-    let modeLabel = null;
+    // org chips (each org listed once)
+    const orgFacet = orgCycle(orgs, (f) => apply(f ? f.type + ":" + f.id : "", true));
     if (orgs.length) {
-      const orgGroup = group("cp-tl-forg", fLabel("Org:"));
-      orgs.forEach((o) => {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "cp-tl-chip";
-        chip.dataset.orgId = String(o.id);
-        chip.title = o.name;            // full name on hover
-        chip.textContent = o.initials;
-        orgChips.push(chip);
-        orgGroup.append(chip);
-      });
-      modeLabel = Object.assign(document.createElement("span"), { className: "cp-tl-orgmode" });
-      orgGroup.append(modeLabel, clearBtn);
-      facets.push(orgGroup);
+      orgFacet.node.classList.add("cp-tl-forg");
+      orgFacet.node.prepend(fLabel("Org:"));
+      orgFacet.node.append(clearBtn);
+      facets.push(orgFacet.node);
     } else facets.push(clearBtn);
-
-    if (clock) document.querySelector(".cp-tl-view")?.append(clock);
     legend.after(...facets);
 
     const catChips = [...legend.querySelectorAll("[data-filter]")];
-    let VALID = new Set([
-      ...catChips.map((c) => c.dataset.filter),
-      ...orgs.flatMap((o) => [`garant:${o.id}`, `attending:${o.id}`]),
-      ...activities.map(([id]) => `activity:${id}`),
-    ]);
-
+    let VALID = new Set();
     let current = "";   // the active "type:value" token, "" = no filter
     const fToggle = document.getElementById("cp-filter-toggle");
     const filterName = () => filter.type === "category"
@@ -663,18 +667,8 @@
       const i = current.indexOf(":");
       const value = current.slice(i + 1);
       filter = current ? { type: current.slice(0, i), value, id: Number(value) } : null;
-      const orgMode = filter && ORG_MODE[filter.type];   // active org relation, or undefined
       catChips.forEach((c) => c.classList.toggle("on", c.dataset.filter === current));
-      orgChips.forEach((c) => {
-        const active = !!orgMode && filter.value === c.dataset.orgId;
-        c.classList.toggle("on", active);                                  // colour by relation:
-        c.classList.toggle("mode-garant", active && filter.type === "garant");        // reddish
-        c.classList.toggle("mode-attending", active && filter.type === "attending");  // blueish
-      });
-      if (modeLabel) {
-        modeLabel.textContent = orgMode || "";
-        modeLabel.className = "cp-tl-orgmode" + (orgMode ? " mode-" + filter.type : "");
-      }
+      orgFacet.set(filter && ORG_MODE[filter.type] ? filter : null);
       if (actSel) actSel.value = current.startsWith("activity:") ? current : "";
       clearBtn.classList.toggle("cp-off", !filter);
       fClear?.classList.toggle("cp-off", !filter);
@@ -690,19 +684,8 @@
       return m ? `${m[1]}:${decodeURIComponent(m[2])}` : "";
     }
 
-    catChips.forEach((c) => c.addEventListener("click",
-      () => apply(c.dataset.filter === current ? "" : c.dataset.filter, true)));   // re-click active = clear
-    orgChips.forEach((c) => c.addEventListener("click", () => {
-      const id = c.dataset.orgId;   // cycle: 1st click garant, 2nd účast, 3rd off
-      const next = current === `garant:${id}` ? `attending:${id}` : current === `attending:${id}` ? "" : `garant:${id}`;
-      apply(next, true);
-    }));
-    if (actSel) actSel.addEventListener("change", () => apply(actSel.value, true));
-    window.addEventListener("hashchange", () => apply(tokenFromHash(), false));    // external links / back button
-    apply(tokenFromHash(), false);   // initial state from the URL
-
-    // After a save the activity list may change; orgs/categories don't, so rebuild only the
-    // activity <select> + VALID token set, keeping the current selection if still valid.
+    // The activity <select> and the VALID tokens follow payload.segments (orgs and categories
+    // don't change); the current selection stays while still valid.
     refreshFilterFacets = () => {
       const map = new Map();
       payload.segments.forEach((s) => { if (!map.has(s.activity_id)) map.set(s.activity_id, s.title); });
@@ -720,6 +703,13 @@
       }
       if (current && !VALID.has(current)) apply("", true);   // the filtered activity is gone
     };
+    refreshFilterFacets();
+
+    catChips.forEach((c) => c.addEventListener("click",
+      () => apply(c.dataset.filter === current ? "" : c.dataset.filter, true)));   // re-click active = clear
+    if (actSel) actSel.addEventListener("change", () => apply(actSel.value, true));
+    window.addEventListener("hashchange", () => apply(tokenFromHash(), false));    // external links / back button
+    apply(tokenFromHash(), false);   // initial state from the URL
   })();
 
   // Re-render from a fresh payload after a save without reloading: rebuild the items in

@@ -27,7 +27,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   cached old files with the new ones.
 - API: a 422 for a repeated item in a list points at the list field.
 - History: an import from Google records only what it changed, as a manual edit does.
-- The activity dialogs ask before discarding edits and save on Enter.
+- The activity and slot type dialogs ask before discarding edits and save on Enter.
 
 ### Fixed
 

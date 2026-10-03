@@ -9,9 +9,10 @@
   const btn = document.getElementById("cp-ical-btn");
   const dataEl = document.getElementById("cp-ical-data");
   const tlEl = document.getElementById("cp-timeline-data");
-  if (!btn || !dataEl || !tlEl || !window.cpDom) return;
+  if (!btn || !dataEl || !tlEl || !window.cpDom || !window.cpTimelineKit) return;
 
   const { el, api, toast, openModal, submit, swatch, chipGroup } = window.cpDom;
+  const { NO_CATEGORY, orgCycle } = window.cpTimelineKit;
   const DATA = JSON.parse(dataEl.textContent);
   let TL = null;         // the (large) timeline payload, parsed on first open only
   let LS_KEY = "";
@@ -34,13 +35,11 @@
     }
     // categories incl. the synthetic "Bez kategorie", mirroring the legend
     const cats = TL.categories.slice();
-    if (TL.segments.some((s) => s.cat_key === "_none")) {
-      cats.push({ key: "_none", label: "Bez kategorie", color: "#9e9e9e" });
-    }
+    if (TL.segments.some((s) => s.cat_key === "_none")) cats.push(NO_CATEGORY);
 
-    // prefill from the active timeline filter (#filter=type:value); activity has no UI here
+    // prefill from the active timeline filter (#filter=type:value)
     let pre = null;
-    const m = /^#filter=(category|garant|attending):(.+)$/.exec(location.hash);
+    const m = /^#filter=(category|garant|attending):(.+)$/.exec(location.hash);   // activity has no UI here
     if (m) {
       try { pre = { type: m[1], value: decodeURIComponent(m[2]) }; }
       catch (_e) { /* malformed escape in a hand-edited hash: no prefill */ }
@@ -59,32 +58,11 @@
       { multi: true, selected: pre && pre.type === "category" ? [pre.value] : [],
         onChange: () => update() });
 
-    // org chips as above the timeline: click cycles garant/pomocník → účast na slotu → off
-    const ORG_MODE = { garant: "garant/pomocník", attending: "účast na slotu" };
-    let orgFilter = pre && ORG_MODE[pre.type] ? { type: pre.type, id: pre.value } : null;
-    const modeLabel = el("span", { class: "cp-tl-orgmode" });
-    const orgChips = TL.orgs.map((o) => {
-      const chip = el("button", { type: "button", class: "cp-tl-chip", title: o.name }, o.initials);
-      chip.addEventListener("click", () => {
-        const id = String(o.id);
-        orgFilter = !orgFilter || orgFilter.id !== id ? { type: "garant", id }
-          : orgFilter.type === "garant" ? { type: "attending", id } : null;
-        syncOrgChips();
-        update();
-      });
-      return { chip, id: String(o.id) };
-    });
-    function syncOrgChips() {
-      orgChips.forEach(({ chip, id }) => {
-        const active = !!orgFilter && orgFilter.id === id;
-        chip.classList.toggle("on", active);
-        chip.classList.toggle("mode-garant", active && orgFilter.type === "garant");
-        chip.classList.toggle("mode-attending", active && orgFilter.type === "attending");
-      });
-      modeLabel.textContent = orgFilter ? ORG_MODE[orgFilter.type] : "";
-      modeLabel.className = "cp-tl-orgmode" + (orgFilter ? " mode-" + orgFilter.type : "");
-    }
-    syncOrgChips();
+    // org chips as above the timeline
+    let orgFilter = pre && (pre.type === "garant" || pre.type === "attending")
+      ? { type: pre.type, id: Number(pre.value) } : null;
+    const orgChips = orgCycle(TL.orgs, (f) => { orgFilter = f; update(); });
+    orgChips.set(orgFilter);
 
     const urlOut = el("textarea", { readOnly: true, class: "cp-act-textarea cp-ical-url", rows: 3, spellcheck: false });
     urlOut.addEventListener("click", () => urlOut.select());
@@ -143,7 +121,7 @@
         el("div", { class: "cp-field-label" }, "Token"), token, tokenHint, genRow,
         el("div", { class: "cp-field-label" }, "Kategorie"), catChips.node,
         el("div", { class: "cp-field-label" }, "Org"),
-        el("div", { class: "cp-tl-fgroup" }, ...orgChips.map((c) => c.chip), modeLabel),
+        orgChips.node,
         el("div", { class: "cp-field-label" }, "URL kalendáře"), urlOut,
         el("div", null, copyBtn),
         hint),
