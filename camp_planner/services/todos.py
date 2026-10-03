@@ -34,9 +34,7 @@ def create_todo(activity: Activity, payload: TodoCreate) -> dict:
                 due_date=payload.due_date, is_done=payload.is_done)
     db_session.add(todo)
     changes: dict[str, list] = {"title": [None, todo.title]}
-    orgs_diff = orgs.replace_assignments(todo, activity.camp, payload.org_ids, TodoAssignment)
-    if orgs_diff:
-        changes["orgs"] = orgs_diff
+    changes |= orgs.replace_assignments(todo, activity.camp, payload.org_ids, TodoAssignment)
     db_session.flush()
     audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.todo,
                  entity_id=todo.id, action=AuditAction.create, changes=changes)
@@ -47,10 +45,8 @@ def create_todo(activity: Activity, payload: TodoCreate) -> dict:
 def update_todo(todo: Todo, payload: TodoUpdate) -> dict:
     changes = audit.apply_patch(todo, payload, _EDITABLE)
     if payload.org_ids is not None:
-        orgs_diff = orgs.replace_assignments(
+        changes |= orgs.replace_assignments(
             todo, todo.activity.camp, payload.org_ids, TodoAssignment)
-        if orgs_diff:
-            changes["orgs"] = orgs_diff
     if changes:
         audit.record(camp_id=todo.activity.camp_id, activity_id=todo.activity_id, entity_type=EntityType.todo,
                      entity_id=todo.id, action=AuditAction.update, changes=changes)

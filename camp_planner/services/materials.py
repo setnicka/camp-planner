@@ -128,10 +128,8 @@ def update_material(material: Material, payload: MaterialUpdateIn) -> dict:
         if value is not None:
             changes.update(audit.apply_changes(material, {field: value}))
     if payload.org_ids is not None:
-        orgs_diff = orgs.replace_assignments(
+        changes |= orgs.replace_assignments(
             material, material.camp, payload.org_ids, MaterialAssignment)
-        if orgs_diff:
-            changes["orgs"] = orgs_diff
     if "inventory_item_id" in payload.model_fields_set:
         # no_autoflush: the lookups inside would flush a pending rename, and its unique
         # violation would then escape the guarded flush below as a 500.

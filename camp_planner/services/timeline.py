@@ -13,20 +13,19 @@ the model deliberately avoids.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 
 from camp_planner.models.activity import OrgRole
 from camp_planner.models.common import czech_sort_key
 from camp_planner.schemas import (
     TimelineCamp,
-    CategoryOut,
     TimelineGroup,
-    OrgOut,
     TimelinePayload,
     TimelineSegment,
     TimelineTag,
 )
+from camp_planner.services import taxonomy
 
 if TYPE_CHECKING:
     from datetime import date
@@ -52,12 +51,18 @@ def _abs_min(dt: datetime, start_date: date) -> int:
     return (dt.date() - start_date).days * DAY_MIN + dt.hour * 60 + dt.minute
 
 
+def camp_window(start_date, length_days: int, window_start_min: int) -> tuple[datetime, datetime]:
+    """A camp's wall-clock span [start, end): from start_date at window_start_min, for
+    length_days. Takes raw fields so a prospective window can be checked too."""
+    start = datetime.combine(start_date, time()) + timedelta(minutes=window_start_min)
+    return start, start + timedelta(days=length_days)
+
+
 def span_in_window(camp: Camp, start_at: datetime, end_at: datetime) -> bool:
     """True when [start_at, end_at) lies fully inside the camp's day windows
     (day 0's window start → the last day's window end)."""
-    lo = camp.window_start_min
-    hi = lo + camp.length_days * DAY_MIN
-    return lo <= _abs_min(start_at, camp.start_date) and _abs_min(end_at, camp.start_date) <= hi
+    lo, hi = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
+    return lo <= start_at and end_at <= hi
 
 
 def slice_segments(
@@ -105,17 +110,6 @@ def _groups(camp: Camp) -> list[TimelineGroup]:
             for i in range(camp.length_days)]
 
 
-def _categories(camp: Camp) -> list[CategoryOut]:
-    """The camp's categories (user sort_order); segments reference them by cat_key."""
-    return [CategoryOut(id=c.id, key=c.key, label=c.label, color=c.color) for c in camp.categories]
-
-
-def _orgs(camp: Camp) -> list[OrgOut]:
-    """All camp orgs (Czech-collated by initials); segments reference them by id."""
-    orgs = sorted(camp.orgs, key=lambda o: czech_sort_key(o.initials))
-    return [OrgOut(id=o.id, initials=o.initials, name=o.name) for o in orgs]
-
-
 def _tags(camp: Camp) -> list[TimelineTag]:
     """All camp tags (in their sort_order); segments reference them by id (tag_ids)."""
     return [TimelineTag(id=t.id, name=t.name, pinned=t.pinned) for t in camp.tags]
@@ -161,8 +155,8 @@ def build_timeline(camp: Camp) -> dict:
             window_start_min=camp.window_start_min, snap_minutes=camp.snap_minutes,
             latitude=camp.latitude, longitude=camp.longitude, rev=camp.timeline_rev,
         ),
-        categories=_categories(camp),
-        orgs=_orgs(camp),
+        categories=taxonomy.categories(camp),  # segments reference them by cat_key
+        orgs=taxonomy.orgs(camp),              # and these by id
         tags=_tags(camp),
         groups=_groups(camp),
         segments=_segments(camp),

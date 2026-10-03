@@ -11,11 +11,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from camp_planner.extensions import db_session
-from camp_planner.models.activity import Activity, ActivityAssignment, ActivityTag, OrgRole
+from camp_planner.models.activity import Activity, ActivityTag
 from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.camp import TagKind
-from camp_planner.models.common import czech_sort_key
-from camp_planner.services import audit, errors, google_sync, serialize, timeline
+from camp_planner.services import audit, errors, google_sync, orgs, serialize, timeline
 
 if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
@@ -51,11 +50,8 @@ def update_activity(activity: Activity, payload: ActivityUpdate) -> dict:
     if changes:
         audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.activity,
                      entity_id=activity.id, action=AuditAction.update, changes=changes)
-        # The event summary derives from the title and its color from the category, so
-        # re-push every slot's event when either changes (no-op unless the camp is connected).
-        if "title" in changes or "category_id" in changes:
-            for slot in activity.slots:
-                google_sync.enqueue_upsert(activity.camp, slot)
+        if "title" in changes or "category_id" in changes:  # event summary and colour
+            google_sync.enqueue_activity(activity)
         db_session.commit()
     return {"activity": serialize.activity(activity)}
 
@@ -125,31 +121,13 @@ def merge_activities(source: Activity, target: Activity) -> dict:
 
 
 def set_orgs(activity: Activity, payload: ActivityOrgsIn) -> dict:
-    """Replace the activity's garant/helper orgs with the submitted set."""
-    initials = {o.id: o.initials for o in activity.camp.orgs}
-    new_pairs: list[tuple] = []
-    for item in payload.orgs:  # schema already rejected (org_id, role) duplicates
-        if item.org_id not in initials:
-            raise errors.Invalid("Orgové: neznámý org této akce.")
-        new_pairs.append((item.org_id, item.role))
-
-    # per-role before/after initials (czech-sorted), only the roles that changed
-    current_pairs = {(a.org_id, a.role) for a in activity.assignments}
-    by_role = lambda pairs, role: sorted((initials[oid] for oid, r in pairs if r == role), key=czech_sort_key)  # noqa: E731
-    changes: dict[str, list] = {}
-    for role in OrgRole:
-        before, after = by_role(current_pairs, role), by_role(new_pairs, role)
-        if before != after:
-            changes[role.value] = [before, after]
-
-    if changes:  # unchanged → no reassignment (avoids delete-orphan churn) and no audit row
-        activity.assignments = [ActivityAssignment(org_id=oid, role=role) for oid, role in new_pairs]
+    """Replace the activity's garant/helper orgs with the submitted set (the schema already
+    rejected (org_id, role) duplicates)."""
+    changes = orgs.replace_roles(activity, [(item.org_id, item.role) for item in payload.orgs])
+    if changes:
         audit.record(camp_id=activity.camp_id, activity_id=activity.id, entity_type=EntityType.assignment,
                      entity_id=None, action=AuditAction.update, changes=changes)
-        # Garants AND helpers both map to each event's LOCATION (format_location), so re-push
-        # the activity's slots on any assignment change (no-op unless the camp is connected).
-        for slot in activity.slots:
-            google_sync.enqueue_upsert(activity.camp, slot)
+        google_sync.enqueue_activity(activity)
         db_session.commit()
     return {"orgs": serialize.activity_orgs(activity)}
 

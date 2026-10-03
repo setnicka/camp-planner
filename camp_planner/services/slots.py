@@ -32,9 +32,7 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
     changes: dict = {}
 
     if "org_ids" in fields and payload.org_ids is not None:  # explicit null → unchanged; [] → clear
-        orgs_diff = orgs.replace_assignments(slot, camp, payload.org_ids, SlotAssignment)
-        if orgs_diff:
-            changes["orgs"] = orgs_diff
+        changes |= orgs.replace_assignments(slot, camp, payload.org_ids, SlotAssignment)
 
     if "override_name" in fields:
         new_name = (payload.override_name or "").strip() or None
@@ -75,6 +73,20 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
         if not span_in_window(camp, start_at, end_at):
             raise errors.Invalid("Změny: blok leží mimo dny akce.")
 
+    def _record(slot: Slot, action: AuditAction, changes: dict) -> None:
+        # Per-slot rows sit under the slot's activity, so its history shows which of its
+        # slots were added, moved or removed.
+        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
+                     entity_id=slot.id, action=action, changes=changes)
+
+    # The batch summary goes first: the feed orders by id.
+    retyped = sum(_slot(r.slot_id).role != r.role for r in payload.retypes)
+    audit.record(camp_id=camp.id, entity_type=EntityType.timeline, entity_id=None, action=AuditAction.update,
+                 changes={"moved": len(payload.moves), "created": len(payload.creates),
+                          "retyped": retyped, "deleted": len(payload.deletes)})
+
+    # Each change is mirrored to Google as it is made (a no-op unless the camp is
+    # connected); drain delivers it out of band.
     created: list[Slot] = []
     for spec in payload.creates:
         if spec.activity_id not in activity_ids:
@@ -84,70 +96,33 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
                     start_at=spec.start_at, end_at=spec.end_at)
         db_session.add(slot)
         created.append(slot)
+    db_session.flush()  # ids for the created slots' audit rows, which keep their place in the feed
+    for slot in created:
+        _record(slot, AuditAction.create, {"role": [None, slot.role], "start_at": [None, slot.start_at],
+                                           "end_at": [None, slot.end_at]})
+        google_sync.enqueue_upsert(camp, slot)
 
-    moved: list[tuple] = []  # (slot, old_start, old_end) — old times captured before the change
     for move in payload.moves:
         slot = _slot(move.slot_id)
         _check_window(move.start_at, move.end_at)
-        moved.append((slot, slot.start_at, slot.end_at))
-        slot.start_at, slot.end_at = move.start_at, move.end_at
+        # only the edge(s) that moved; a no-op move writes nothing
+        if changes := audit.apply_changes(slot, {"start_at": move.start_at, "end_at": move.end_at}):
+            _record(slot, AuditAction.update, changes)
+            google_sync.enqueue_upsert(camp, slot)
 
-    retyped: list[tuple] = []  # (slot, old_role) — only slots whose role actually changed
     for retype in payload.retypes:
         slot = _slot(retype.slot_id)
-        if slot.role != retype.role:
-            retyped.append((slot, slot.role))
-            slot.role = retype.role
+        if changes := audit.apply_changes(slot, {"role": retype.role}):
+            _record(slot, AuditAction.update, changes)
+            google_sync.enqueue_upsert(camp, slot)
 
-    deleted: list[tuple] = []  # (id, activity_id, start, end, google_event_id) — captured pre-delete
     for slot_id in payload.deletes:
         slot = _slot(slot_id)
-        deleted.append((slot.id, slot.activity_id, slot.start_at, slot.end_at, slot.google_event_id))
+        _record(slot, AuditAction.delete,
+                {"start_at": [slot.start_at, None], "end_at": [slot.end_at, None]})
+        google_sync.enqueue_delete(camp, slot.google_event_id)
         db_session.delete(slot)
 
     bump_timeline_rev(camp)
-    db_session.flush()  # assign ids to the created slots; apply deletes
-
-    # One batch-level summary, then a per-slot row grouped under each slot's activity, so
-    # an activity's history shows exactly which of its slots were added/moved/removed.
-    audit.record(camp_id=camp.id, entity_type=EntityType.timeline, entity_id=None, action=AuditAction.update,
-                 changes={"moved": len(payload.moves), "created": len(payload.creates),
-                          "retyped": len(retyped), "deleted": len(payload.deletes)})
-    for slot in created:
-        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                     entity_id=slot.id, action=AuditAction.create,
-                     changes={"role": [None, slot.role], "start_at": [None, slot.start_at],
-                              "end_at": [None, slot.end_at]})
-    for slot, old_start, old_end in moved:
-        changes = {}  # only the edge(s) that actually moved — a resize touches just one
-        if slot.start_at != old_start:
-            changes["start_at"] = [old_start, slot.start_at]
-        if slot.end_at != old_end:
-            changes["end_at"] = [old_end, slot.end_at]
-        if not changes:
-            continue  # a no-op move (identical times) → no audit row
-        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                     entity_id=slot.id, action=AuditAction.update, changes=changes)
-    for slot, old_role in retyped:
-        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                     entity_id=slot.id, action=AuditAction.update,
-                     changes={"role": [old_role.value, slot.role.value]})
-    for sid, activity_id, old_start, old_end, _event_id in deleted:
-        audit.record(camp_id=camp.id, activity_id=activity_id, entity_type=EntityType.slot,
-                     entity_id=sid, action=AuditAction.delete,
-                     changes={"start_at": [old_start, None], "end_at": [old_end, None]})
-
-    # Mirror this batch to Google (no-op unless the camp is connected). Created and
-    # retyped slots and slots whose times actually moved are upserted; deleted slots'
-    # events are removed. Staged here, delivered out of band by google_sync.drain.
-    to_upsert = set(created)
-    to_upsert.update(slot for slot, old_start, old_end in moved
-                     if slot.start_at != old_start or slot.end_at != old_end)
-    to_upsert.update(slot for slot, _old_role in retyped)
-    for slot in to_upsert:
-        google_sync.enqueue_upsert(camp, slot)
-    for _sid, _activity_id, _old_start, _old_end, event_id in deleted:
-        google_sync.enqueue_delete(camp, event_id)
-
     db_session.commit()
     return {"rev": camp.timeline_rev, "created": [serialize.slot(s) for s in created]}

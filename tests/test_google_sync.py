@@ -1003,11 +1003,14 @@ def test_inbound_attendants_change(client, seeded, gcal):
 # test_parse_location_matrix); the e2e tests here keep one round-trip per change kind.
 
 def test_inbound_garant_change(client, seeded, gcal):
-    from camp_planner.models.activity import Activity, OrgRole
+    from camp_planner.models.activity import Activity, ActivityAssignment, OrgRole
+    from camp_planner.models.audit import AuditLog, EntityType
 
     camp, slot = _connected_with_event(seeded)
     marek = _add_org(camp, "M", "Marek")
     petr = _add_org(camp, "P", "Petr")
+    db.session.get(Activity, seeded["activity_id"]).assignments = [
+        ActivityAssignment(org_id=petr.id, role=OrgRole.helper)]
     db.session.commit()
     gcal.events[slot.google_event_id]["location"] = "K+M, P"  # K,M garants; P helper
 
@@ -1015,7 +1018,7 @@ def test_inbound_garant_change(client, seeded, gcal):
                       headers=editor(seeded["slug"])).get_json()
     gar = next(c for c in body["changes"] if c["kind"] == "garant_change")
     assert set(gar["new_garants"]) == {"K", "M"} and gar["new_helpers"] == ["P"]
-    assert gar["old_garants"] == [] and gar["old_helpers"] == []  # none before
+    assert gar["old_garants"] == [] and gar["old_helpers"] == ["P"]
 
     client.post(f"/api/camps/{seeded['slug']}/google/pull",
                 json={"decisions": [{"key": gar["key"], "action": "apply"}]},
@@ -1025,6 +1028,9 @@ def test_inbound_garant_change(client, seeded, gcal):
     garants = {a.org_id for a in activity.assignments if a.role == OrgRole.garant}
     helpers = {a.org_id for a in activity.assignments if a.role == OrgRole.helper}
     assert garants == {seeded["org_id"], marek.id} and helpers == {petr.id}
+    # the audit names only the role that changed, as a manual edit does
+    row = db.session.scalars(db.select(AuditLog).filter_by(entity_type=EntityType.assignment)).one()
+    assert row.changes == {"garant": [[], ["K", "M"]]}
 
 
 def test_inbound_unknown_orgs_flagged_and_skipped(client, seeded, gcal):

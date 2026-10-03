@@ -62,7 +62,7 @@ ESHOP = "https://example.org/eshop"   # the "where to buy" link of demo rows
 
 # --- taxonomy ---------------------------------------------------------------
 
-# Colours are entries of the Google event palette (google_client._EVENT_COLORS), so a
+# Colours are entries of the Google event palette (google_client.EVENT_COLORS), so a
 # connected camp round-trips them exactly instead of snapping to the nearest swatch.
 CATEGORIES = [
     ("rozcvicka", "Rozcvička", "#e67c73"),

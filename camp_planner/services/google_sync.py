@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from contextlib import contextmanager
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from camp_planner import schemas
@@ -25,8 +25,8 @@ from camp_planner.models.audit import AuditAction, EntityType
 from camp_planner.models.common import czech_sort_key
 from camp_planner.models.google import GoogleSyncOp, SyncOpKind
 from camp_planner.models.slot import Slot, SlotAssignment, SlotRole
-from camp_planner.services import audit, errors, google_client
-from camp_planner.services.timeline import bump_timeline_rev
+from camp_planner.services import audit, errors, google_client, orgs, taxonomy
+from camp_planner.services.timeline import bump_timeline_rev, camp_window, span_in_window
 
 # An imported event longer than this is treated as a whole-camp span, not a slot, and skipped.
 _MAX_IMPORT_HOURS = 48
@@ -62,6 +62,13 @@ def enqueue_upsert(camp: Camp, slot: Slot) -> None:
     if _already_queued(camp, GoogleSyncOp.slot_id == slot.id, GoogleSyncOp.op == SyncOpKind.upsert):
         return
     db_session.add(GoogleSyncOp(camp_id=camp.id, slot_id=slot.id, op=SyncOpKind.upsert))
+
+
+def enqueue_activity(activity: Activity) -> None:
+    """Stage an upsert of every slot of the activity: its title, category colour and orgs
+    (LOCATION) are on each of its events."""
+    for slot in activity.slots:
+        enqueue_upsert(activity.camp, slot)
 
 
 def enqueue_delete(camp: Camp, google_event_id: str | None) -> None:
@@ -315,14 +322,6 @@ def _deliver_queued_ops(camp: Camp) -> dict:
 
 # --- inbound (Google → Planner), explicit & reviewed -------------------------
 
-def camp_window(start_date, length_days: int, window_start_min: int) -> tuple[datetime, datetime]:
-    """A camp's wall-clock span [start, end): from start_date at window_start_min, for
-    length_days. Used to filter import candidates and to detect overlaps between camps that
-    share one calendar. Takes raw fields so a *prospective* window can be checked too."""
-    start = datetime.combine(start_date, time()) + timedelta(minutes=window_start_min)
-    return start, start + timedelta(days=length_days)
-
-
 # Initials tokens are separated by commas, semicolons, plus signs or whitespace; any
 # parentheses are dropped (e.g. "(K) M+P, R" → K, M, P, R).
 _TOKEN_SEP = re.compile(r"[,;+\s]+")
@@ -390,9 +389,8 @@ def _parse_location(camp: Camp, text: str | None) -> tuple[list[int], list[int],
 
 def _color_to_category(camp: Camp, color_id: str | None) -> int | None:
     """The camp category whose color is nearest the Google event color, or None."""
-    hex_color = google_client.color_id_to_hex(color_id)
     options = {c.id: c.color for c in camp.categories if c.color}
-    return google_client.nearest_hex(hex_color, options)
+    return google_client.nearest_hex(google_client.EVENT_COLORS.get(color_id), options)
 
 
 def _detect(camp: Camp) -> list[dict]:
@@ -427,7 +425,7 @@ def _detect(camp: Camp) -> list[dict]:
 
         times = google_client.parse_event_times(ev, tz)
         if times and (times[0] != slot.start_at or times[1] != slot.end_at):
-            if window_start <= times[0] and times[1] <= window_end:
+            if span_in_window(camp, *times):
                 changes.append({"kind": "time_change", "key": f"time:{slot.id}", "slot": slot,
                                 "new_start": times[0], "new_end": times[1]})
             else:
@@ -618,8 +616,7 @@ def preview_pull(camp: Camp) -> dict:
         "rev": camp.timeline_rev,  # echoed back on apply to detect a racing timeline edit
         "changes": [_serialize_change(c).model_dump(mode="json") for c in changes],
         "activities": [{"id": a.id, "title": a.title} for a in activities],
-        "categories": [{"id": c.id, "key": c.key, "label": c.label, "color": c.color}
-                       for c in camp.categories],
+        "categories": taxonomy.categories(camp),
     }
 
 
@@ -653,11 +650,9 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
 
         if kind == "time_change":
             slot = c["slot"]
-            old_start, old_end = slot.start_at, slot.end_at
-            slot.start_at, slot.end_at = c["new_start"], c["new_end"]
+            changes = audit.apply_changes(slot, {"start_at": c["new_start"], "end_at": c["new_end"]})
             audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                         entity_id=slot.id, action=AuditAction.update,
-                         changes={"start_at": [old_start, slot.start_at], "end_at": [old_end, slot.end_at]})
+                         entity_id=slot.id, action=AuditAction.update, changes=changes)
             applied["updated"] += 1
 
         elif kind == "deleted_in_google":
@@ -670,38 +665,28 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
 
         elif kind == "attendants_change":
             slot = c["slot"]
-            before = _initials(camp, [a.org_id for a in slot.assignments])
-            slot.assignments = [SlotAssignment(org_id=i) for i in c["new_org_ids"]]
+            changes = orgs.replace_assignments(slot, camp, c["new_org_ids"], SlotAssignment)
             audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                         entity_id=slot.id, action=AuditAction.update,
-                         changes={"orgs": [before, c["new_initials"]]})
+                         entity_id=slot.id, action=AuditAction.update, changes=changes)
             enqueue_upsert(camp, slot)  # reconcile (clears any unknown initials from the event)
             applied["updated"] += 1
 
         elif kind == "garant_change":
             activity = c["activity"]
-            before_g = _initials(camp, [a.org_id for a in activity.assignments if a.role == OrgRole.garant])
-            before_h = _initials(camp, [a.org_id for a in activity.assignments if a.role == OrgRole.helper])
-            activity.assignments = (
-                [ActivityAssignment(org_id=i, role=OrgRole.garant) for i in c["new_garant_ids"]]
-                + [ActivityAssignment(org_id=i, role=OrgRole.helper) for i in c["new_helper_ids"]])
+            changes = orgs.replace_roles(
+                activity, [(i, OrgRole.garant) for i in c["new_garant_ids"]]
+                + [(i, OrgRole.helper) for i in c["new_helper_ids"]])
             audit.record(camp_id=camp.id, activity_id=activity.id, entity_type=EntityType.assignment,
-                         entity_id=None, action=AuditAction.update,
-                         changes={"garant": [before_g, _initials(camp, c["new_garant_ids"])],
-                                  "helper": [before_h, _initials(camp, c["new_helper_ids"])]})
-            for s in activity.slots:
-                enqueue_upsert(camp, s)  # LOCATION is on every one of the activity's events
+                         entity_id=None, action=AuditAction.update, changes=changes)
+            enqueue_activity(activity)
             applied["updated"] += 1
 
         elif kind == "category_change":
             activity = c["activity"]
-            old = activity.category_id
-            activity.category_id = c["new_category_id"]
+            changes = audit.apply_changes(activity, {"category_id": c["new_category_id"]})
             audit.record(camp_id=camp.id, activity_id=activity.id, entity_type=EntityType.activity,
-                         entity_id=activity.id, action=AuditAction.update,
-                         changes={"category_id": [old, activity.category_id]})
-            for s in activity.slots:
-                enqueue_upsert(camp, s)  # colorId is on every one of the activity's events
+                         entity_id=activity.id, action=AuditAction.update, changes=changes)
+            enqueue_activity(activity)
             applied["updated"] += 1
 
         else:  # new_event → create a new activity or attach to an existing one
