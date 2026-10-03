@@ -218,11 +218,15 @@ def test_merge_passes_the_link_to_an_unlinked_target(client, seeded, box):
     assert link_of(client, slug, own["id"])["id"] == provaz["id"]
 
 
-def test_a_need_carries_the_link(client, seeded, box):
+def test_a_need_carries_the_link_and_the_orgs(client, seeded, box):
     item = make_item(client, box["id"], "Lano", count=3)
     m = make_material(client, seeded["slug"], "Lano", inventory_item_id=item["id"])
-    need = add_need(client, seeded["activity_id"], m["id"], amount=2)
-    assert need["material"]["inventory_item"]["box"]["name"] == box["name"]
+    patch_material(client, seeded["slug"], m["id"], org_ids=[seeded["org_id"]])
+    add_need(client, seeded["activity_id"], m["id"], amount=2)
+    activity = client.get(f"/api/activities/{seeded['activity_id']}", headers=ADMIN).get_json()
+    nested = activity["activity"]["material_needs"][0]["material"]
+    assert nested["inventory_item"]["box"]["name"] == box["name"]
+    assert [o["initials"] for o in nested["orgs"]] == ["K"]
 
 
 def test_a_blank_unit_override_is_no_override(client, seeded):

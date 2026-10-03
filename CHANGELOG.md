@@ -29,6 +29,11 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Static file URLs carry the file's mtime, so after a deploy a browser can't mix
   cached old files with new ones.
 
+### Fixed
+
+- Activity detail: with the warehouse off, a material no longer links to
+  a warehouse box; the API also lists its responsible orgs.
+
 ## [0.4.0] - 2026-09-27
 
 The warehouse: boxes and items shared by all camps, inventory checks and a link
