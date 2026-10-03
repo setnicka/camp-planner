@@ -424,7 +424,6 @@ class TagLinkOut(BaseModel):
 
 class MaterialOut(BaseModel):
     """A catalog material (registry) — also returned by the catalog endpoints."""
-    model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     unit: str | None

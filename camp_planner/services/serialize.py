@@ -102,7 +102,7 @@ def _tags(a: Activity) -> list[TagLinkOut]:
 def _material_need(m: MaterialNeed) -> MaterialNeedOut:
     """An activity's material need, with the catalog material nested."""
     return MaterialNeedOut(id=m.id, amount=m.amount, unit=m.unit, note=m.note,
-                           is_ready=m.is_ready, material=m.material)
+                           is_ready=m.is_ready, material=_material(m.material))
 
 
 # --- public adapters (dump the model at the API boundary) --------------------

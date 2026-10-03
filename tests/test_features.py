@@ -47,6 +47,8 @@ def test_camp_pages_lose_the_warehouse(app, client, seeded, box):
     resp = client.post(f"/api/camps/{seeded['slug']}/materials",
                        json={"inventory_item_id": item["id"]}, headers=ADMIN)
     material_id = resp.get_json()["material"]["id"]
+    client.post(f"/api/activities/{seeded['activity_id']}/materials",
+                json={"material_id": material_id}, headers=ADMIN)
     _off(app)
 
     assert ">Sklad<" not in client.get("/", headers=ADMIN).get_data(as_text=True)
@@ -55,6 +57,8 @@ def test_camp_pages_lose_the_warehouse(app, client, seeded, box):
         assert "inventoryItems" not in _page_urls(client, url)
     listed = client.get(f"/api/camps/{seeded['slug']}/materials", headers=ADMIN).get_json()
     assert [m["inventory_item"] for m in listed["materials"]] == [None]
+    activity = client.get(f"/api/activities/{seeded['activity_id']}", headers=ADMIN).get_json()
+    assert activity["activity"]["material_needs"][0]["material"]["inventory_item"] is None
 
     # Neither made nor let go while hidden: a null would otherwise drop the unseen link.
     resp = client.patch(f"/api/camps/{seeded['slug']}/materials/{material_id}",

@@ -195,7 +195,7 @@ def merge_materials(camp: Camp, source: Material, target: Material) -> dict:
             # activity already uses target (same effective unit) → sum the amounts
             if need.amount is not None:
                 existing.amount = (existing.amount or 0) + need.amount
-            db_session.delete(need)
+            source.needs.remove(need)   # orphan → deleted once, not re-deleted by source's cascade
             continue
         if need.unit is None and source.unit != target.unit:
             need.unit = source.unit   # keep the old effective unit

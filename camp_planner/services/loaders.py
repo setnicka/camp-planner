@@ -35,6 +35,10 @@ INVENTORY_ITEM_BOX = (selectinload(InventoryItem.box), selectinload(InventoryIte
 # names and places it. joinedload: many-to-one, one row at most.
 _MATERIAL_LINK = (joinedload(Material.inventory_item).options(*INVENTORY_ITEM_BOX),)
 
+# What every material serializer walks: its responsible orgs and the warehouse link.
+_MATERIAL_GRAPH = (selectinload(Material.assignments).selectinload(MaterialAssignment.org),
+                   *_MATERIAL_LINK)
+
 
 def _activity_graph() -> tuple:
     """The graph serialize.activity() walks (slots+attendees, org roles, tag links,
@@ -46,7 +50,7 @@ def _activity_graph() -> tuple:
         selectinload(Activity.tags).selectinload(ActivityTag.tag),
         selectinload(Activity.todos).selectinload(Todo.assignments).selectinload(TodoAssignment.org),
         selectinload(Activity.material_needs).selectinload(MaterialNeed.material)
-        .options(*_MATERIAL_LINK),
+        .options(*_MATERIAL_GRAPH),
     )
 
 
@@ -82,10 +86,7 @@ ICAL = (selectinload(Camp.activities).options(*_calendar_graph()),)
 # GET /camps/<slug>/materials — the catalog list; serialize.material walks each material's
 # responsible orgs (the activity-detail picker reads it).
 MATERIALS = (
-    selectinload(Camp.materials).options(
-        selectinload(Material.assignments).selectinload(MaterialAssignment.org),
-        *_MATERIAL_LINK,
-    ),
+    selectinload(Camp.materials).options(*_MATERIAL_GRAPH),
 )
 
 # GET /camps/<slug>/materials/overview — each catalog material with its responsible orgs and
@@ -94,9 +95,7 @@ MATERIALS = (
 MATERIALS_OVERVIEW = (
     selectinload(Camp.orgs),
     selectinload(Camp.materials).options(
-        selectinload(Material.assignments).selectinload(MaterialAssignment.org),
-        selectinload(Material.needs).selectinload(MaterialNeed.activity),
-        *_MATERIAL_LINK,
+        *_MATERIAL_GRAPH, selectinload(Material.needs).selectinload(MaterialNeed.activity),
     ),
 )
 

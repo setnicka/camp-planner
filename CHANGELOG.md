@@ -26,6 +26,11 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Static files carry a version in their URL, so after a deploy a browser can't mix its
   cached old files with the new ones.
 
+### Fixed
+
+- Activity detail: with the warehouse off, a material no longer links to a warehouse box;
+  the API also lists its responsible orgs.
+
 ## [0.4.0] - 2026-09-27
 
 The warehouse: boxes and items shared by all camps, inventory checks and a link
