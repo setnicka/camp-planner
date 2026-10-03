@@ -50,27 +50,19 @@ def _login(client, username="franta", password="tajne", next_=""):
 
 # --- login / logout ------------------------------------------------------------------
 
-def test_anonymous_landing_goes_to_the_login_page(client, app):
+def test_login_and_logout(client):
     # With nothing visible and no session, the camp list would say only that the visitor is
     # not signed in, so the login page stands in for it.
     resp = client.get("/")
     assert resp.status_code == 302 and "/auth/login" in resp.headers["Location"]
 
     _add_user()
-    _login(client)
-    assert client.get("/").status_code == 200
-
-
-def test_login_success_and_logout(client, app):
-    _add_user()
     resp = _login(client)
     assert resp.status_code == 302 and resp.headers["Location"] == "/"
-
     html = client.get("/").get_data(as_text=True)
-    assert "Franta" in html and "Odhlásit se" in html    # logged in, display name shown
+    assert "Franta" in html and "Odhlásit se" in html
 
     assert client.post("/auth/logout").status_code == 302
-    # signed out, the landing page hands the visitor on to the login form
     html = client.get("/", follow_redirects=True).get_data(as_text=True)
     assert "Franta" not in html and "Přihlásit se" in html
 
@@ -99,16 +91,11 @@ def test_stale_session_is_anonymous_not_500(client):
     assert "Franta" not in resp.get_data(as_text=True)    # treated as anonymous
 
 
-def test_the_way_back_from_login_is_root_relative(client):
-    # _safe_next refuses an absolute one, landing the visitor on the camp list instead.
+def test_an_anonymous_admin_page_sends_to_login_and_back(client):
     resp = client.get("/auth/users?page=2")
-    target = parse_qs(urlparse(resp.headers["Location"]).query)["next"][0]
-    assert target == "/auth/users?page=2"
-
-
-def test_anonymous_admin_page_redirects_to_login(client):
-    resp = client.get("/auth/users")
     assert resp.status_code == 302 and "/auth/login" in resp.headers["Location"]
+    # root-relative, as _safe_next refuses an absolute one
+    assert parse_qs(urlparse(resp.headers["Location"]).query)["next"] == ["/auth/users?page=2"]
 
 
 def test_non_admin_cannot_manage_users(client):

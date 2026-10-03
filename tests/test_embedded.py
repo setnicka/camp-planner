@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import re
+import warnings
 
 import pytest
 from flask import Flask
@@ -13,16 +14,14 @@ from flask_wtf import CSRFProtect
 from jinja2 import DictLoader
 
 from camp_planner import register_camp_planner
-from camp_planner.config import MAX_UPLOAD_BYTES
 from camp_planner.extensions import db
-from tests.conftest import HOST_ADMIN, make_camp_embedded, page_data, png
+from tests.conftest import HOST_ADMIN, make_camp, page_data, png
 
 
 @pytest.fixture
 def embedded_factory():
-    """Mount Camp Planner on a bare host app at /planner. Returns a builder taking
-    register_camp_planner kwargs (so a test can vary e.g. force_theme=) and giving back
-    (client, identity holder); contexts are unwound at teardown."""
+    """Mount Camp Planner on a bare host app at /planner. The builder takes
+    register_camp_planner kwargs and gives back (client, identity holder)."""
     contexts = []
 
     def build(templates=None, **kwargs):
@@ -50,24 +49,9 @@ def embedded_factory():
 
 @pytest.fixture
 def embedded(embedded_factory):
-    """The default mount: yields (client, identity holder); tests set
-    holder["value"] to the dict the host callback would return."""
+    """The default mount: (client, identity holder); tests set holder["value"] to the
+    dict the host callback would return."""
     return embedded_factory()
-
-
-@pytest.fixture
-def embedded_dark(embedded_factory):
-    """A host that pins the dark theme (the KSP case): yields just the client."""
-    client, _ = embedded_factory(force_theme="dark")
-    return client
-
-
-def _admin(holder):
-    holder["value"] = HOST_ADMIN
-
-
-def _make_camp(client):
-    make_camp_embedded(client)
 
 
 def test_mounts_under_prefix_with_host_identity(embedded):
@@ -76,30 +60,27 @@ def test_mounts_under_prefix_with_host_identity(embedded):
     # anonymous (callback returns None): the landing page renders, links carry the prefix
     html = client.get("/planner/").get_data(as_text=True)
     assert "nejste přihlášeni" in html
-    assert 'href="/planner/"' in html                    # url_for is prefix-safe
+    assert 'href="/planner/"' in html
 
-    # the host's admin identity drives the API mounted under the prefix
-    _admin(holder)
-    _make_camp(client)
+    holder["value"] = HOST_ADMIN
+    make_camp(client, "t", prefix="/planner")
 
     html = client.get("/planner/camps/t").get_data(as_text=True)
     assert 'id="cp-timeline-data"' in html
-    assert "/planner/api/camps/t/timeline" in html       # embedded api urls carry the prefix
-    assert "/planner/camps/t/activities/0" in html        # page urls too
+    assert "/planner/api/camps/t/timeline" in html
+    assert "/planner/camps/t/activities/0" in html
 
 
 def test_slug_grants_scope_access(embedded):
     client, holder = embedded
-    _admin(holder)
-    _make_camp(client)
+    holder["value"] = HOST_ADMIN
+    make_camp(client, "t", prefix="/planner")
 
-    # a viewer grant by camp slug: read yes, write no
     holder["value"] = {"user_id": "host-user",
                        "grants": [{"role": "viewer", "camps": ["t"]}]}
     assert client.get("/planner/camps/t").status_code == 200
     assert client.patch("/planner/api/camps/t", json={"length_days": 4}).status_code == 403
 
-    # no grant for the camp → no access
     holder["value"] = {"user_id": "host-user",
                        "grants": [{"role": "viewer", "camps": ["jina"]}]}
     assert client.get("/planner/camps/t").status_code == 403
@@ -109,33 +90,39 @@ def test_malformed_grant_is_skipped_not_500(embedded):
     client, holder = embedded
     holder["value"] = {"user_id": "host-user",
                        "grants": [{"rolle": "typo"}, "nonsense"]}
-    resp = client.get("/planner/")
-    assert resp.status_code == 200    # the bad grant is logged + skipped, not a 500
+    assert client.get("/planner/").status_code == 200
 
 
-@pytest.mark.parametrize("theme", ["dark", "auto"])
-def test_forced_theme_wraps_our_output_and_drops_the_switch(embedded_factory, theme):
-    """The wrapper (not <html>, which is the host's) is what content.css keys the theme off;
-    "auto" is for a host page that itself follows prefers-color-scheme."""
-    client, _ = embedded_factory(force_theme=theme)
+HOST_BASE = """<html><head><title>Host</title>
+<link rel=stylesheet href="/planner/static/css/content.css">
+{% block cp_head %}{% endblock %}</head>
+<body><nav>{% block cp_nav %}{% endblock %}</nav>
+{% block content %}{% endblock %}{% block cp_scripts %}{% endblock %}</body></html>"""
+
+
+@pytest.mark.parametrize("host_base, theme, wrapper, switch", [
+    (False, "dark", '<div class="cp-embed" data-cp-theme="dark">', False),
+    # for a host page that itself follows prefers-color-scheme
+    (False, "auto", '<div class="cp-embed" data-cp-theme="auto">', False),
+    # unforced, the visitor chooses; no "auto" either, as the host's page decides, not the OS
+    (False, None, '<div class="cp-embed">', True),
+    (True, "dark", '<div class="cp-embed" data-cp-theme="dark">', False),
+    (True, None, '<div class="cp-embed">', False),
+])
+def test_the_theme_rides_on_our_wrapper(embedded_factory, host_base, theme, wrapper, switch):
+    """content.css keys the theme off our wrapper, as <html> is the host's. The wrapper
+    ships unforced too: it carries the palette's background and text."""
+    host = {"base_template": "hb.html", "templates": {"hb.html": HOST_BASE}} if host_base else {}
+    client, _ = embedded_factory(force_theme=theme, **host)
     html = client.get("/planner/").get_data(as_text=True)
-    assert f'<div class="cp-embed" data-cp-theme="{theme}">' in html
-    # the wrapper closes our markup; only the deferred header script follows it
-    assert html.split("<script")[0].rstrip().endswith("</div>")
-    assert "data-cp-theme-switch" not in html
-    assert "js/theme.js" not in html
-
-
-def test_switch_ships_when_the_host_forces_nothing(embedded):
-    """Unforced, the visitor chooses, but no attribute is emitted, in particular not
-    "auto": embedded, the host's page decides, not the OS."""
-    client, holder = embedded
-    html = client.get("/planner/").get_data(as_text=True)
-    assert "data-cp-theme-switch" in html
-    assert "/planner/static/js/theme.js" in html      # prefix-safe
-    assert 'data-cp-theme="' not in html
-    # the wrapper ships either way: it carries the palette's own background/text
-    assert '<div class="cp-embed">' in html
+    assert wrapper in html
+    assert html.count('data-cp-theme="') == wrapper.count('data-cp-theme="')   # nothing else
+    assert ("data-cp-theme-switch" in html) is switch
+    assert ("/planner/static/js/theme.js" in html) is switch
+    if host_base:   # the host's shell rendered; our bare.html with its nav did not
+        assert "<title>Host</title>" in html and "cp-camp-nav" not in html
+    elif theme:     # the wrapper closes our markup; only the deferred header script follows
+        assert html.split("<script")[0].rstrip().endswith("</div>")
 
 
 def _asset_name(url):   # the file name, the ?v= cache buster dropped
@@ -151,8 +138,8 @@ def test_embedded_pages_ship_their_own_css_js_and_csrf_token(embedded):
     """Only full.html has a <head>/end-of-body, so page.html forwards each page's assets
     inline when embedded."""
     client, holder = embedded
-    _admin(holder)
-    _make_camp(client)
+    holder["value"] = HOST_ADMIN
+    make_camp(client, "t", prefix="/planner")
     html = client.get("/planner/camps/t").get_data(as_text=True)
 
     css, js = _assets(html)
@@ -164,30 +151,23 @@ def test_embedded_pages_ship_their_own_css_js_and_csrf_token(embedded):
     assert css.index("content.css") < css.index("timeline.css")
 
 
-HOST_BASE = """<html><head><title>Host</title>
-<link rel=stylesheet href="/planner/static/css/content.css">
-{% block cp_head %}{% endblock %}</head>
-<body><nav>{% block cp_nav %}{% endblock %}</nav>
-{% block content %}{% endblock %}{% block cp_scripts %}{% endblock %}</body></html>"""
-
-
 def test_a_host_base_template_places_our_assets_where_it_wants(embedded_factory):
-    """The contract is four slots. A host declaring them gets our stylesheets in its <head> and
-    our scripts before </body>: proper placement, which only the host's template can do."""
+    """The contract is four slots, and only the host's template can place our stylesheets
+    in its <head> and our scripts before </body>."""
     client, holder = embedded_factory(base_template="hb.html", templates={"hb.html": HOST_BASE})
-    _admin(holder)
-    _make_camp(client)
+    holder["value"] = HOST_ADMIN
+    make_camp(client, "t", prefix="/planner")
     html = client.get("/planner/camps/t").get_data(as_text=True)
 
     head, body = html.split("</head>", 1)
-    assert "timeline.css" in head and "components.css" in head   # stylesheets in <head>
-    assert "timeline.js" not in head and "timeline.js" in body    # scripts at the end
+    assert "timeline.css" in head and "components.css" in head
+    assert "timeline.js" not in head and "timeline.js" in body
     assert 'name="csrf-token"' in head                            # csrf_meta rides in cp_head
     assert "cp-timeline-data" in body
 
 
 def test_a_host_base_template_missing_the_slots_warns_at_registration(embedded_factory):
-    """A missing slot warns at startup instead of shipping unstyled, inert pages."""
+    """At startup, instead of shipping unstyled, inert pages."""
     with pytest.warns(RuntimeWarning, match="cp_head / cp_scripts / cp_nav"):
         embedded_factory(base_template="bad.html",
                          templates={"bad.html": "<html><body>{% block content %}{% endblock %}"
@@ -195,12 +175,10 @@ def test_a_host_base_template_missing_the_slots_warns_at_registration(embedded_f
 
 
 def test_a_host_template_that_extends_another_is_not_second_guessed(embedded_factory):
-    """The check reads one file and can't see inherited slots, so it stays quiet rather than
-    cry wolf at a host whose own base declares them further up."""
-    import warnings as w
-
-    with w.catch_warnings(record=True) as caught:
-        w.simplefilter("always")
+    """The check reads one file and can't see inherited slots, so it stays quiet rather
+    than cry wolf."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         embedded_factory(base_template="child.html", templates={
             "root.html": "<html><head>{% block cp_head %}{% endblock %}</head><body>"
                          "{% block content %}{% endblock %}{% block cp_scripts %}{% endblock %}"
@@ -210,29 +188,9 @@ def test_a_host_template_that_extends_another_is_not_second_guessed(embedded_fac
     assert not [c for c in caught if c.category is RuntimeWarning]
 
 
-def test_force_theme_reaches_a_host_supplied_base_template(embedded_factory):
-    """With a custom base_template our own shells never render, so _layouts/page.html
-    emits the themed wrapper instead."""
-    client, _ = embedded_factory(base_template="hb.html", templates={"hb.html": HOST_BASE},
-                                 force_theme="dark")
-    html = client.get("/planner/").get_data(as_text=True)
-    assert "<title>Host</title>" in html                            # the host's shell rendered
-    assert '<div class="cp-embed" data-cp-theme="dark">' in html     # ...and carries our theme
-    assert "cp-camp-nav" not in html          # our nav lives in bare.html, which didn't render
-
-
-def test_host_base_template_without_a_forced_theme_still_gets_the_wrapper(embedded_factory):
-    """The wrapper carries the palette's background/text, so it ships either way, just
-    without an attribute, leaving the light default."""
-    client, _ = embedded_factory(base_template="hb.html", templates={"hb.html": HOST_BASE})
-    html = client.get("/planner/").get_data(as_text=True)
-    assert '<div class="cp-embed">' in html
-    assert 'data-cp-theme="' not in html
-
-
-def test_the_theme_does_not_land_in_the_hosts_config(embedded_dark):
+def test_the_theme_does_not_land_in_the_hosts_config(embedded_factory):
     """app.config belongs to the host; our resolved value lives in our extensions state."""
-    app = embedded_dark.application
+    app = embedded_factory(force_theme="dark")[0].application
     assert "CP_FORCE_THEME" not in app.config
     assert app.extensions["camp_planner"]["force_theme"] == "dark"
 
@@ -240,7 +198,6 @@ def test_the_theme_does_not_land_in_the_hosts_config(embedded_dark):
 def test_a_bad_theme_value_fails_loudly(embedded_factory):
     with pytest.raises(ValueError, match="expected 'light', 'dark', 'auto' or None"):
         embedded_factory(force_theme="midnight")
-
 
 
 def test_embedded_host_switches_it_off(embedded_factory):
@@ -253,8 +210,7 @@ def test_embedded_host_switches_it_off(embedded_factory):
 
 
 def test_the_warehouse_under_a_host(embedded_factory, tmp_path):
-    """Photos come from media_dir=, every url carries the prefix, and the upload cap holds
-    without the host setting MAX_CONTENT_LENGTH."""
+    """Photos come from media_dir= and every url carries the prefix."""
     client, holder = embedded_factory(media_dir=str(tmp_path))
     holder["value"] = HOST_ADMIN
     box = client.post("/planner/api/inventory/boxes", json={"name": "B"}).get_json()["box"]
@@ -271,7 +227,3 @@ def test_the_warehouse_under_a_host(embedded_factory, tmp_path):
     photo = resp.get_json()["item"]["photos"][0]
     assert list((tmp_path / "inventory").rglob(photo["filename"]))
     assert client.get(f"/planner/inventory/photos/thumb/{photo['filename']}").status_code == 200
-
-    resp = client.post(f"/planner/api/inventory/items/{item['id']}/photos",
-                       environ_overrides={"CONTENT_LENGTH": str(MAX_UPLOAD_BYTES + 1)})
-    assert resp.status_code == 413

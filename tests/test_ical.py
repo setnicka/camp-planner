@@ -11,12 +11,11 @@ from camp_planner.extensions import db
 from camp_planner.models.activity import Activity, ActivityAssignment, OrgRole
 from camp_planner.models.auth import ApiToken
 from camp_planner.models.camp import Camp
-from camp_planner.models.org import Org
 from camp_planner.models.slot import Slot, SlotAssignment, SlotRole
 from camp_planner.services import api_tokens
 from camp_planner.services.errors import Invalid
 from camp_planner.services.ical import _escape, _fold, parse_filters
-from tests.conftest import make_camp
+from tests.conftest import add_org, make_camp
 
 
 @pytest.fixture
@@ -24,9 +23,7 @@ def feed(seeded):
     """seeded + a second org, an uncategorized activity and three slots:
     main+prep of "Akce" (garant Karel, helper Marta) and one of "Volno…" (Marta attends)."""
     camp = db.session.get(Camp, seeded["camp_id"])
-    marta = Org(camp_id=camp.id, name="Marta Nováková", initials="M")
-    db.session.add(marta)
-    db.session.flush()
+    marta = add_org(camp.id, "M", "Marta Nováková")
     hra = db.session.get(Activity, seeded["activity_id"])   # category "hra"
     free = Activity(camp_id=camp.id, title="Volno, klid; pohoda")   # no category
     db.session.add_all([
@@ -62,30 +59,27 @@ def _unfold(text: str) -> str:
 
 # --- token guarding ---------------------------------------------------------------
 
-def test_missing_or_unknown_token_is_401(client, feed):
+def test_feed_token_guard(client, feed):
+    """Only a viewer token of this very camp reads the feed."""
     assert _get(client, feed["slug"], None).status_code == 401
     assert _get(client, feed["slug"], "cp_wrong").status_code == 401
 
-
-def test_editor_token_is_403(client, feed):
     camp = db.session.get(Camp, feed["camp_id"])
-    _token, secret = api_tokens.create(camp, "ed", CampRole.editor, "tester")
-    assert _get(client, feed["slug"], secret).status_code == 403
+    _token, editor_secret = api_tokens.create(camp, "ed", CampRole.editor, "tester")
+    assert _get(client, feed["slug"], editor_secret).status_code == 403
+
+    make_camp(client, "u")
+    other = db.session.scalar(db.select(Camp).filter_by(slug="u"))
+    _token, foreign_secret = api_tokens.create(other, "cal", CampRole.viewer, "tester")
+    assert _get(client, feed["slug"], foreign_secret).status_code == 404
 
 
 def test_only_successful_requests_touch_last_used_at(client, feed):
     token = db.session.scalar(db.select(ApiToken).filter_by(camp_id=feed["camp_id"]))
     assert _get(client, "nope", feed["secret"]).status_code == 404
-    assert token.last_used_at is None          # rejected probe is not a use
+    assert token.last_used_at is None          # a rejected probe is not a use
     assert _get(client, feed["slug"], feed["secret"]).status_code == 200
     assert token.last_used_at is not None
-
-
-def test_foreign_camp_token_is_404(client, feed):
-    other = make_camp(client, "u")
-    camp = db.session.scalar(db.select(Camp).filter_by(slug=other["slug"]))
-    _token, secret = api_tokens.create(camp, "cal", CampRole.viewer, "tester")
-    assert _get(client, feed["slug"], secret).status_code == 404
 
 
 # --- feed content -----------------------------------------------------------------

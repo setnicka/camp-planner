@@ -4,6 +4,7 @@ survives retiring or erasing the thing, and a check that follows up on a camp.
 
 from __future__ import annotations
 
+import pytest
 
 from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditLog, EntityType
@@ -14,8 +15,11 @@ from tests.conftest import (
     discard,
     editor,
     get_item,
-    make_item,
+    make_activity,
     make_camp,
+    make_item,
+    make_material,
+    ok,
     page_data,
     start_check,
     upload,
@@ -28,28 +32,18 @@ def material_from(client, slug, item_id, headers=ADMIN, **fields):
                        json={"inventory_item_id": item_id, **fields}, headers=headers)
 
 
-def make_material(client, slug, name, **fields) -> dict:
-    resp = client.post(f"/api/camps/{slug}/materials", json={"name": name, **fields}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["material"]
-
-
 def patch_material(client, slug, material_id, **fields):
     return client.patch(f"/api/camps/{slug}/materials/{material_id}", json=fields, headers=ADMIN)
 
 
 def add_need(client, activity_id, material_id, **fields) -> dict:
-    resp = client.post(f"/api/activities/{activity_id}/materials",
-                       json={"material_id": material_id, **fields}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["need"]
+    return ok(client.post(f"/api/activities/{activity_id}/materials",
+                          json={"material_id": material_id, **fields}, headers=ADMIN))["need"]
 
 
 def start_camp_check(client, camp_id, name="Po táboře") -> dict:
-    resp = client.post("/api/inventory/checks", json={"name": name, "camp_id": camp_id},
-                       headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["check"]
+    return ok(client.post("/api/inventory/checks", json={"name": name, "camp_id": camp_id},
+                          headers=ADMIN))["check"]
 
 
 def catalog(client, slug) -> list[dict]:
@@ -282,12 +276,6 @@ def test_the_link_and_the_picker_carry_the_title_photo(client, seeded, box, medi
 
 # --- a check that follows up on a camp ----------------------------------------
 
-def activity(client, slug, title) -> int:
-    resp = client.post(f"/api/camps/{slug}/activities", json={"title": title}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["activity"]["id"]
-
-
 def test_check_with_a_camp_shows_what_it_took(client, seeded, box):
     slug, camp_id = seeded["slug"], seeded["camp_id"]
     izolepa = make_item(client, box["id"], "Izolepa", count=10)
@@ -296,7 +284,7 @@ def test_check_with_a_camp_shows_what_it_took(client, seeded, box):
     tape = make_material(client, slug, "Izolepa", unit="ks", inventory_item_id=izolepa["id"])
     rope = make_material(client, slug, "Lano", unit="m", inventory_item_id=lano["id"])
     patch_material(client, slug, rope["id"], sum_strategy="max")   # shared: the largest need counts
-    a1, a2 = seeded["activity_id"], activity(client, slug, "Druhá")
+    a1, a2 = seeded["activity_id"], make_activity(client, slug, "Druhá")
     add_need(client, a1, tape["id"], amount=3)
     add_need(client, a2, tape["id"], amount=4)
     add_need(client, a1, rope["id"], amount=5, unit="m")
@@ -308,9 +296,8 @@ def test_check_with_a_camp_shows_what_it_took(client, seeded, box):
     assert box_state(client, box["id"])["taken"] == []
     client.delete(f"/api/inventory/checks/{check['id']}", headers=ADMIN)
 
-    resp = client.post("/api/inventory/checks", json={"name": "Po táboře", "camp_id": camp_id}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    assert resp.get_json()["check"]["camp"] == {"id": camp_id, "name": "Tábor", "slug": slug}
+    check = start_camp_check(client, camp_id)
+    assert check["camp"] == {"id": camp_id, "name": "Tábor", "slug": slug}
     state = box_state(client, box["id"])
     assert state["active_check"]["camp"]["name"] == "Tábor"
     taken = {t["item_id"]: t for t in state["taken"]}
@@ -320,26 +307,19 @@ def test_check_with_a_camp_shows_what_it_took(client, seeded, box):
     assert set(taken) == {izolepa["id"], lano["id"]}
 
 
-def test_needs_in_other_units_are_summed_apart(client, seeded, box):
-    slug = seeded["slug"]
+@pytest.mark.parametrize("needs, taken", [   # one need per activity
+    ([{"amount": 3}, {"amount": 2, "unit": "bal"}],
+     [{"activities": 2, "totals": [{"amount": 3, "unit": "ks"}, {"amount": 2, "unit": "bal"}]}]),
+    ([{}], []),                     # no amount, no number to show: no camp column
+    ([{}, {"amount": 3}], [{"activities": 1, "totals": [{"amount": 3, "unit": "ks"}]}]),
+])
+def test_the_camp_column_sums_the_named_amounts_per_unit(client, seeded, box, needs, taken):
     item = make_item(client, box["id"], "Izolepa")
-    tape = make_material(client, slug, "Izolepa", unit="ks", inventory_item_id=item["id"])
-    add_need(client, seeded["activity_id"], tape["id"], amount=3)
-    add_need(client, activity(client, slug, "Druhá"), tape["id"], amount=2, unit="bal")
-    client.post("/api/inventory/checks", json={"name": "Po táboře", "camp_id": seeded["camp_id"]}, headers=ADMIN)
-    taken, = box_state(client, box["id"])["taken"]
-    assert taken == {"item_id": item["id"], "activities": 2,
-                     "totals": [{"amount": 3, "unit": "ks"}, {"amount": 2, "unit": "bal"}]}
-
-
-def test_a_material_nobody_asked_an_amount_of_is_left_out(client, seeded, box):
-    """Needs without amounts have no number to show, so the thing gets no camp column."""
-    slug = seeded["slug"]
-    item = make_item(client, box["id"], "Izolepa")
-    tape = make_material(client, slug, "Izolepa", inventory_item_id=item["id"])
-    add_need(client, seeded["activity_id"], tape["id"])
-    client.post("/api/inventory/checks", json={"name": "Po táboře", "camp_id": seeded["camp_id"]}, headers=ADMIN)
-    assert box_state(client, box["id"])["taken"] == []
+    tape = make_material(client, seeded["slug"], "Izolepa", unit="ks", inventory_item_id=item["id"])
+    for i, need in enumerate(needs):
+        add_need(client, make_activity(client, seeded["slug"], f"A{i}"), tape["id"], **need)
+    start_camp_check(client, seeded["camp_id"])
+    assert box_state(client, box["id"])["taken"] == [{"item_id": item["id"], **row} for row in taken]
 
 
 def test_another_camps_material_on_the_same_thing_is_not_counted(client, seeded, box):
@@ -350,19 +330,7 @@ def test_another_camps_material_on_the_same_thing_is_not_counted(client, seeded,
     add_need(client, seeded["activity_id"], tape["id"], amount=3)
     make_camp(client, "u")
     other = make_material(client, "u", "Izolepa", unit="ks", inventory_item_id=item["id"])
-    add_need(client, activity(client, "u", "Jiná"), other["id"], amount=99)
-    start_camp_check(client, seeded["camp_id"])
-    taken, = box_state(client, box["id"])["taken"]
-    assert taken == {"item_id": item["id"], "activities": 1,
-                     "totals": [{"amount": 3, "unit": "ks"}]}
-
-
-def test_only_the_activities_that_named_an_amount_are_counted(client, seeded, box):
-    slug = seeded["slug"]
-    item = make_item(client, box["id"], "Izolepa")
-    tape = make_material(client, slug, "Izolepa", unit="ks", inventory_item_id=item["id"])
-    add_need(client, seeded["activity_id"], tape["id"])                        # no amount
-    add_need(client, activity(client, slug, "Druhá"), tape["id"], amount=3)
+    add_need(client, make_activity(client, "u", "Jiná"), other["id"], amount=99)
     start_camp_check(client, seeded["camp_id"])
     taken, = box_state(client, box["id"])["taken"]
     assert taken == {"item_id": item["id"], "activities": 1,

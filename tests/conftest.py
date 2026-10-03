@@ -19,6 +19,7 @@ os.environ["AUTH_MODE"] = "proxy"
 os.environ["SECRET_KEY"] = "test-secret"
 
 from datetime import date  # noqa: E402
+from urllib.parse import urlencode  # noqa: E402
 
 import pytest  # noqa: E402
 from flask import g  # noqa: E402
@@ -69,35 +70,12 @@ def seeded(app):
     }
 
 
-def make_camp(client, slug, **overrides) -> dict:
-    """Create a camp via the API (as admin) and return its envelope dict."""
-    body = {"name": slug.capitalize(), "slug": slug, "start_date": "2026-09-01",
-            "length_days": 3, "timezone": "Europe/Prague",
-            "window_start_min": 240, "snap_minutes": 15, **overrides}
-    resp = client.post("/api/camps", json=body, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["camp"]
-
-
-# --- embedded-mode helpers ---------------------------------------------------
-# Identity comes from the host's auth_callback, not headers, and the api sits behind the
-# mount prefix. Shared by test_embedded and test_injected_session.
-
-HOST_ADMIN = {"user_id": "host-admin", "display_name": "Host Admin", "is_admin": True}
-
-
-def make_camp_embedded(client, prefix="/planner", slug="t") -> dict:
-    """Create a camp through a mounted api and return its envelope dict."""
-    resp = client.post(f"{prefix}/api/camps", json={
-        "name": "Tábor", "slug": slug, "start_date": "2026-07-04", "length_days": 3,
-        "timezone": "Europe/Prague", "window_start_min": 240, "snap_minutes": 15})
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["camp"]
-
-
-# --- auth header helpers -----------------------------------------------------
+# --- auth headers ------------------------------------------------------------
 
 ADMIN = {"X-Remote-User": "admin", "X-Remote-Roles": "admin"}
+
+# What an embedded host's auth callback returns for its admin; there, headers carry nothing.
+HOST_ADMIN = {"user_id": "host-admin", "display_name": "Host Admin", "is_admin": True}
 
 
 def editor(slug: str) -> dict:
@@ -108,27 +86,74 @@ def viewer(slug: str) -> dict:
     return {"X-Remote-User": "vi", "X-Remote-Roles": f"viewer:{slug}"}
 
 
+# --- requests: every make_* asserts its request succeeded ---------------------
+
+def ok(resp) -> dict:
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()
+
+
+def get_json(client, url, headers=ADMIN) -> dict:
+    return ok(client.get(url, headers=headers))
+
+
+def make_camp(client, slug, prefix="", **overrides) -> dict:
+    """Create a camp via the API (as admin) and return its envelope dict. Embedded tests
+    pass the mount prefix; the host's callback then supplies the identity."""
+    body = {"name": slug.capitalize(), "slug": slug, "start_date": "2026-09-01",
+            "length_days": 3, "timezone": "Europe/Prague",
+            "window_start_min": 240, "snap_minutes": 15, **overrides}
+    return ok(client.post(f"{prefix}/api/camps", json=body, headers=ADMIN))["camp"]
+
+
+def make_activity(client, slug, title="Druhá") -> int:
+    return ok(client.post(f"/api/camps/{slug}/activities", json={"title": title},
+                          headers=ADMIN))["activity"]["id"]
+
+
+def make_material(client, slug, name="A4 papír", **fields) -> dict:
+    return ok(client.post(f"/api/camps/{slug}/materials", json={"name": name, **fields},
+                          headers=ADMIN))["material"]
+
+
+def make_slot(client, slug, activity_id, start="2026-07-04T14:00", end="2026-07-04T16:00",
+              role="main") -> int:
+    """Create a slot via the timeline batch (the only placement path) and return its id."""
+    rev = get_json(client, f"/api/camps/{slug}/timeline")["camp"]["rev"]
+    created = {"activity_id": activity_id, "role": role, "start_at": start, "end_at": end}
+    resp = client.patch(f"/api/camps/{slug}/timeline", json={"rev": rev, "creates": [created]},
+                        headers=ADMIN)
+    return ok(resp)["created"][0]["id"]
+
+
+def add_org(camp_id, initials, name) -> Org:
+    org = Org(camp_id=camp_id, name=name, initials=initials)
+    db.session.add(org)
+    db.session.flush()
+    return org
+
+
+def audit(client, slug, **query) -> list[dict]:
+    """The camp's audit feed, newest first."""
+    return get_json(client, f"/api/camps/{slug}/audit?" + urlencode(query))["entries"]
+
+
 # --- the global warehouse ----------------------------------------------------
 # Shared by the warehouse tests and the camp-material link tests, so neither imports the
 # other's module (which pytest would then hold twice, once per import name).
 
 def make_box(client, name="Krabice 1", **fields) -> dict:
-    resp = client.post("/api/inventory/boxes", json={"name": name, **fields}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["box"]
+    return ok(client.post("/api/inventory/boxes", json={"name": name, **fields},
+                          headers=ADMIN))["box"]
 
 
 def make_item(client, box_id, name="Lano", **fields) -> dict:
-    resp = client.post("/api/inventory/items",
-                       json={"name": name, "box_id": box_id, **fields}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["item"]
+    return ok(client.post("/api/inventory/items",
+                          json={"name": name, "box_id": box_id, **fields}, headers=ADMIN))["item"]
 
 
 def start_check(client, name="Inventura 2026") -> dict:
-    resp = client.post("/api/inventory/checks", json={"name": name}, headers=ADMIN)
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()["check"]
+    return ok(client.post("/api/inventory/checks", json={"name": name}, headers=ADMIN))["check"]
 
 
 def observe(client, in_box, item_id, headers=ADMIN, **body):
@@ -162,10 +187,10 @@ def box_state(client, box_id, headers=ADMIN) -> dict:
     return client.get(f"/api/inventory/boxes/{box_id}/state", headers=headers).get_json()["state"]
 
 
-def page_data(client, url, headers=ADMIN) -> dict:
+def page_data(client, url, headers=ADMIN, script="cp-inventory-data") -> dict:
     """The JSON a page inlines for its script (no page fetches on load)."""
     html = client.get(url, headers=headers).get_data(as_text=True)
-    match = re.search(r'<script id="cp-inventory-data" type="application/json">(.*?)</script>',
+    match = re.search(rf'<script id="{script}" type="application/json">(.*?)</script>',
                       html, re.S)
     assert match, f"{url} inlined no data"
     return json.loads(match.group(1))

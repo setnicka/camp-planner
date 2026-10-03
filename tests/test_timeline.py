@@ -1,8 +1,8 @@
-"""Unit tests for the timeline segment math and payload builder.
+"""The timeline.
 
-build_timeline only reads attributes off the camp graph, so we feed it lightweight
-duck-typed objects (no DB needed). Real SlotRole/OrgRole enums are used since the
-code compares against them by identity.
+The segment math and payload builder are pure: build_timeline only reads attributes off
+the camp graph, so it gets lightweight duck-typed objects (no DB needed), with the real
+SlotRole/OrgRole enums the code compares by identity.
 """
 
 from __future__ import annotations

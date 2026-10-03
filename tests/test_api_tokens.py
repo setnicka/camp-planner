@@ -3,13 +3,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from camp_planner import create_app
 from camp_planner.extensions import db
 from camp_planner.auth.identity import CampRole
 from camp_planner.models.auth import ApiToken
 from camp_planner.models.camp import Camp
 from camp_planner.services import api_tokens
-from tests.conftest import ADMIN, editor, make_camp, viewer
+from tests.conftest import ADMIN, audit, editor, get_json, make_camp, ok, viewer
 
 
 def _create(client, slug, name="import", role="viewer", headers=ADMIN):
@@ -59,72 +61,45 @@ def test_same_name_allowed_in_different_camps(client, seeded):
     assert _create(client, other, name="import").status_code == 200   # names are per-camp
 
 
-def test_create_and_revoke_are_audited(client, seeded):
+def test_revoke_removes_the_token_and_both_ends_are_audited(client, seeded):
     slug = seeded["slug"]
-    tid = _create(client, slug, name="audited").get_json()["token"]["id"]
+    tid = ok(_create(client, slug))["token"]["id"]
     assert client.delete(f"/api/tokens/{tid}", headers=ADMIN).status_code == 200
-    rows = client.get(f"/api/camps/{slug}/audit?entity_type=api_token",
-                      headers=ADMIN).get_json()["entries"]
+    assert get_json(client, f"/api/camps/{slug}/tokens")["tokens"] == []
+    assert client.delete(f"/api/tokens/{tid}", headers=ADMIN).status_code == 404   # already gone
+
+    rows = audit(client, slug, entity_type="api_token")
     assert sorted(r["action"] for r in rows) == ["create", "delete"]
     assert all(r["entity_id"] == tid and r["author"] == "admin" for r in rows)
 
 
-def test_revoke_removes_the_token(client, seeded):
-    slug = seeded["slug"]
-    tid = _create(client, slug).get_json()["token"]["id"]
-    assert client.delete(f"/api/tokens/{tid}", headers=ADMIN).status_code == 200
-    assert client.get(f"/api/camps/{slug}/tokens", headers=ADMIN).get_json()["tokens"] == []
-    assert client.delete(f"/api/tokens/{tid}", headers=ADMIN).status_code == 404   # already gone
-
-
 # --- Bearer authentication ------------------------------------------------------------
 
-def test_token_authenticates_scoped_to_its_camp(client, seeded):
-    slug = seeded["slug"]
-    secret = _create(client, slug, role="editor").get_json()["secret"]
-
-    # a viewer/editor token reaches its camp's API with no session, no CSRF token
-    got = client.get(f"/api/camps/{slug}", headers=_bearer(secret))
-    assert got.status_code == 200 and got.get_json()["camp"]["slug"] == slug
-
-    # and it can mutate (editor)
-    patched = client.patch(f"/api/camps/{slug}", json={"length_days": 5}, headers=_bearer(secret))
-    assert patched.status_code == 200 and patched.get_json()["camp"]["length_days"] == 5
-
-
-def test_viewer_token_cannot_edit(client, seeded):
-    slug = seeded["slug"]
-    secret = _create(client, slug, role="viewer").get_json()["secret"]
-    assert client.get(f"/api/camps/{slug}", headers=_bearer(secret)).status_code == 200
-    assert client.patch(f"/api/camps/{slug}", json={"length_days": 5},
-                        headers=_bearer(secret)).status_code == 403
-
-
-def test_token_cannot_reach_another_camp(client, seeded):
-    slug = seeded["slug"]
+@pytest.mark.parametrize("role, method, url, body, status", [
+    # no session and no CSRF token, scoped to its camp by its role
+    ("editor", "get", "/api/camps/t", None, 200),
+    ("editor", "patch", "/api/camps/t", {"length_days": 5}, 200),
+    ("viewer", "get", "/api/camps/t", None, 200),
+    ("viewer", "patch", "/api/camps/t", {"length_days": 5}, 403),
+    ("editor", "get", "/api/camps/jina", None, 403),
+    # even an editor token may not manage tokens
+    ("editor", "get", "/api/camps/t/tokens", None, 403),
+    ("editor", "post", "/api/camps/t/tokens", {"name": "x", "role": "viewer"}, 403),
+])
+def test_token_scope(client, seeded, role, method, url, body, status):
     make_camp(client, "jina")
-    secret = _create(client, slug, role="editor").get_json()["secret"]
-    assert client.get("/api/camps/jina", headers=_bearer(secret)).status_code == 403
+    secret = ok(_create(client, seeded["slug"], role=role))["secret"]
+    assert client.open(url, method=method, json=body, headers=_bearer(secret)).status_code == status
 
 
 def test_revoked_and_malformed_tokens_fail_closed(client, seeded):
     slug = seeded["slug"]
-    created = _create(client, slug, role="editor").get_json()
+    created = ok(_create(client, slug, role="editor"))
     secret = created["secret"]
-    # a bogus secret → no identity → 401 (not 200/500)
     assert client.get(f"/api/camps/{slug}", headers=_bearer("cp_nope")).status_code == 401
 
     client.delete(f"/api/tokens/{created['token']['id']}", headers=ADMIN)
     assert client.get(f"/api/camps/{slug}", headers=_bearer(secret)).status_code == 401
-
-
-def test_token_cannot_manage_tokens(client, seeded):
-    slug = seeded["slug"]
-    secret = _create(client, slug, role="editor").get_json()["secret"]
-    # even an editor token is refused on the token-management endpoints
-    assert client.get(f"/api/camps/{slug}/tokens", headers=_bearer(secret)).status_code == 403
-    assert client.post(f"/api/camps/{slug}/tokens", json={"name": "x", "role": "viewer"},
-                       headers=_bearer(secret)).status_code == 403
 
 
 def test_last_used_at_is_set_and_throttled(app, client, seeded):

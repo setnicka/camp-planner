@@ -36,19 +36,16 @@ ED = editor("t")
 VI = viewer("t")
 
 
-def test_anonymous_is_rejected(client):
+def test_read_access(client, seeded):
     assert client.get("/inventory").status_code == 401
     assert client.post("/api/inventory/boxes", json={"name": "X"}).status_code == 401
-
-
-def test_viewer_reads(client, seeded):
     assert client.get("/inventory", headers=VI).status_code == 200
 
 
-def test_every_write_endpoint_is_guarded(client, seeded):
+def test_every_write_endpoint_is_guarded(app, client, seeded):
     """A real viewer grant (seeded makes the camp exist) is still no write. The guard runs
-    before the lookup, so a viewer gets 403 for any id. The bodies pass the schema, which
-    spectree checks before the view runs."""
+    before the lookup, hence 403 for any id; the bodies pass the schema, which spectree
+    checks first."""
     writes = [
         ("post", "/api/inventory/boxes", {"name": "X"}), ("patch", "/api/inventory/boxes/1", {}),
         ("delete", "/api/inventory/boxes/1", None),
@@ -65,6 +62,10 @@ def test_every_write_endpoint_is_guarded(client, seeded):
     ]
     for method, url, body in writes:
         assert getattr(client, method)(url, json=body, headers=VI).status_code == 403, url
+
+    routes = {(m, re.sub(r"<[^>]+>", "1", r.rule)) for r in app.url_map.iter_rules()
+              if r.endpoint.startswith("api.inventory") for m in r.methods - {"GET", "HEAD", "OPTIONS"}}
+    assert routes <= {(m.upper(), url) for m, url, _ in writes}, "a new write endpoint goes in the list"
 
 
 def test_editor_of_any_camp_may_write(client, seeded):
@@ -113,11 +114,15 @@ def test_virtual_flag_round_trips(client, box):
     assert patched["virtual"] is False
 
 
-def test_box_with_items_cannot_be_deleted(client, box):
-    make_item(client, box["id"])
+def test_a_box_is_deletable_once_empty(client, box):
+    item = make_item(client, box["id"])
+    assert "jsou v ní věci" in box_state(client, box["id"])["delete_blocked"]
     resp = client.delete(f"/api/inventory/boxes/{box['id']}", headers=ADMIN)
-    assert resp.status_code == 400
-    assert "jsou v ní věci" in resp.get_json()["error"]
+    assert resp.status_code == 400 and "jsou v ní věci" in resp.get_json()["error"]
+
+    discard(client, item)
+    assert box_state(client, box["id"])["delete_blocked"] is None
+    assert client.delete(f"/api/inventory/boxes/{box['id']}", headers=ADMIN).status_code == 200
 
 
 def test_the_db_refuses_to_delete_a_box_with_items(client, box):
@@ -128,10 +133,6 @@ def test_the_db_refuses_to_delete_a_box_with_items(client, box):
         db_session.flush()
     db_session.rollback()
     assert get_item(client, item["id"])["box_id"] == box["id"]
-
-
-def test_empty_box_is_deleted(client, box):
-    assert client.delete(f"/api/inventory/boxes/{box['id']}", headers=ADMIN).status_code == 200
 
 
 def test_box_holding_an_observation_cannot_be_deleted(client, box):
@@ -183,9 +184,8 @@ def test_pages_are_titled_after_their_box_and_check(client, box):
 
 
 def test_box_state_knows_whether_history_mentions_it(client, box):
-    """has_history greys out the Historie button; in_history warns before a delete that
-    finished checks would lose the box's name. Both flags follow the finished checks only,
-    and ride in the state every write returns, as the page changes without a reload."""
+    """has_history greys out the Historie button; in_history warns that a delete loses the
+    box's name in finished checks. Both ride in the state every write returns."""
     target = make_box(client, "Krabice 2")
     item = make_item(client, box["id"])
     check = start_check(client)
@@ -197,13 +197,6 @@ def test_box_state_knows_whether_history_mentions_it(client, box):
     source = box_state(client, box["id"])
     assert source["in_history"] is True        # the record's from_box_id leg
     assert source["has_history"] is False      # but nothing it lists was observed here
-
-
-def test_box_state_says_whether_it_can_be_deleted(client, box):
-    item = make_item(client, box["id"])
-    assert "jsou v ní věci" in box_state(client, box["id"])["delete_blocked"]
-    discard(client, item)
-    assert box_state(client, box["id"])["delete_blocked"] is None
 
 
 # --- items -------------------------------------------------------------------
@@ -221,10 +214,8 @@ def test_item_url_must_be_a_web_link(client, box):
 
 @pytest.mark.parametrize("count", [float("inf"), float("nan"), -5])
 def test_a_count_must_be_a_finite_amount(client, box, count):
-    """json.dumps writes inf as the bare token Infinity, which no JSON parser reads back:
-    one such row would blank every warehouse page for everybody."""
+    """An Infinity in the inlined JSON would blank every warehouse page for everybody."""
     item = make_item(client, box["id"])
-    # 422: the schema refuses it, so it never reaches the service (nor the DB).
     assert client.post("/api/inventory/items", headers=ADMIN,
                        json={"name": "X", "box_id": box["id"], "count": count}
                        ).status_code == 422
@@ -298,8 +289,8 @@ def test_cancelling_a_check_drops_its_observations(client, box):
 
 
 def test_a_completed_check_is_frozen(client, box):
-    """Cancelling is a rule (400); completing again is a lost race (409), the double
-    click, and must not apply the observations twice: the note append would show it."""
+    """Cancelling is a rule (400); completing again is a lost race (409) and must not
+    apply the observations twice, which the note append would show."""
     item = make_item(client, box["id"], note="Původní")
     check = start_check(client)
     observe(client, box["id"], item["id"], note="3 rozbité")
@@ -314,12 +305,25 @@ def test_a_completed_check_is_frozen(client, box):
 
 # --- observation semantics ---------------------------------------------------
 
-def test_unchecked_items_are_left_alone(client, box):
-    item = make_item(client, box["id"], count=5, unit="ks")
+@pytest.mark.parametrize("observations, count, unit, discarded", [
+    ([], 4, "ks", False),                                        # unchecked: left alone
+    ([{}], 4, "ks", False),                                      # "stav sedí"
+    # clearing the number is a real observation ("we have it, uncounted"), not "no change"
+    ([{"count": None, "unit": None}], None, None, False),
+    ([{"count": 2.5, "unit": "m"}], 2.5, "m", False),
+    ([{"discarded": True}], 4, "ks", True),
+    # one marks it gone, another finds it: the amount re-seeds from the item
+    ([{"discarded": True}, {"discarded": False}], 4, "ks", False),
+])
+def test_completion_applies_the_last_observation(client, box, observations, count, unit, discarded):
+    item = make_item(client, box["id"], count=4, unit="ks")
     check = start_check(client)
+    for body in observations:
+        assert observe(client, box["id"], item["id"], **body).status_code == 200
     complete(client, check)
     after = get_item(client, item["id"])
-    assert (after["count"], after["unit"]) == (5, "ks")
+    assert (after["count"], after["unit"]) == (count, unit)
+    assert (after["discarded_at"] is not None, after["box_id"] is None) == (discarded, discarded)
 
 
 def test_new_observation_is_seeded_from_the_item(client, box):
@@ -342,34 +346,6 @@ def test_record_snapshots_the_source_box(client, box):
     assert record["box_id"] == target["id"]
 
 
-def test_count_propagates_verbatim_including_null(client, box):
-    """Clearing the number is a real observation ("we have it, uncounted"), not "no change"."""
-    item = make_item(client, box["id"], count=4, unit="ks")
-    check = start_check(client)
-    observe(client, box["id"], item["id"], count=None, unit=None)
-    complete(client, check)
-    after = get_item(client, item["id"])
-    assert after["count"] is None and after["unit"] is None
-
-
-def test_adjusted_count_propagates(client, box):
-    item = make_item(client, box["id"], count=4, unit="ks")
-    check = start_check(client)
-    observe(client, box["id"], item["id"], count=2.5, unit="m")
-    complete(client, check)
-    after = get_item(client, item["id"])
-    assert (after["count"], after["unit"]) == (2.5, "m")
-
-
-def test_discarded_observation_retires_the_item(client, box):
-    item = make_item(client, box["id"], count=4)
-    check = start_check(client)
-    observe(client, box["id"], item["id"], discarded=True)
-    complete(client, check)
-    after = get_item(client, item["id"])
-    assert after["discarded_at"] is not None and after["box_id"] is None
-
-
 def test_discarded_observation_cannot_carry_a_count(client, box):
     item = make_item(client, box["id"])
     start_check(client)
@@ -378,22 +354,9 @@ def test_discarded_observation_cannot_carry_a_count(client, box):
     assert "počet" in resp.get_json()["error"]
 
 
-def test_discarding_then_finding_clears_the_discard(client, box):
-    """One person marks it gone, another finds it and puts it somewhere."""
-    item = make_item(client, box["id"], count=4, unit="ks")
-    check = start_check(client)
-    observe(client, box["id"], item["id"], discarded=True)
-    observe(client, box["id"], item["id"], discarded=False)
-    complete(client, check)
-    after = get_item(client, item["id"])
-    assert after["discarded_at"] is None
-    assert (after["count"], after["unit"]) == (4, "ks")   # re-seeded from the item
-
-
 def test_a_check_revives_a_discarded_item_by_observation_only(client, box):
-    """Finding a retired thing during a check ("Přesunout sem" on it) is an observation:
-    the master row stays retired until completion, so nobody else's observation gets
-    overwritten, and the discarded shelf says which box it is heading for."""
+    """Finding a retired thing mid-check ("Přesunout sem") only records an observation,
+    so nobody else's gets overwritten; the discarded shelf says where it is heading."""
     item = make_item(client, box["id"])
     discard(client, item)
     check = start_check(client)
@@ -458,8 +421,8 @@ def test_deleting_the_observation_returns_the_item_to_unchecked(client, box):
 
 
 def test_new_item_during_a_check_counts_as_observed(client, box):
-    """A thing found mid-check is created with its count and at once observed with it;
-    the count lives on the item, so cancelling keeps it and completing changes nothing."""
+    """A thing found mid-check is observed with the count it was created with; that count
+    lives on the item, so cancelling keeps it and completing changes nothing."""
     check = start_check(client)
     item = make_item(client, box["id"], name="Nově nalezeno", count=3, unit="ks")
     state = box_state(client, box["id"])
@@ -520,9 +483,8 @@ def test_summary_counts_what_happened_and_the_preview_agrees(client, box):
 # --- a master edit during a check invalidates the observation -----------------
 
 def test_the_amount_cannot_be_edited_from_under_a_running_check(client, box):
-    """The pages lock the amount fields while a check runs, and this is what makes that
-    true for an API client too: otherwise a patch would silently delete somebody's
-    observation (or be reverted by it at completion)."""
+    """What makes the pages' locked amount fields true for an API client too: a patch
+    would otherwise drop somebody's observation, or be reverted by it at completion."""
     item = make_item(client, box["id"], count=5, unit="ks")
     check = start_check(client)
     observe(client, box["id"], item["id"], count=5, unit="ks")
@@ -542,44 +504,32 @@ def test_the_amount_cannot_be_edited_from_under_a_running_check(client, box):
     complete(client, check)
     assert get_item(client, item["id"])["count"] == 5
 
-
-def test_the_amount_is_editable_once_no_check_runs(client, box):
-    item = make_item(client, box["id"], count=5)
-    check = start_check(client)
-    client.delete(f"/api/inventory/checks/{check['id']}", headers=ADMIN)
+    # with no check running, the amount is editable again
     assert client.patch(f"/api/inventory/items/{item['id']}", json={"count": 3},
                         headers=ADMIN).status_code == 200
     assert get_item(client, item["id"])["count"] == 3
 
 
-def test_moving_an_item_from_its_detail_drops_the_observation(client, box):
+def test_an_edit_from_the_detail_drops_the_observation(client, box):
     target = make_box(client, "Krabice 2")
-    item = make_item(client, box["id"])
+    moved = make_item(client, box["id"], "Přesunutá")
+    retired = make_item(client, box["id"], "Vyřazená")
     check = start_check(client)
-    observe(client, box["id"], item["id"])            # observed in the old box
-    client.patch(f"/api/inventory/items/{item['id']}",
-                 json={"box_id": target["id"]}, headers=ADMIN)
+    observe(client, box["id"], moved["id"])          # "it is here and fine"
+    observe(client, box["id"], retired["id"])
+    client.patch(f"/api/inventory/items/{moved['id']}", json={"box_id": target["id"]}, headers=ADMIN)
+    discard(client, retired)
     complete(client, check)
-    # The stale observation would have moved it back into the source box.
-    assert get_item(client, item["id"])["box_id"] == target["id"]
-
-
-def test_discarding_from_the_detail_drops_the_observation(client, box):
-    item = make_item(client, box["id"])
-    check = start_check(client)
-    observe(client, box["id"], item["id"])            # "it is here and fine"
-    discard(client, item)
-    complete(client, check)
-    # The stale observation would have revived it.
-    assert get_item(client, item["id"])["discarded_at"] is not None
+    # the stale observations would have moved one back and revived the other
+    assert get_item(client, moved["id"])["box_id"] == target["id"]
+    assert get_item(client, retired["id"])["discarded_at"] is not None
 
 
 # --- completion: races and records that lost their box ------------------------
 
 def test_cancel_cannot_delete_a_check_completed_meanwhile(client, box):
-    """The status is checked in SQL, not only on the row this request happens to hold:
-    a cancel racing a completion would otherwise erase the finished check and its
-    observations while the item writes stayed."""
+    """The status is checked in SQL, not on the row this request holds: a cancel racing a
+    completion would otherwise erase the finished check while its item writes stayed."""
     item = make_item(client, box["id"], count=5)
     check = start_check(client)
     observe(client, box["id"], item["id"], count=3)
@@ -604,8 +554,8 @@ def lose_the_box(check, item):
 
 
 def test_completion_does_not_revive_a_thing_into_no_box(client, box):
-    """A revive record whose box was deleted mid-check carries no position: reviving on
-    it would leave a live thing in no box, invisible on every page of the warehouse."""
+    """Reviving on a record whose box went mid-check would leave a live thing in no box,
+    invisible on every warehouse page."""
     item = make_item(client, box["id"])
     discard(client, item)
     check = start_check(client)
@@ -621,8 +571,8 @@ def test_completion_does_not_revive_a_thing_into_no_box(client, box):
 
 
 def test_completion_leaves_an_item_where_it_is_when_the_record_lost_its_box(client, box):
-    """A record's box_id is SET NULL when that box goes: completing must not then file the
-    thing nowhere, which would hide it from every page in the warehouse."""
+    """A record's box_id is SET NULL when that box goes; filing the thing nowhere would
+    hide it from every warehouse page."""
     item = make_item(client, box["id"])
     check = start_check(client)
     observe(client, box["id"], item["id"], count=2)
@@ -638,9 +588,8 @@ def test_completion_leaves_an_item_where_it_is_when_the_record_lost_its_box(clie
 
 
 def test_completion_audits_boxes_by_their_new_name(client, box):
-    """The audit row is the one place a box name outlives the box, so a completed move
-    has to name where the thing went, not where the item row still said it was. Read
-    from the table: the only audit endpoint is a camp's, and the warehouse has none."""
+    """The audit row is the one place a box name outlives the box, so it names where the
+    thing went. Read from the table: the warehouse has no audit endpoint."""
     other = make_box(client, "Krabice 2")
     moved = make_item(client, box["id"], "Přesunutá")
     gone = make_item(client, box["id"], "Ztracená")
@@ -733,13 +682,6 @@ def test_relative_media_dir_serves_what_it_stored(client, app, box, tmp_path, mo
     assert client.get(photo_url(photo), headers=ADMIN).status_code == 200
 
 
-def test_non_image_upload_fails_as_a_business_error(client, box, media_dir):
-    item = make_item(client, box["id"])
-    resp = upload(client, item["id"], b"nejsem obrazek")
-    assert resp.status_code == 400
-    assert not list((media_dir / "inventory").rglob("*.jpg"))   # no orphan files
-
-
 def test_a_pixel_bomb_is_a_business_error_too(client, box, media_dir, monkeypatch):
     """A few MB of JPEG can claim hundreds of megapixels; Pillow's guard raises an error
     that is neither OSError nor UnidentifiedImageError, so it needs answering as a 400."""
@@ -752,25 +694,25 @@ def test_a_pixel_bomb_is_a_business_error_too(client, box, media_dir, monkeypatc
     assert "rozměry" in resp.get_json()["error"]
 
 
-def test_only_photo_formats_are_decoded(client, box, media_dir):
-    """EPS would run Ghostscript on the upload; Pillow must not even try it."""
+def _eps() -> bytes:
     from PIL import Image
 
     buffer = io.BytesIO()
     Image.new("RGB", (8, 8)).save(buffer, "EPS")
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("make, error", [
+    (_eps, "není obrázek"),   # EPS would run Ghostscript: refused unread, not a failed decode
+    (png, "rozměry"),         # below Pillow's own guard; a PNG does not shrink while decoding
+])
+def test_a_bad_upload_is_refused_and_leaves_no_files(client, box, media_dir, monkeypatch, make, error):
+    monkeypatch.setattr(media, "_MAX_PIXELS", 16)
     item = make_item(client, box["id"])
-    resp = upload(client, item["id"], buffer.getvalue())
+    resp = upload(client, item["id"], make())
     assert resp.status_code == 400
-    assert "není obrázek" in resp.get_json()["error"]   # refused unread, not a failed decode
+    assert error in resp.get_json()["error"]
     assert not list((media_dir / "inventory").rglob("*.jpg"))
-
-
-def test_a_small_file_claiming_many_pixels_is_refused(client, box, media_dir):
-    """Below Pillow's own guard, and a PNG does not shrink while decoding."""
-    item = make_item(client, box["id"])
-    resp = upload(client, item["id"], png((8000, 6000)))
-    assert resp.status_code == 400
-    assert "rozměry" in resp.get_json()["error"]
 
 
 def test_a_failed_variant_leaves_no_orphan_files(media_dir, monkeypatch):
@@ -825,8 +767,8 @@ def test_the_landing_header_is_the_way_into_the_warehouse(client, seeded):
 
 
 def test_pages_render_with_the_data_their_scripts_read(client, box):
-    """The page JSON is the contract between the service and the page scripts; a renamed
-    key would otherwise only show up as a blank page in the warehouse."""
+    """The page JSON is the contract with the page scripts; a renamed key would otherwise
+    only show up as a blank page."""
     item = make_item(client, box["id"])
     check = start_check(client)
     observe(client, box["id"], item["id"])

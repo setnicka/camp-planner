@@ -1,7 +1,8 @@
-"""Tests for the ORM → response-model adapters, and for the relationship ordering they lean on.
+"""Activities.
 
-The pages render these lists as-is, so their order is part of the contract: unordered, the
-database may hand back a different row order after an edit and silently reshuffle the UI.
+The pages render an activity's relationship lists as-is, so their order is part of the
+contract: unordered, the database may hand back a different row order after an edit and
+silently reshuffle the UI.
 """
 
 from __future__ import annotations
@@ -18,8 +19,7 @@ from camp_planner.services import serialize
 
 
 def test_activity_overview_serializes_slots(app, seeded):
-    """activity_overview exposes every slot (role + span + override_name), time-ordered, so the
-    overview can derive per-role counts and the chronological sort's main-slot rows client-side."""
+    """The overview derives per-role counts and the chronological rows from these client-side."""
     a = db.session.get(Activity, seeded["activity_id"])
     db.session.add_all([   # main + prep slots added out of order; Activity.slots time-orders them
         Slot(activity_id=a.id, role=SlotRole.main, override_name="Odpolední",
@@ -32,7 +32,6 @@ def test_activity_overview_serializes_slots(app, seeded):
     db.session.commit()
 
     out = serialize.activity_overview(a)
-    # all roles, time-ordered (prep 08:00 first), each with span + override_name
     assert [(s["role"], s["start_at"]) for s in out["slots"]] == [
         ("prep", "2026-07-05T08:00:00"),
         ("main", "2026-07-05T09:00:00"),
@@ -45,9 +44,8 @@ def test_activity_overview_serializes_slots(app, seeded):
 
 
 def test_activity_slots_relationship_is_time_ordered(app, seeded):
-    """Activity.slots is ordered by the same keys as the timeline's `order` comparator, so every
-    consumer sees one sequence whatever order the rows were written in. Unordered, the DB may
-    return them differently after an edit and reshuffle how overlapping slots stack."""
+    """The same keys as the timeline's `order` comparator, so every consumer stacks
+    overlapping slots alike."""
     a = db.session.get(Activity, seeded["activity_id"])
     db.session.add_all([   # written out of order
         Slot(activity_id=a.id, role=SlotRole.main,
@@ -63,9 +61,8 @@ def test_activity_slots_relationship_is_time_ordered(app, seeded):
 
 
 def test_activity_lists_are_deterministically_ordered(app, seeded):
-    """serialize.activity() sorts the relationships that carry no SQL order: the detail page
-    renders them as-is. Orgs and materials are Czech-collated (Č next to C, not after Z as its
-    code point would put it), tags follow the curated Tag.sort_order."""
+    """serialize.activity() sorts what carries no SQL order: orgs and materials Czech-collated
+    (Č next to C, not after Z), tags by the curated Tag.sort_order."""
     camp_id, a_id = seeded["camp_id"], seeded["activity_id"]
     orgs = [Org(camp_id=camp_id, name=n, initials=n[0]) for n in ("Dana", "Čeněk", "Adam")]
     tags = [Tag(camp_id=camp_id, name=n, kind=TagKind.label, sort_order=o)
