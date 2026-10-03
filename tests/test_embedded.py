@@ -50,7 +50,7 @@ def embedded_factory():
 
 @pytest.fixture
 def embedded(embedded_factory):
-    """The default mount: yields (client, identity holder) — tests set
+    """The default mount: yields (client, identity holder); tests set
     holder["value"] to the dict the host callback would return."""
     return embedded_factory()
 
@@ -127,14 +127,14 @@ def test_forced_theme_wraps_our_output_and_drops_the_switch(embedded_factory, th
 
 
 def test_switch_ships_when_the_host_forces_nothing(embedded):
-    """Unforced, the visitor chooses — but no attribute is emitted, in particular not
+    """Unforced, the visitor chooses, but no attribute is emitted, in particular not
     "auto": embedded, the host's page decides, not the OS."""
     client, holder = embedded
     html = client.get("/planner/").get_data(as_text=True)
     assert "data-cp-theme-switch" in html
     assert "/planner/static/js/theme.js" in html      # prefix-safe
     assert 'data-cp-theme="' not in html
-    # the wrapper ships either way — it carries the palette's own background/text
+    # the wrapper ships either way: it carries the palette's own background/text
     assert '<div class="cp-embed">' in html
 
 
@@ -173,7 +173,7 @@ HOST_BASE = """<html><head><title>Host</title>
 
 def test_a_host_base_template_places_our_assets_where_it_wants(embedded_factory):
     """The contract is four slots. A host declaring them gets our stylesheets in its <head> and
-    our scripts before </body> — proper placement, which only the host's template can do."""
+    our scripts before </body>: proper placement, which only the host's template can do."""
     client, holder = embedded_factory(base_template="hb.html", templates={"hb.html": HOST_BASE})
     _admin(holder)
     _make_camp(client)
@@ -195,7 +195,7 @@ def test_a_host_base_template_missing_the_slots_warns_at_registration(embedded_f
 
 
 def test_a_host_template_that_extends_another_is_not_second_guessed(embedded_factory):
-    """The check reads one file, so it can't see inherited slots — it stays quiet rather than
+    """The check reads one file and can't see inherited slots, so it stays quiet rather than
     cry wolf at a host whose own base declares them further up."""
     import warnings as w
 
@@ -222,7 +222,7 @@ def test_force_theme_reaches_a_host_supplied_base_template(embedded_factory):
 
 
 def test_host_base_template_without_a_forced_theme_still_gets_the_wrapper(embedded_factory):
-    """The wrapper carries the palette's background/text, so it ships either way — just
+    """The wrapper carries the palette's background/text, so it ships either way, just
     without an attribute, leaving the light default."""
     client, _ = embedded_factory(base_template="hb.html", templates={"hb.html": HOST_BASE})
     html = client.get("/planner/").get_data(as_text=True)

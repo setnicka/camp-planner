@@ -55,7 +55,7 @@ def _safe_next(target: str | None) -> str | None:
     """Only allow same-site, root-relative redirect targets (no open redirects)."""
     if not target:
         return None
-    # Browsers fold backslashes to slashes, so normalize before parsing —
+    # Browsers fold backslashes to slashes, so normalize before parsing;
     # otherwise "/\evil.com" slips past urlparse as a path, then redirects off-site.
     parsed = urlparse(target.replace("\\", "/"))
     if parsed.scheme or parsed.netloc or not target.startswith("/"):

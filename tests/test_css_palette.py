@@ -1,6 +1,6 @@
 """Guards on the CSS design-token palette in static/css/content.css: no colour
 literal outside the palette block, every token defined and used, and the two dark
-blocks (media query vs. attribute — CSS can't OR them) kept identical."""
+blocks (media query vs. attribute, as CSS can't OR them) kept identical."""
 
 import re
 from pathlib import Path
@@ -13,7 +13,7 @@ END_MARKER = "/* === end palette"
 # dark counterpart.
 NON_COLOUR = {"--cp-page-width", "--cp-page-pad", "--cp-daynight-max"}
 
-# Per-component state written at runtime by JS — deliberately absent from the palette
+# Per-component state written at runtime by JS, deliberately absent from the palette
 # block. (Element-keyed values like the materials hue --h don't use the --cp- prefix.)
 RUNTIME_STATE = {
     "--cp-pill-n", "--cp-pill-pos",   # .cp-pill knob: positions + the active one (theme.js, dom.js)
@@ -33,8 +33,8 @@ COLOR_SCHEME_RULES = (
 )
 
 HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
-# An rgb()/hsl()/… call composed from tokens is fine — materials.css builds a tag colour
-# from the runtime hue --h — so only a call with no var() inside counts as a literal.
+# An rgb()/hsl()/… call composed from tokens is fine (materials.css builds a tag colour
+# from the runtime hue --h), so only a call with no var() inside counts as a literal.
 FUNC = re.compile(r"\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color-mix)\(")
 # Named colours are only a literal in a declaration *value*: "white-space" is a property.
 VALUE = re.compile(r":([^;{}]*)[;}]")
@@ -45,7 +45,7 @@ NAMED = {
     "magenta", "maroon", "olive", "lime", "aqua", "fuchsia", "ivory", "khaki", "coral",
 }
 DECL = re.compile(r"(--cp-[a-z0-9-]+)\s*:\s*([^;]+);")
-# A token is consumed either through var() or, from JS, via getPropertyValue() — the
+# A token is consumed either through var() or, from JS, via getPropertyValue(); the
 # timeline's day/night overlay needs the latter because vis strips var() from an
 # item's inline style (see timeline.js).
 USE = re.compile(r"""(?:var\(\s*|getPropertyValue\(\s*["'])(--cp-[a-z0-9-]+)""")
@@ -164,7 +164,7 @@ def test_a_background_over_the_day_night_items_isolates():
 
 def test_color_scheme_follows_the_theme_but_only_on_our_own_elements():
     """Pinned themes need their own form controls, but :root is the *host's* document in
-    embedded mode — so color-scheme rides on data-cp-theme, never on a token block."""
+    embedded mode, so color-scheme rides on data-cp-theme, never on a token block."""
     palette, _ = _split_palette()
     for selector in (LIGHT, DARK_AUTO, DARK_FORCED):
         assert "color-scheme" not in _body(palette, selector), (

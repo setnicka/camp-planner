@@ -16,7 +16,7 @@
       <label>Název<input name="name" value="{{ values.get('name', '') }}" required></label>
       <label>Slug<input name="slug" value="{{ values.get('slug', '') }}" required></label>
     {% else %}
-      {# Editors can't change name/slug — shown read-only and not submitted. #}
+      {# Editors can't change name/slug; shown read-only and not submitted. #}
       <label>Název<span class="cp-static">{{ camp.name }}</span></label>
       <label>Slug<span class="cp-static">{{ camp.slug }}</span></label>
     {% endif %}

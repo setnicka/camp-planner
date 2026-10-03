@@ -22,7 +22,7 @@ demo/
 # Env
 .env
 
-# Secrets — Google service-account key (never commit)
+# Secrets: Google service-account key (never commit)
 smf-camp-planner-*.json
 
 # Editors

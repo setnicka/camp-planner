@@ -1,4 +1,4 @@
-// Camp Planner — camp settings page (camp_edit.html).
+// Camp Planner: camp settings page (camp_edit.html).
 //
 // Wires the admin-only "Smazat akci" button to DELETE /api/camps/<slug> via cpDom.api. The
 // button is server-rendered disabled (with an explaining title) when the camp still has

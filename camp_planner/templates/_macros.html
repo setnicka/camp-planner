@@ -2,7 +2,7 @@
 
 {% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
-{# Static assets, path relative to static/ — url_for keeps them prefix-safe. #}
+{# Static assets, path relative to static/; url_for keeps them prefix-safe. #}
 {% macro css(path) %}<link rel="stylesheet" href="{{ url_for('main.static', filename=path) }}">{% endmacro %}
 {% macro js(path) %}<script src="{{ url_for('main.static', filename=path) }}"></script>{% endmacro %}
 
@@ -91,7 +91,7 @@
     </button>
     <button type="button" data-theme="dark" aria-pressed="false"
             title="Tmavý režim" aria-label="Tmavý režim">
-      {#- Crescent via <mask> — path subtraction retraces equal-radius arcs to zero area.
+      {#- Crescent via <mask>: path subtraction retraces equal-radius arcs to zero area.
           The bare id is fine: one switch per page. #}
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <mask id="cp-moon-mask">
@@ -148,7 +148,7 @@
 {% endmacro %}
 
 {# Scheduling/location parameters shared by the create and edit camp forms.
-   `values` is always fully populated by the view — defaults live there, not here. #}
+   `values` is always fully populated by the view; defaults live there, not here. #}
 {% macro camp_fields(values, timezones, tz_fixed, snap_choices) %}
   <label>Začátek<input type="date" name="start_date" value="{{ values.get('start_date', '') }}" required></label>
   <label>Počet dní<input type="number" name="length_days" min="1" value="{{ values.get('length_days', '') }}"></label>

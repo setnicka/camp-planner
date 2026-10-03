@@ -147,7 +147,7 @@ def test_admin_cannot_delete_own_account(client):
 def test_admin_cannot_strip_own_admin_flag(client):
     admin = _add_user("boss", admin=True)
     _login(client, "boss")
-    # the form omits is_admin (a disabled checkbox posts nothing) — admin must survive
+    # the form omits is_admin (a disabled checkbox posts nothing), admin must survive
     client.post(f"/auth/users/{admin.id}/profile",
                 data={"username": "boss", "display_name": "Boss"})
     assert db.session.get(User, admin.id).is_admin is True

@@ -62,7 +62,7 @@ class Material(Base):
     # renders as a scoped tag. Nullable (unset rows); serialize coerces NULL → [].
     acquisition_labels: Mapped[list[str]] = mapped_column(JSON, default=list)
 
-    # How per-activity needs roll up into the camp-wide total — see SumStrategy.
+    # How per-activity needs roll up into the camp-wide total (see SumStrategy).
     sum_strategy: Mapped[SumStrategy] = mapped_column(
         portable_enum(SumStrategy, "sum_strategy"), default=SumStrategy.sum
     )

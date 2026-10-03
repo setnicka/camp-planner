@@ -3,10 +3,10 @@
 SECURITY: these headers are trustworthy ONLY when a reverse proxy is the sole
 route to this app and overwrites any client-supplied X-Remote-* on every
 request. Bind the app to localhost/an internal interface and never enable proxy
-mode on a directly reachable process — otherwise a client can forge identities.
+mode on a directly reachable process; otherwise a client can forge identities.
 
 Header grammar:
-  X-Remote-User   stable id (feeds AuditLog.author) — its presence = authenticated
+  X-Remote-User   stable id (feeds AuditLog.author); its presence = authenticated
   X-Remote-Name   display name (optional; falls back to the user id). May be
                   percent-encoded UTF-8, since HTTP headers carry only latin-1.
   X-Remote-Roles  space-separated tokens:

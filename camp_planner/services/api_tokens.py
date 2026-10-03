@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from camp_planner.models.camp import Camp
 
 _PREFIX = "cp_"
-# How stale last_used_at may get before a read refreshes it — avoids a write per request.
+# How stale last_used_at may get before a read refreshes it (avoids a write per request).
 _TOUCH_AFTER = timedelta(minutes=1)
 
 

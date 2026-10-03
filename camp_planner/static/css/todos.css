@@ -1,6 +1,6 @@
 /* Camp-wide TODO overview page. Table/button/modal primitives come from content.css and
  * components.css (incl. the cp-th-* filter-header controls and all the cp-todo-* cell, toolbar
- * and table-shape styles — shared with the activity TODO tab); only the full-width layout that
+ * and table-shape styles, shared with the activity TODO tab); only the full-width layout that
  * makes this table fill the wide page lives here (this file loads only on the overview page). */
 
 /* #cp-todos centres like the activity overview (components.css); the table fills it. */

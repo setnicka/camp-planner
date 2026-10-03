@@ -57,7 +57,7 @@ def _static_version(endpoint: str, values: dict) -> None:
             pass   # a missing file: the plain URL 404s as before
 
 # Timezone <select> choices, built once at import. Regional zones (Europe/…, …) in
-# one group; intuitive fixed offsets ("GMT+1") in another — the latter map to the
+# one group; intuitive fixed offsets ("GMT+1") in another. The latter map to the
 # Etc/GMT∓N zone keys, whose POSIX sign is inverted, so we hide that confusion.
 _TZ_ALL = available_timezones()
 _TIMEZONES = sorted(z for z in _TZ_ALL if not z.startswith("Etc/"))
@@ -255,15 +255,15 @@ def camp_materials(slug: str):
 @require_view
 def camp_overview(slug: str):
     """Camp-wide activity overview / status page: every activity in a filterable, sortable
-    table — category, orgs, todo/material progress, a column per pinned tag, slot counts —
+    table (category, orgs, todo/material progress, a column per pinned tag, slot counts)
     with delete and merge from the embedded JSON via the api endpoints. Edit affordances are
     gated by can_edit; the api re-checks server-side."""
     camp = _camp(slug, *loaders.ACTIVITIES_OVERVIEW)
-    tax = taxonomy.serialize(camp)   # categories / orgs (czech-sorted) / tags — reused as filter metadata
+    tax = taxonomy.serialize(camp)   # categories / orgs (czech-sorted) / tags, reused as filter metadata
     data = {
         # order is decided client-side (the table re-sorts on every filter/sort change)
         "activities": [serialize.activity_overview(a) for a in camp.activities],
-        # camp day window — the chronological sort mode groups slots into camp days client-side
+        # camp day window: the chronological sort mode groups slots into camp days client-side
         # (24h rows anchored at window_start_min; see services/timeline.py).
         "camp": {"start_date": camp.start_date.isoformat(), "length_days": camp.length_days,
                  "window_start_min": camp.window_start_min},
@@ -287,8 +287,8 @@ def camp_overview(slug: str):
 @bp.get("/camps/<slug>/todos")
 @require_view
 def camp_todos(slug: str):
-    """Camp-wide TODO overview: every activity's todos in a filterable, sortable table —
-    status, activity, assigned orgs, due date and note — checked/edited/deleted in place
+    """Camp-wide TODO overview: every activity's todos in a filterable, sortable table
+    (status, activity, assigned orgs, due date and note), checked/edited/deleted in place
     from the embedded JSON via the api endpoints. Edit affordances are gated by can_edit;
     the api re-checks server-side."""
     camp = _camp(slug, *loaders.TODOS_OVERVIEW)
@@ -369,7 +369,7 @@ def camp_detail(slug: str):
         },
         **tax,
     }
-    # Google Calendar panel data — rendered server-side (no fetch on load), gated by
+    # Google Calendar panel data, rendered server-side (no fetch on load), gated by
     # may_edit here and re-checked by the api. The status reports whether the feature is
     # configured at all (status.enabled), so the template can hide the whole section.
     google_data = {
@@ -382,7 +382,7 @@ def camp_detail(slug: str):
             "pull": url_for("api.google_pull_preview", slug=camp.slug),  # GET preview / POST apply
         },
     }
-    # API tokens panel — editor-gated (re-checked by the api). may_edit false → the
+    # API tokens panel, editor-gated (re-checked by the api). may_edit false → the
     # template omits the tab, the data and the script entirely.
     tokens_data = {
         "may_edit": may_edit,

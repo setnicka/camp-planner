@@ -1,7 +1,7 @@
 """Drop camps.google_sync_token; acquisition_labels NOT NULL
 
 camps.google_sync_token was never read (the incremental-sync path it fed was
-unreachable); materials.acquisition_labels always holds a list in practice — NULL
+unreachable); materials.acquisition_labels always holds a list in practice: NULL
 rows (predating the column's default) are backfilled to [] and the column tightened.
 
 Revision ID: d4e5f6a7b8c9
@@ -29,7 +29,7 @@ def upgrade():
     with op.batch_alter_table(table_name('camps'), schema=None) as batch_op:
         batch_op.drop_column('google_sync_token')
 
-    # Offline SQL (--sql) can't render a JSON literal — skip the backfill there;
+    # Offline SQL (--sql) can't render a JSON literal. Skip the backfill there;
     # NULL rows must then be backfilled by hand before the NOT NULL alter below.
     if not context.is_offline_mode():
         materials = sa.table(table_name('materials'), sa.column('acquisition_labels', sa.JSON()))

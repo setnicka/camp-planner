@@ -1,4 +1,4 @@
-// Camp Planner — shared frontend primitives.
+// Camp Planner: shared frontend primitives.
 //
 // Tiny DOM/UI helpers reused across the pages: element building, the api() envelope,
 // modals and pickers, toasts, hints, formatting. Exposed as window.cpDom; load this
@@ -106,7 +106,7 @@ window.cpDom = (function () {
 
   // Body-level portals sit outside the element carrying data-cp-theme; the palette
   // reaches them via :has() but color-scheme does not, leaving native widgets light in a
-  // dark dialog — so stamp the theme onto the portal itself (no attribute = light =
+  // dark dialog; so stamp the theme onto the portal itself (no attribute = light =
   // stamp nothing). theme.js re-stamps open portals on a switch.
   function stampTheme(node) {
     const t = document.querySelector("[data-cp-theme]");
@@ -385,7 +385,7 @@ window.cpDom = (function () {
   }
 
   // In-header filter slider: a .cp-pill of one-symbol positions (`states` are
-  // [value, symbol, tooltip]) with a knob under the active one. No "all" position —
+  // [value, symbol, tooltip]) with a knob under the active one. No "all" position:
   // clicking the active state again clears the filter and the knob fades out. `get`/`set`
   // bind it to the caller's filter state; set(null) clears.
   function filterSlider(states, get, set, onChange) {
@@ -455,7 +455,7 @@ window.cpDom = (function () {
   }
 
   // Selectable chip set (`.cp-cat-chips`). Each entry is [value, ...chipChildren]; clicking
-  // toggles the `on` class. Returns { node, get() } — get() yields the selected value, or
+  // toggles the `on` class. Returns { node, get() }; get() yields the selected value, or
   // (multi) the array of selected values. onChange fires after each toggle.
   // Used by the role / category / org pickers.
   function chipGroup(entries, { multi = false, selected, onChange } = {}) {
@@ -481,7 +481,7 @@ window.cpDom = (function () {
   // Keyboard navigation for a search-box + results list (the activity / material pickers):
   // ↑/↓ move the highlight, Enter picks the active row, hover syncs it. Create once with the
   // search input; after each (re)render call the returned setRows(entries) with the rows in
-  // display order — entries are { el, pick } and it wires click + hover and highlights the
+  // display order; entries are { el, pick } and it wires click + hover and highlights the
   // first. The active row carries the `cp-active` class (styled in components.css).
   function keyList(search) {
     let rows = [], active = -1;
@@ -534,7 +534,7 @@ window.cpDom = (function () {
     return box;
   }
 
-  // Queue a toast to appear after the next full page load — for flows that reload the page
+  // Queue a toast to appear after the next full page load, for flows that reload the page
   // (e.g. the timeline save), where an immediate toast would be wiped by the navigation.
   function toastNext(message, isError) {
     try { sessionStorage.setItem("cp-toast", JSON.stringify({ message, isError: !!isError })); } catch (_e) { /* sessionStorage unavailable */ }
@@ -544,7 +544,7 @@ window.cpDom = (function () {
     let raw;
     try { raw = sessionStorage.getItem("cp-toast"); if (raw) sessionStorage.removeItem("cp-toast"); } catch (_e) { return; }
     if (!raw) return;
-    try { const t = JSON.parse(raw); toast(t.message, t.isError); } catch (_e) { /* malformed — ignore */ }
+    try { const t = JSON.parse(raw); toast(t.message, t.isError); } catch (_e) { /* malformed: ignore */ }
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", drainQueuedToast);
   else drainQueuedToast();
@@ -663,7 +663,7 @@ window.cpDom = (function () {
   // Freeze a table's current column widths into a <colgroup> + table-layout:fixed, so later
   // re-renders (e.g. filtering to fewer rows) keep the columns put instead of reflowing/jumping.
   // Call after a full-data paint so the frozen widths fit the widest content. No-op when the
-  // table is hidden (zero-width) — there's nothing to measure yet. Shared by the overview tables.
+  // table is hidden (zero-width): there's nothing to measure yet. Shared by the overview tables.
   function freezeColumns(table, headRow) {
     const widths = [...headRow.children].map((th) => th.getBoundingClientRect().width);
     if (!widths.some((w) => w > 0)) return;

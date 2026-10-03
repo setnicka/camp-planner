@@ -1,4 +1,4 @@
-// Camp Planner — Google Calendar tab (camp settings page).
+// Camp Planner: Google Calendar tab (camp settings page).
 //
 // Renders the connect / connected views from the JSON the server embeds in
 // #cp-google-data (no fetch on load), and drives connect / disconnect / sync / the
@@ -26,7 +26,7 @@
   let status = DATA.status;
   const POLL_MS = 5000;            // re-check queued-op counts while the settings page is open
   let statusInfoEl = null;         // the pending/failed block inside the connected view (re-rendered in place)
-  let syncBtn = null;              // "Synchronizovat nyní" — disabled when nothing is queued
+  let syncBtn = null;              // "Synchronizovat nyní", disabled when nothing is queued
 
   // n is always ≥ 1 here; cpDom.plural handles the 1 / 2–4 / 5+ agreement.
   function pendingMessage(n) {
@@ -136,7 +136,7 @@
     syncBtn = sync;
 
     const resync = el("button", { type: "button", class: "cp-seg-btn" }, "Znovu synchronizovat vše");
-    resync.title = "Zařadí všechny sloty k odeslání do Google — oprava, když se kalendář rozejde.";
+    resync.title = "Zařadí všechny sloty k odeslání do Google – oprava, když se kalendář rozejde.";
     resync.addEventListener("click", async () => {
       if (!window.confirm("Zařadit všechny sloty k opětovnému odeslání do Google?")) return;
       const json = await call(resync, "POST", URLS.resync);
@@ -174,7 +174,7 @@
   // One reviewable inbound change → a block of rows. ROW1: checkbox (rowspan over the whole
   // block) · the change name (colspan 2) · the action (rowspan; "Importovat jako" for new
   // events). Following rows: the server-formatted detail rows (name + value, one per row).
-  // Returns { nodes, cb, setEnabled, decide } — setEnabled greys the block and disables its
+  // Returns { nodes, cb, setEnabled, decide }; setEnabled greys the block and disables its
   // controls; decide() yields the decision object or null when unchecked.
   function changeRow(change, activities, categories) {
     const cb = el("input", { type: "checkbox", checked: true });
@@ -196,7 +196,7 @@
       controls.push(newBtn, attachBtn);
       const toggle = el("div", { class: "cp-seg" }, newBtn, attachBtn);
 
-      // category — compact button showing the current pick; click opens a small chooser modal
+      // category: compact button showing the current pick; click opens a small chooser modal
       let catId = change.category_id != null ? change.category_id : "";  // "" = bez kategorie
       const catBtn = el("button", { type: "button", class: "cp-google-pick" });
       const renderCatBtn = () => {
@@ -216,7 +216,7 @@
       const catField = el("div", { class: "cp-google-field" },
         el("span", { class: "cp-google-flabel" }, "Kategorie:"), catBtn);
 
-      // existing activity — compact button; click opens a modal with the fuzzy search picker
+      // existing activity: compact button; click opens a modal with the fuzzy search picker
       let chosen = activities[0] || null;
       const actBtn = el("button", { type: "button", class: "cp-google-pick" });
       const renderActBtn = () => actBtn.replaceChildren(el("span", null, chosen ? chosen.title : "— vyberte —"));
@@ -334,7 +334,7 @@
       el("tbody", null, ...rows.flatMap((r) => r.nodes)));
 
     // Warn (inline, atop the list) when any change is an event that carried another camp's slot
-    // id — importing it rewrites that marker in Google. Shown here rather than in a confirm.
+    // id: importing it rewrites that marker in Google. Shown here rather than in a confirm.
     const children = [el("h3", { class: "cp-google-review-title" }, "Změny z Google kalendáře")];
     if (preview.changes.some((c) => c.foreign_slot)) {
       children.push(el("div", { class: "cp-google-error cp-google-foreign" }, FOREIGN_WARNING));
@@ -353,7 +353,7 @@
 
   // Poll the status endpoint while the settings page is open so the queued-op count (tab badge
   // + pending notice) tracks background drains without a reload. Only the status notice is
-  // refreshed in place — never the buttons or an open review table — and a flipped connection
+  // refreshed in place (never the buttons or an open review table), and a flipped connection
   // state triggers a full re-render. Transient errors are ignored; the next tick retries.
   async function poll() {
     if (!status.connected) return;  // disconnected → nothing can be queued; skip the request (timer stays alive)

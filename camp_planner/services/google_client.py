@@ -1,4 +1,4 @@
-"""The Google Calendar boundary — the ONLY module that talks to Google's API and the
+"""The Google Calendar boundary: the ONLY module that talks to Google's API and the
 ONLY place datetimes cross the naive/aware line.
 
 Slot datetimes are naive local wall-clock in camp.timezone (see models/slot.py); Google
@@ -7,7 +7,7 @@ wants an explicit time zone. We hand Google `{dateTime: <naive isoformat>, timeZ
 camp-local on the way in (`parse_event_times`). zoneinfo is used here and nowhere else.
 
 The google-api-python-client / google-auth imports are deferred into the functions so the
-heavy client libraries only load when sync actually runs — the rest of the app, and the
+heavy client libraries only load when sync actually runs; the rest of the app, and the
 test suite (which monkeypatches this module), never pay for them. The feature is enabled
 only when GOOGLE_SERVICE_ACCOUNT_JSON is configured; see docs/google_calendar_setup.md.
 """
@@ -60,7 +60,7 @@ def service_account_email() -> str:
 
 @lru_cache(maxsize=1)
 def _build_service(info_json: str):
-    from google.oauth2 import service_account  # noqa: PLC0415 — deferred optional import
+    from google.oauth2 import service_account  # noqa: PLC0415  (deferred optional import)
     from googleapiclient.discovery import build  # noqa: PLC0415
 
     creds = service_account.Credentials.from_service_account_info(
@@ -77,13 +77,13 @@ def client():
 # --- payload building / parsing (the timezone boundary) -------------------------------
 
 def initials_csv(initials: list[str]) -> str:
-    """Czech-sorted, comma-joined initials — the DESCRIPTION (attendants) wire format."""
+    """Czech-sorted, comma-joined initials: the DESCRIPTION (attendants) wire format."""
     return ", ".join(sorted(initials, key=czech_sort_key))
 
 
 def format_location(garants: list[str], helpers: list[str]) -> str:
     """The LOCATION wire format: the garants joined by '+' as the first comma item, then
-    each helper as its own comma item — e.g. "K+M, P". Each group is czech-sorted."""
+    each helper as its own comma item, e.g. "K+M, P". Each group is czech-sorted."""
     g = sorted(garants, key=czech_sort_key)
     h = sorted(helpers, key=czech_sort_key)
     parts = (["+".join(g)] if g else []) + h
@@ -160,7 +160,7 @@ def event_color_id(activity) -> str | None:
 def parse_event_times(event: dict, timezone: str) -> tuple[datetime, datetime] | None:
     """Google event start/end → naive wall-clock datetimes in the camp timezone.
 
-    Returns None for all-day events (date, not dateTime) — those aren't slot-shaped and
+    Returns None for all-day events (date, not dateTime): those aren't slot-shaped and
     are skipped by the inbound review. An offset-less dateTime is localized with the event
     field's own `timeZone` when present, otherwise treated as already camp-local."""
     start, end = event.get("start", {}), event.get("end", {})
@@ -233,7 +233,7 @@ class PushResult(NamedTuple):
 
 def batch_push(ops: list[PushOp]) -> dict[str, PushResult]:
     """Deliver event create/patch/delete ops to Google in batched HTTP round-trips (≤_BATCH_MAX
-    per batch) rather than one network call each — the big win when a drain has many changes.
+    per batch) rather than one network call each (the big win when a drain has many changes).
     Returns {key: PushResult}. A delete of an already-gone event (404/410) counts as success.
     Never raises for a single op's failure: it's recorded in that op's PushResult so the caller
     can retry just that op. A whole-batch failure (e.g. a network error) fails every op in the
@@ -270,7 +270,7 @@ def batch_push(ops: list[PushOp]) -> dict[str, PushResult]:
             batch.add(_request(op), request_id=op.key)
         try:
             batch.execute()
-        except Exception as exc:  # noqa: BLE001 — whole-batch failure → mark its ops failed, retry next drain
+        except Exception as exc:  # noqa: BLE001  (whole-batch failure → mark its ops failed, retry next drain)
             for op in chunk:
                 results.setdefault(op.key, PushResult(False, None, str(exc)))
     return results

@@ -18,7 +18,7 @@
   <section class="cp-section">
     <table class="cp-params">
       <tr><th>Slug</th><td><code>{{ camp.slug }}</code></td></tr>
-      <tr><th>Trvání</th><td>{{ camp.start_date.isoformat() }} — {{ end_date.isoformat() }} ({{ camp.length_days }} dní)</td></tr>
+      <tr><th>Trvání</th><td>{{ camp.start_date.isoformat() }} – {{ end_date.isoformat() }} ({{ camp.length_days }} dní)</td></tr>
       <tr><th>Časové pásmo</th><td>{{ tz_label }}</td></tr>
       <tr><th>Začátek dne</th><td>{{ window_start }}</td></tr>
       <tr><th>Krok mřížky</th><td>{{ camp.snap_minutes }} min</td></tr>
@@ -65,7 +65,7 @@
     {{ tax_pane("categories", "Kategorie") }}
     {{ tax_pane("orgs", "Orgové") }}
     {{ tax_pane("tags", "Tagy") }}
-    {# Google Calendar pane — sits in the same tab system (settings.js toggles panes by
+    {# Google Calendar pane: sits in the same tab system (settings.js toggles panes by
        data-tax-pane), but its body is rendered by google-sync.js, not the taxonomy editor
        (no data-tax attribute, so the editor loop skips it). #}
     {% if show_google %}
@@ -74,7 +74,7 @@
         <div data-google-body></div>
       </section>
     {% endif %}
-    {# API tokens pane — rendered by token-admin.js (no data-tax attribute → the taxonomy
+    {# API tokens pane: rendered by token-admin.js (no data-tax attribute → the taxonomy
        editor skips it). Editor-gated here and re-checked server-side. #}
     {% if tokens_data.may_edit %}
       <section class="cp-tabpane cp-section" data-tax-pane="tokens" data-tokens-root hidden>
@@ -82,7 +82,7 @@
         <div data-tokens-body></div>
       </section>
     {% endif %}
-    {# Change-history pane — rendered by history-feed.js into data-history-root. No data-tax
+    {# Change-history pane: rendered by history-feed.js into data-history-root. No data-tax
        attribute, so the taxonomy editor loop skips it. The segmented toggle switches between
        the curated camp-level feed and the full unfiltered camp history. #}
     <section class="cp-tabpane cp-section" data-tax-pane="history" hidden>

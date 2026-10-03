@@ -1,4 +1,4 @@
-// Camp Planner — timeline hydrator + editor.
+// Camp Planner: timeline hydrator + editor.
 //
 // Reads the JSON the server inlined in #cp-timeline-data (already sliced into
 // per-day-row segments by services.timeline.build_timeline) and renders it with
@@ -310,7 +310,7 @@
     format: { minorLabels: { hour: "HH:mm" } },
     zoomKey: "ctrlKey",
     // Shift + wheel pans; a plain wheel is left to the page. vis consults
-    // horizontalScrollKey only when verticalScroll is on — inert here, the grid auto-sizes.
+    // horizontalScrollKey only when verticalScroll is on; inert here, the grid auto-sizes.
     horizontalScroll: true,
     horizontalScrollKey: "shiftKey",
     verticalScroll: true,
@@ -363,7 +363,7 @@
   // synchronously, only the event is debounced).
   timeline.initialRangeChangeDone = true;
 
-  // Vertical line at midnight — the day boundary that falls inside the window when it opens
+  // Vertical line at midnight: the day boundary that falls inside the window when it opens
   // at e.g. 04:00. One marker spans every row (all days map onto the same 24h window). Skip
   // it if the window opens at midnight (the line would sit on the left edge).
   const midnightMin = (DAY_MIN - WINDOW_START) % DAY_MIN;
@@ -406,7 +406,7 @@
     };
   })();
   // Night overlay: colour from a palette token, alpha from the sun. Resolved to a
-  // literal rgba() — vis round-trips an item's style through the CSSOM, and a shorthand
+  // literal rgba(): vis round-trips an item's style through the CSSOM, and a shorthand
   // holding var() gets dropped there.
   function nightRGB() {
     const v = getComputedStyle(container).getPropertyValue("--cp-daynight-rgb").trim();
@@ -481,7 +481,7 @@
   }
   if (hasLocation) items.add(dayNightBackgrounds());
 
-  // The colour is baked into each item's style, so re-derive it on a theme change —
+  // The colour is baked into each item's style, so re-derive it on a theme change:
   // the visitor flipping our switch, or the OS while on "auto".
   function refreshDayNight() {
     if (hasLocation) items.update(dayNightBackgrounds());
@@ -785,7 +785,7 @@
 
   // Present only when the server embedded the edit config (i.e. the user can edit).
   // Move/resize existing slots, double-tap to add (with an activity-picker modal),
-  // tap-select + action bar to delete — all collected into a pending batch and
+  // tap-select + action bar to delete, all collected into a pending batch and
   // committed with one PATCH under the timeline_rev optimistic lock.
   const editEl = document.getElementById("cp-timeline-edit");
   if (editEl && window.cpTimelineEdit) {

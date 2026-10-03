@@ -1,6 +1,6 @@
 """Shared SQLAlchemy eager-load option sets for the read paths.
 
-The read endpoints (and the web timeline view) serialize whole object graphs —
+The read endpoints (and the web timeline view) serialize whole object graphs:
 activities → slots → attendees → org, needs → catalog material, and so on. Loading
 those relationships lazily means one query per relationship per row (N+1); these
 option sets pull each graph in a fixed handful of queries instead. Apply with
@@ -54,10 +54,10 @@ def _activity_graph() -> tuple:
     )
 
 
-# GET /activities/<id> — one activity's full detail graph.
+# GET /activities/<id>: one activity's full detail graph.
 ACTIVITY = _activity_graph()
 
-# GET /camps/<slug>/activities — the same graph for every activity of the camp.
+# GET /camps/<slug>/activities: the same graph for every activity of the camp.
 ACTIVITIES = (selectinload(Camp.activities).options(*_activity_graph()),)
 
 
@@ -71,7 +71,7 @@ def _calendar_graph() -> tuple:
     )
 
 
-# GET /camps/<slug>/timeline (+ web camp_timeline) — only what build_timeline reads:
+# GET /camps/<slug>/timeline (+ web camp_timeline). Only what build_timeline reads:
 # categories, and per activity its category, role assignments, tag links and placed
 # slots with attendees. Notably NOT todos/needs (the timeline doesn't show them).
 TIMELINE = (
@@ -79,17 +79,17 @@ TIMELINE = (
     selectinload(Camp.activities).options(*_calendar_graph(), selectinload(Activity.tags)),
 )
 
-# GET /ical/<slug> — only what build_feed reads: the shared slot graph, and notably
+# GET /ical/<slug>. Only what build_feed reads: the shared slot graph, and notably
 # NOT camp.categories or tags.
 ICAL = (selectinload(Camp.activities).options(*_calendar_graph()),)
 
-# GET /camps/<slug>/materials — the catalog list; serialize.material walks each material's
+# GET /camps/<slug>/materials: the catalog list; serialize.material walks each material's
 # responsible orgs (the activity-detail picker reads it).
 MATERIALS = (
     selectinload(Camp.materials).options(*_MATERIAL_GRAPH),
 )
 
-# GET /camps/<slug>/materials/overview — each catalog material with its responsible orgs and
+# GET /camps/<slug>/materials/overview: each catalog material with its responsible orgs and
 # its needs (+ the activity each need belongs to, for the activity_title column), plus the
 # camp roster used to populate the edit modal's org picker.
 MATERIALS_OVERVIEW = (
@@ -102,7 +102,7 @@ MATERIALS_OVERVIEW = (
 # What a check's camp took of a thing: the linked material's needs.
 MATERIAL_NEEDS = (selectinload(Material.needs),)
 
-# GET /camps/<slug>/todos (+ web todos overview) — every activity's todos with their
+# GET /camps/<slug>/todos (+ web todos overview): every activity's todos with their
 # responsible orgs (each todo's .activity is its already loaded parent, so activity_title
 # needs no further option), plus the camp roster used as filter metadata.
 TODOS_OVERVIEW = (
@@ -111,9 +111,9 @@ TODOS_OVERVIEW = (
     .selectinload(Todo.assignments).selectinload(TodoAssignment.org),
 )
 
-# GET /camps/<slug>/activities (web overview/status page) — the camp's filter metadata
+# GET /camps/<slug>/activities (web overview/status page): the camp's filter metadata
 # (categories, orgs, tags) plus, per activity, what serialize.activity_overview counts:
-# category, org assignments, tag links (value only — keyed by tag_id), slots (role + span +
+# category, org assignments, tag links (value only, keyed by tag_id), slots (role + span +
 # override_name; no attendees), todos (is_done) and needs (is_ready). Notably no slot attendees
 # or need catalog rows.
 ACTIVITIES_OVERVIEW = (

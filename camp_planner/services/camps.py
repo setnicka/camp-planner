@@ -43,7 +43,7 @@ def validate_camp_form(form, *, require_meta: bool = True) -> tuple[dict, list[s
     error strings (for inline re-rendering), by running the same CampUpdate schema
     the JSON API uses. Slug uniqueness is checked at commit (race-safe), not here.
 
-    require_meta includes name/slug — true for create and admin edit; editors submit
+    require_meta includes name/slug: true for create and admin edit; editors submit
     the form without them."""
     def text(field: str) -> str:
         return (form.get(field) or "").strip()
@@ -120,7 +120,7 @@ def delete_camp(camp: Camp) -> dict:
     """Delete a camp (cascades to its taxonomy, materials and audit trail). Refused while
     it still has activities, so a populated camp can't be wiped by accident. The caller
     enforces admin rights; this enforces only the empty-camp rule. No audit row is written
-    — it would be cascade-deleted with the camp."""
+    (it would be cascade-deleted with the camp)."""
     if camp.activities:
         raise errors.Invalid("Akci nelze smazat – nejprve odstraňte všechny její aktivity.")
     camp_id = camp.id
@@ -235,7 +235,7 @@ def google_status(camp: Camp) -> dict:
 def save_camp_settings(camp: Camp, data: dict, *, allow_meta: bool) -> None:
     """Apply settings to a camp, recording a field-level diff and bumping the
     timeline revision if a layout field changed. name/slug are applied only when
-    allow_meta (admin) — never trust which fields the form submitted."""
+    allow_meta (admin); never trust which fields the form submitted."""
     # If the camp shares a Google calendar, refuse a date change that would overlap another
     # camp on that calendar (checked before applying anything, so a reject leaves it intact).
     if camp.google_calendar_id and any(

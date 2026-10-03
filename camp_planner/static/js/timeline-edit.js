@@ -1,4 +1,4 @@
-// Camp Planner — timeline editor (loaded only when the user can edit).
+// Camp Planner: timeline editor (loaded only when the user can edit).
 //
 // Split out of timeline.js: drag/resize existing slots, double-tap to add (with an
 // activity-picker modal), tap-select + action bar to delete, undo/redo, an unsaved-
@@ -67,7 +67,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   const snapshot = (id) => { const it = items.get(id); return it ? { start: it.start, end: it.end, group: it.group } : null; };
   const clockOf = (group, date) => fmtClock(absMinOf(group, date));
   const rangeLabel = (group, start, end) => `${clockOf(group, start)}–${clockOf(group, end)}`;
-  // "<day>. HH:MM" for an absolute camp-minute — used to label a multi-row slot's range,
+  // "<day>. HH:MM" for an absolute camp-minute, used to label a multi-row slot's range,
   // which a single group's HH:MM–HH:MM can't express.
   function dayClock(abs) {
     const i = Math.max(0, Math.min(payload.groups.length - 1, Math.floor((abs - WINDOW_START) / DAY_MIN)));
@@ -97,7 +97,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   }
 
   // Fold every move/resize of one block (change.fold) into a single row at its first
-  // occurrence, showing the net first→last range — even when interleaved with other blocks.
+  // occurrence, showing the net first→last range, even when interleaved with other blocks.
   // Drives both the rows and the "N změn" counter; undo/redo still steps through each.
   function foldedChangeLines() {
     const rows = [];            // display rows in first-occurrence order
@@ -273,7 +273,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- multi-row (window-crossing) slot editing ------------------------------
   // A slot whose [start,end] crosses the daily window renders as several items, one per
   // row. We keep the slot's absolute [start,end] canonical (carried on every segment as
-  // abs_start_min/abs_end_min) and, on a drag, re-derive the whole slot then re-slice it —
+  // abs_start_min/abs_end_min) and, on a drag, re-derive the whole slot then re-slice it:
   // both halves move together. Mirrors services.timeline slicing and the mockup's
   // applySegmentEdit (data.js). Re-rendering swaps the slot's items wholesale.
 
@@ -576,7 +576,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     // select-first step. The global editable + itemsAlwaysDraggable make every box
     // drag/resize directly; multi-segment slots are guarded in onMove. A touch screen keeps
     // vis's select-first step (a long press selects), so a swipe over a box pans instead.
-    // Only attach the callbacks when enabling — vis rejects `undefined` for them, and with
+    // Only attach the callbacks when enabling: vis rejects `undefined` for them, and with
     // editable:false they never fire anyway, so there's no need to clear them on exit.
     const opts = {
       editable: on ? { add: true, updateTime: true, updateGroup: true, remove: false, overrideItems: false } : false,
@@ -595,7 +595,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     refresh();
   }
 
-  // Revert every change in place (each is invertible) and leave edit mode — no reload.
+  // Revert every change in place (each is invertible) and leave edit mode (no reload).
   function discardChanges() {
     while (history.length) history.pop().undo();
     redoStack.length = 0;

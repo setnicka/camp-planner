@@ -1,4 +1,4 @@
-// Camp Planner — shared TODO list: a filterable, sortable table of tasks.
+// Camp Planner: shared TODO list (a filterable, sortable table of tasks).
 //
 // Used by both the camp-wide TODO overview page (every activity's todos, with an activity
 // column + filter/sort) and the TODO tab of the activity detail page (one activity's todos,
@@ -15,8 +15,8 @@ window.cpTodoList = function (opts) {
   const { el, api, withId, dash, submit, formModal, orgFilterHead, orgChips, toast, plural, freezeColumns, actionGroup, orgInitials, joinNodes } = window.cpDom;
   const mount = opts.mount;
   const TODOS = opts.todos;                 // mutated in place (push/splice/assign)
-  const ORGS = opts.orgs || [];             // [{id, initials, name}] — filter + edit picker
-  const ACTS = opts.activities || [];       // [{id, title}] — activity filter/sort/link
+  const ORGS = opts.orgs || [];             // [{id, initials, name}]; filter + edit picker
+  const ACTS = opts.activities || [];       // [{id, title}]; activity filter/sort/link
   const U = opts.urls;                      // {item, create?, activityDetail?}
   const mayEdit = !!opts.mayEdit;
   const showActivity = !!opts.showActivity;
@@ -40,7 +40,7 @@ window.cpTodoList = function (opts) {
   const sortArrows = new Map();   // sortKey -> direction indicator span, updated in place
   const arrowFor = (key) => (key === sortKey ? (sortDir === 1 ? " ▾" : " ▴") : "");
   let orgSetLabel = null;   // org-filter button's label setter (for sizing the freeze to the widest label)
-  // columns: task + orgs + due (3), plus activity and/or actions. The note is NOT a column —
+  // columns: task + orgs + due (3), plus activity and/or actions. The note is NOT a column;
   // it renders on its own full-width second row beneath the task.
   const colCount = () => 3 + (showActivity ? 1 : 0) + (mayEdit ? 1 : 0);
 
@@ -66,7 +66,7 @@ window.cpTodoList = function (opts) {
     const cb = el("input", { type: "checkbox" });
     cb.checked = t.is_done;
     cb.disabled = !mayEdit;
-    if (mayEdit) cb.addEventListener("change", async () => {   // toggle done — no confirmation
+    if (mayEdit) cb.addEventListener("change", async () => {   // toggle done; no confirmation
       try { const j = await api("PATCH", withId(U.item, t.id), { is_done: cb.checked }); Object.assign(t, j.todo); refresh(); }
       catch (e) { cb.checked = !cb.checked; toast(e.message, true); }
     });
@@ -133,7 +133,7 @@ window.cpTodoList = function (opts) {
     history.replaceState(null, "", h ? "#" + h : location.pathname + location.search);
   }
   // The filter portion of the hash. On a tabbed host (hashPrefix set) the first &-segment is the
-  // tab token — drop it whatever its value, so our filters apply even when another tab leads the
+  // tab token; drop it whatever its value, so our filters apply even when another tab leads the
   // hash (e.g. reloading on #materials&done=1). Without a prefix the whole hash is ours.
   function hashQuery() {
     const raw = location.hash.slice(1);
@@ -234,7 +234,7 @@ window.cpTodoList = function (opts) {
   }
 
   function orgsHead() {
-    // "bez orgů" — match unassigned todos (OR-combined with any orgs ticked below)
+    // "bez orgů": match unassigned todos (OR-combined with any orgs ticked below)
     const head = orgFilterHead({
       orgs: ORGS, selected: filter.orgIds, onChange: onFilterChange,
       extra: { label: "bez orgů", checked: filter.noOrg, set: (v) => { filter.noOrg = v; }, countInLabel: true },
@@ -313,11 +313,11 @@ window.cpTodoList = function (opts) {
     }
     mount.replaceChildren(...children);
     // Paint the full set first so the frozen column widths fit the widest content, then apply
-    // any active filter. Pinning the widths up front stops later filtered re-renders — which
-    // show only the matching rows — from reflowing (jumping) the columns.
+    // any active filter. Pinning the widths up front stops later filtered re-renders (which
+    // show only the matching rows) from reflowing (jumping) the columns.
     tbody.replaceChildren(...TODOS.map(todoRow));
     // Size the org-filter header to its WIDEST possible label before measuring, so the frozen
-    // widths don't depend on how many orgs are currently selected — otherwise reloading with an
+    // widths don't depend on how many orgs are currently selected; otherwise reloading with an
     // org filter active (button reads "Orgové (N) ▾", wider than "Vše ▾") would freeze different
     // widths than filtering live, and the columns would jump on reload.
     if (orgSetLabel) orgSetLabel(ORGS.length + 1);   // widest label → frozen widths don't depend on the filter

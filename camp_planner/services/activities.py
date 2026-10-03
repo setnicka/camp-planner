@@ -2,8 +2,8 @@
 tag set-replacement operations used by the activity detail page.
 
 Bodies are validated by the request schemas; what remains here is the business
-validation that needs the DB (a category/org/tag must belong to this camp) — raised
-as errors.Invalid — and the writes themselves. Each function owns its transaction.
+validation that needs the DB (a category/org/tag must belong to this camp), raised
+as errors.Invalid, and the writes themselves. Each function owns its transaction.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def update_activity(activity: Activity, payload: ActivityUpdate) -> dict:
 
 
 def delete_activity(activity: Activity) -> dict:
-    """Delete an activity. Refused (400) while it still has slots on the timeline — remove
+    """Delete an activity. Refused (400) while it still has slots on the timeline; remove
     those first (or merge the activity), so a delete never silently drops placed slots."""
     if activity.slots:
         raise errors.Invalid(
@@ -74,7 +74,7 @@ def delete_activity(activity: Activity) -> dict:
 def merge_activities(source: Activity, target: Activity) -> dict:
     """Merge `source` INTO `target`, then delete `source`. Its todos and slots are reassigned
     to the target; its material needs are joined into the target's (a need for a material the
-    target already uses sums the amounts — but only if their effective units match, else the
+    target already uses sums the amounts, but only if their effective units match, else the
     whole merge fails); the source's org assignments and tags are dropped (not transferred).
     Bumps timeline_rev because slots change which activity they belong to."""
     if source.id == target.id:

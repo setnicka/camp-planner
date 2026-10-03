@@ -1,8 +1,8 @@
-// Camp Planner — shared change-history feed ("Historie změn").
+// Camp Planner: shared change-history feed ("Historie změn").
 //
 // GitLab-style audit feed rendered from the /api/.../audit endpoint: newest first, each
 // entry an author + relative time + per-field old→new diffs, paginated with the keyset
-// `next_before` cursor. Read-only — no edit affordances. Used by the activity detail page
+// `next_before` cursor. Read-only: no edit affordances. Used by the activity detail page
 // (filtered to one activity) and the camp settings page (high-level camp_level feed).
 //
 // Factory: window.cpHistoryFeed({ host, url, query, catById, typeLabels, emptyText }) → { reload }
@@ -46,7 +46,7 @@ window.cpHistoryFeed = (function () {
   const fmtWallClock = (iso) => new Date(iso).toLocaleString("cs-CZ", DT_FMT);
 
   // Relative "před …" for the last week, absolute timestamp beyond it (full ts always in title).
-  // floor (not round) so it reads like elapsed time — "1 hodinou" until two full hours pass.
+  // floor (not round) so it reads like elapsed time: "1 hodinou" until two full hours pass.
   function relTime(iso) {
     const s = Math.floor((Date.now() - asInstant(iso).getTime()) / 1000);
     if (s < 60) return "před chvílí";
@@ -63,7 +63,7 @@ window.cpHistoryFeed = (function () {
   const trunc = (s) => (s.length > CAP ? s.slice(0, CAP) + "…" : s);
 
   // Word-level diff via LCS over whitespace/word tokens (so spacing and line breaks survive).
-  // Returns ops [{t:'eq'|'del'|'ins', s}]. Quadratic in token count — callers guard the size.
+  // Returns ops [{t:'eq'|'del'|'ins', s}]. Quadratic in token count; callers guard the size.
   function diffTokens(a, b) {
     const n = a.length, m = b.length;
     const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
@@ -181,7 +181,7 @@ window.cpHistoryFeed = (function () {
     }
 
     // Headline noun for an entry. An activity can have several slots, so identify a slot by
-    // its role label (taken from the diff when it carries one — create/retype do) plus its id,
+    // its role label (taken from the diff when it carries one; create/retype do) plus its id,
     // e.g. "Hlavní slot (#12)"; falls back to "slot (#12)" for moves/deletes that omit the role.
     function entityLabel(e, changes) {
       if (e.entity_type === "slot" && e.entity_id != null) {
@@ -196,7 +196,7 @@ window.cpHistoryFeed = (function () {
     const linked = (text, url) => (url ? el("a", { class: "cp-hist-link", href: url }, text) : text);
 
     // The headline text + entity node(s). When the entity still exists the server sends its
-    // name (entity_title) — use it instead of the generic noun. A merge reads as a direction:
+    // name (entity_title); use it instead of the generic noun. A merge reads as a direction:
     // "sloučil(a) aktivitu „Source" do <target name>", target linked.
     function headParts(e, changes) {
       const verb = ACTION_VERBS[e.action] || e.action;

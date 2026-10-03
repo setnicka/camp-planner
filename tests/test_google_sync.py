@@ -1,4 +1,4 @@
-"""Google Calendar sync — service + API tests.
+"""Google Calendar sync: service + API tests.
 
 The Google boundary is faked at the googleapiclient *service* level (over an in-memory
 event store), so the real batch_push, list_events and verify_access run in every test.
@@ -34,7 +34,7 @@ def _http_error(status):
 class FakeGoogle:
     """An in-memory calendar, with per-test failure knobs:
     fail_next (next op raises), fail_batch (next whole batch HTTP call dies),
-    gone (event ids whose PATCH 400s — deleted/cancelled upstream),
+    gone (event ids whose PATCH 400s: deleted/cancelled upstream),
     error_ids (event ids whose ops 500), no_insert_id (insert response lacks the id)."""
 
     def __init__(self):
@@ -147,7 +147,7 @@ class _FakeBatch:
         for rid, req in self._reqs:
             try:
                 self._callback(rid, req.execute(), None)
-            except Exception as exc:  # noqa: BLE001 — the real batch reports errors via the callback
+            except Exception as exc:  # noqa: BLE001 (the real batch reports errors via the callback)
                 self._callback(rid, None, exc)
 
 
@@ -380,7 +380,7 @@ def test_resync_all_queues_every_slot(app, seeded, gcal):
 
     assert google_sync.resync_all(camp) == {"queued": 2}
     assert google_sync.pending_count(camp) == 2          # one upsert per slot
-    assert google_sync.resync_all(camp) == {"queued": 2}  # idempotent — dedupes against queued upserts
+    assert google_sync.resync_all(camp) == {"queued": 2}  # idempotent, dedupes against queued upserts
     assert google_sync.pending_count(camp) == 2
 
     google_sync.drain(camp)
@@ -552,7 +552,7 @@ def test_enqueue_dedupes_ops_per_slot(app, seeded, gcal):
     for _ in range(3):  # three upserts for the same slot
         google_sync.enqueue_upsert(camp, slot)
     db.session.commit()
-    assert google_sync.pending_count(camp) == 1  # deduped at insert — only one row queued
+    assert google_sync.pending_count(camp) == 1  # deduped at insert, only one row queued
 
     result = google_sync.drain(camp)
     assert result == {"pushed": 1, "failed": 0, "pending": 0}
@@ -592,7 +592,7 @@ def test_helper_only_change_repushes(app, seeded, gcal):
     google_sync.drain(camp)  # event now synced, queue empty
     assert google_sync.pending_count(camp) == 0
 
-    # change ONLY a helper (no garant) — LOCATION carries helpers, so this must re-push
+    # change ONLY a helper (no garant); LOCATION carries helpers, so this must re-push
     activity = db.session.get(Activity, seeded["activity_id"])
     activities.set_orgs(activity, ActivityOrgsIn(orgs=[{"org_id": helper.id, "role": OrgRole.helper}]))
     assert google_sync.pending_count(camp) == 1
@@ -672,7 +672,7 @@ def test_drain_whole_batch_failure_fails_all_ops(app, seeded, gcal):
 
 
 def test_drain_insert_without_id_is_kept_for_retry(app, seeded, gcal):
-    """An insert whose response carries no event id must count as failed and stay queued —
+    """An insert whose response carries no event id must count as failed and stay queued:
     dropping the op would leave the slot unmapped forever."""
     camp = _camp(seeded)
     _connect(camp)
@@ -1127,7 +1127,7 @@ def test_pending_delete_event_not_reoffered_as_import(client, seeded, gcal):
     slot = db.session.scalar(db.select(Slot))
     event_id = slot.google_event_id
 
-    # delete the slot but DON'T drain — the event lingers in Google with the gone slot's marker
+    # delete the slot but DON'T drain: the event lingers in Google with the gone slot's marker
     delete = {"rev": camp.timeline_rev, "deletes": [slot.id]}
     client.patch(f"/api/camps/{seeded['slug']}/timeline", json=delete, headers=hdr)
     assert event_id in gcal.events                 # not yet removed from Google
@@ -1240,7 +1240,7 @@ def test_drain_skips_when_lock_held(client, seeded, gcal, monkeypatch):
 
 def test_drain_op_removal_is_idempotent(client, seeded, gcal, monkeypatch):
     """The op rows are bulk-deleted, so a row already removed (by a drain that raced past the
-    lock — only possible on SQLite) doesn't raise: the trailing delete just matches no rows."""
+    lock, only possible on SQLite) doesn't raise: the trailing delete just matches no rows."""
     camp = _camp(seeded)
     _connect(camp)
     slot = _make_slot(seeded["activity_id"], datetime(2026, 7, 4, 14, 0), datetime(2026, 7, 4, 16, 0))
@@ -1256,7 +1256,7 @@ def test_drain_op_removal_is_idempotent(client, seeded, gcal, monkeypatch):
         return real_insert(cal, body)
 
     monkeypatch.setattr(gcal, "insert", insert_then_yank)  # batch_push dispatches to fake.insert
-    google_sync.drain(camp)  # trailing bulk delete hits 0 rows — must not raise
+    google_sync.drain(camp)  # trailing bulk delete hits 0 rows and must not raise
 
     assert google_sync.pending_count(camp) == 0
     assert len(gcal.events) == 1

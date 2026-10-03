@@ -1,7 +1,7 @@
 """Unit tests for the timeline segment math and payload builder.
 
 build_timeline only reads attributes off the camp graph, so we feed it lightweight
-duck-typed objects — no DB needed. Real SlotRole/OrgRole enums are used since the
+duck-typed objects (no DB needed). Real SlotRole/OrgRole enums are used since the
 code compares against them by identity.
 """
 

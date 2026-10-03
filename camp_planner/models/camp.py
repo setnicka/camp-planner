@@ -114,7 +114,7 @@ class TagKind(str, enum.Enum):
     """What value a tag carries per activity (the actual value lives on the
     activity↔tag join). label is a plain presence tag with no value."""
 
-    label = "label"        # presence only — no per-activity value
+    label = "label"        # presence only, no per-activity value
     check = "check"        # done / not done
     progress = "progress"  # 0–100 %
     text = "text"          # free text

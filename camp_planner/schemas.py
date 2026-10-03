@@ -1,4 +1,4 @@
-"""Pydantic models — the API's single source of truth for request validation and
+"""Pydantic models: the API's single source of truth for request validation and
 the OpenAPI documentation.
 
 Each request model validates the incoming body (spectree rejects a malformed one
@@ -42,7 +42,7 @@ _NOTE_MAX = 10_000
 # --- shared ------------------------------------------------------------------
 
 class _Ok(BaseModel):
-    """Base for success envelopes — the constant ok=True flag."""
+    """Base for success envelopes: the constant ok=True flag."""
     ok: bool = True
 
 
@@ -54,22 +54,22 @@ class ErrorOut(BaseModel):
 
 
 class BadRequestOut(ErrorOut):
-    """400 — a business rule failed (referenced row not in this camp, name clash, …)."""
+    """400: a business rule failed (referenced row not in this camp, name clash, …)."""
     error: str = Field(examples=["Kategorie: neznámá kategorie této akce."])
 
 
 class UnauthorizedOut(ErrorOut):
-    """401 — not signed in."""
+    """401: not signed in."""
     error: str = Field(examples=["Pro přístup k této akci se přihlaste."])
 
 
 class ForbiddenOut(ErrorOut):
-    """403 — signed in but lacking the required role."""
+    """403: signed in but lacking the required role."""
     error: str = Field(examples=["K této akci nemáte oprávnění."])
 
 
 class NotFoundOut(ErrorOut):
-    """404 — no such entity."""
+    """404: no such entity."""
     error: str = Field(examples=["Akce nenalezena."])
 
 
@@ -133,7 +133,7 @@ class TodoCreate(BaseModel):
 
 
 class TodoUpdate(BaseModel):
-    """Partial update — only the fields actually present are applied."""
+    """Partial update: only the fields actually present are applied."""
     title: str | None = Field(default=None, min_length=1, max_length=255)
     note: str | None = Field(default=None, max_length=_NOTE_MAX)
     due_date: date | None = None
@@ -336,7 +336,7 @@ class TimelineOut(TimelinePayload, _Ok):
 
 
 class ConflictOut(ErrorOut):
-    """409 — an optimistic-lock race; carries the fresh state to reconcile against."""
+    """409: an optimistic-lock race; carries the fresh state to reconcile against."""
     error: str = Field(examples=["Časový plán mezitím někdo změnil. Načtěte ho prosím znovu."])
     rev: int
     timeline: TimelinePayload
@@ -408,7 +408,7 @@ class TagLinkOut(BaseModel):
 
 
 class MaterialOut(BaseModel):
-    """A catalog material (registry) — also returned by the catalog endpoints."""
+    """A catalog material (registry), also returned by the catalog endpoints."""
     id: int
     name: str
     unit: str | None
@@ -483,7 +483,7 @@ class TagLinkEnvelope(_Ok):
 # (MaterialOut / MaterialNeedOut are defined above, near ActivityOut.)
 
 def _http_url(value: str | None) -> str | None:
-    """A material's link must be an http(s) URL (or empty) — blocks javascript:/data:/etc.,
+    """A material's link must be an http(s) URL (or empty): blocks javascript:/data:/etc.,
     which would otherwise execute when the rendered link is clicked. Blank clears it."""
     if not value:
         return None
@@ -592,7 +592,7 @@ class MaterialNeedEnvelope(_Ok):
 
 class _TaxonomyIn(BaseModel):
     """Base for taxonomy item inputs: strip surrounding whitespace so min_length and
-    uniqueness see the trimmed value — the reconcile service then trusts the fields."""
+    uniqueness see the trimmed value; the reconcile service then trusts the fields."""
     model_config = ConfigDict(str_strip_whitespace=True)
 
 
@@ -744,7 +744,7 @@ class ApiTokenListEnvelope(_Ok):
 
 
 class ApiTokenCreatedEnvelope(_Ok):
-    """The created token plus its secret — the only time the secret is returned."""
+    """The created token plus its secret (the only time the secret is returned)."""
     token: ApiTokenOut
     secret: str = Field(examples=["cp_xNf3…"])
 
@@ -919,7 +919,7 @@ class GoogleActivityRefOut(BaseModel):
 
 class GooglePullPreviewEnvelope(_Ok):
     """The reviewable inbound diff; `activities`/`categories` are the options for
-    importing a new event. `rev` is the timeline revision this was computed against —
+    importing a new event. `rev` is the timeline revision this was computed against;
     echo it back on apply."""
     rev: int
     changes: list[GoogleChangeOut]
@@ -959,7 +959,7 @@ class GooglePullApplyEnvelope(_Ok):
 
 
 class GooglePullConflictOut(ErrorOut):
-    """409 — the timeline changed since the preview; re-pull. Carries the fresh rev (unlike
+    """409: the timeline changed since the preview; re-pull. Carries the fresh rev (unlike
     the timeline's ConflictOut, the client just re-runs the pull rather than reconciling)."""
     error: str = Field(examples=["Časový plán se mezitím změnil. Načtěte změny z Google prosím znovu."])
     rev: int

@@ -1,4 +1,4 @@
-// Camp Planner — in-place Markdown editor (CodeMirror 5 + a toolbar), built into `host`:
+// Camp Planner: in-place Markdown editor (CodeMirror 5 + a toolbar), built into `host`:
 // grouped actions with active-mark tracking, preview toggle, Ctrl/Cmd shortcuts,
 // window-bottom auto-fit, unsaved-changes guards. Save awaits onSave(content) and closes;
 // any close calls onClose(). Returns { cm, fit } so a tabbed host can refit when re-shown.
@@ -149,7 +149,7 @@ window.cpMarkdownEdit = function ({ host: pane, value, md, onSave, onClose }) {
   // grow the editor down to the bottom of the window; re-fit on resize (self-removing)
   const fit = () => {
     if (!host.isConnected) { window.removeEventListener("resize", fit); return; }
-    if (host.offsetParent === null) return;   // hidden (another tab is active) — refit when shown
+    if (host.offsetParent === null) return;   // hidden (another tab is active); refit when shown
     cm.setSize(null, Math.max(240, window.innerHeight - host.getBoundingClientRect().top - 16));
   };
   fit();

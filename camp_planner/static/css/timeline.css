@@ -304,8 +304,8 @@
 
 /* --- vendored vis-timeline: theme its chrome from the palette ---------------
  * Never edit the vendored file; it links before this one, so plain selectors win.
- * `showCurrentTime: false` — the red now-marker is our own .cp-nowline. */
-/* Border only — a background here paints over the z-index:-1 day/night items
+ * `showCurrentTime: false` (the red now-marker is our own .cp-nowline). */
+/* Border only: a background here paints over the z-index:-1 day/night items
    (.vis-timeline creates no stacking context); the page --cp-bg shows through instead. */
 .vis-timeline,
 .vis-panel.vis-top, .vis-panel.vis-bottom, .vis-panel.vis-center,
@@ -313,7 +313,7 @@
 .vis-panel .vis-shadow { box-shadow: 0 0 10px var(--cp-shadow-2); }
 /* the axis labels + left-hand day labels (vis defaults to a mid grey) */
 .vis-time-axis .vis-text, .vis-labelset .vis-label { color: var(--cp-muted); }
-/* unclassed items (vis default is a pale blue box) — every real slot gets a
+/* unclassed items (vis default is a pale blue box); every real slot gets a
    .cat-<key> fill injected by timeline.js, so this is only a fallback */
 .vis-item { background-color: var(--cp-surface-2); }
 /* vis paints selection yellow; ours lifts the box instead (see .vis-selected above) */

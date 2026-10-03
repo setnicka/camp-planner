@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 class ActivityType(str, enum.Enum):
     """What kind of activity, which drives how its description is sourced and
     how it's edited. Add members here (plus a handler reading Activity.config)
-    to introduce new special types — no schema change needed.
+    to introduce new special types (no schema change needed).
     """
 
     basic = "basic"                      # description authored in-app (description_md)

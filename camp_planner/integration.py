@@ -1,8 +1,8 @@
 """Integration seam: attach Camp Planner's blueprints to a Flask app.
 
 Two entrypoints:
-  - wire_app(app) — used for standalone/proxy mode (auth provider chosen by AUTH_MODE)
-  - register_camp_planner(host_app, ...) — mount on a host Flask app (embedded);
+  - wire_app(app): used for standalone/proxy mode (auth provider chosen by AUTH_MODE)
+  - register_camp_planner(host_app, ...): mount on a host Flask app (embedded);
     identity comes from the host's auth_callback.
 
 The wiring is blueprint-scoped: a per-blueprint before_request loads g.identity and
@@ -55,7 +55,7 @@ def _check_host_template(app: Flask, base_template: str) -> None:
     """Warn when a host's base template declares none of the slots our pages render into.
 
     Static, so it only sees blocks written in that file: a template that itself extends another
-    is skipped rather than guessed at. Unreadable templates are skipped too — a host may install
+    is skipped rather than guessed at. Unreadable templates are skipped too: a host may install
     its loader after registering us, and a check must not be the thing that breaks startup.
     """
     try:

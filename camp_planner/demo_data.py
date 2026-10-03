@@ -6,7 +6,7 @@ random is drawn from one seeded Random, so the same seed yields the same camp.
 
 Rows are inserted directly through the ORM (not the service layer): timestamps are
 backdated across the planning weeks and the audit trail is seeded explicitly, which
-the services — stamping everything "now" from a request identity — cannot produce.
+the services (stamping everything "now" from a request identity) cannot produce.
 """
 
 from __future__ import annotations
@@ -54,10 +54,10 @@ EDITOR_USER = "org"            # the everyday-organiser account the docs shots l
 ADMIN_USER = "admin"
 # The activities the docs screenshots point at (imported by scripts/shoot_docs.py).
 HERO_ACTIVITY = "Šifrovačka"   # richest detail: description, material, todos, history
-SLOTS_ACTIVITY = "Přednáška"   # the override_name showcase — eight individually named slots
+SLOTS_ACTIVITY = "Přednáška"   # the override_name showcase: eight individually named slots
 START = date(2026, 8, 1)       # Saturday → Sunday 9. 8., nine day-rows
 LENGTH_DAYS = 9
-LOCATION = {"latitude": 49.5940, "longitude": 15.5800}   # Vysočina — day/night shading
+LOCATION = {"latitude": 49.5940, "longitude": 15.5800}   # Vysočina (day/night shading)
 ESHOP = "https://example.org/eshop"   # the "where to buy" link of demo rows
 
 # --- taxonomy ---------------------------------------------------------------
@@ -96,7 +96,7 @@ PLACES = ["louka za chatou", "klubovna", "velký sál", "les nad rybníkem", "h�
 # Materials sorted out for every activity that needs them, so the overview shows the
 # fully-done state too and not only partial progress.
 FULLY_READY = {"Buzoly", "Ozvučení", "Dřevo na oheň"}
-# PINNED_TAG_VALUES / PINNED_NEEDS are derived from AUDIT below — see _audit_final_pins.
+# PINNED_TAG_VALUES / PINNED_NEEDS are derived from AUDIT below (see _audit_final_pins).
 
 # --- descriptions -----------------------------------------------------------
 
@@ -233,7 +233,7 @@ RECURRING = [
     ("Večeře", "jidlo",
      [(d, "19:00", "20:00", None) for d in (1, 2, 3, 4, 6, 8)]
      + [(5, "18:30", "19:30", None), (7, "20:00", "21:00", None)]),
-    # One activity, eight slots, each named by its topic — the override_name showcase.
+    # One activity, eight slots, each named by its topic: the override_name showcase.
     ("Přednáška", "prednaska", [
         (2, "09:00", "10:45", "Základy algoritmizace"),
         (2, "17:00", "18:45", "První pomoc"),
@@ -269,7 +269,7 @@ ONE_OFF = [
         ("prep", 2, "08:00", "09:00", None),
         ("main", 2, "10:45", "12:45", None),
     ]),
-    # Two parallel options at the same time — the overlap showcase.
+    # Two parallel options at the same time: the overlap showcase.
     ("Vybíjená", "hra-fyzicka", [("main", 2, "14:30", "16:30", None)]),
     ("Deskovky", "hra-klidna", [("main", 2, "14:30", "16:30", None)]),
     ("Diskuzní kroužky", "hra-klidna", [("main", 2, "20:30", "22:00", None)]),
@@ -311,7 +311,7 @@ ONE_OFF = [
     ("Odjezd", "org", [("main", 9, "14:00", "15:00", None)]),
 ]
 
-# Activities with no slots yet — the "not scheduled" pool.
+# Activities with no slots yet: the "not scheduled" pool.
 UNSCHEDULED = [
     ("Stopovaná", "hra-fyzicka"),
     ("Hra na velkém území", "hra-fyzicka"),
@@ -462,7 +462,7 @@ TODOS = [
 # disagrees with the schedule tables fails the seed too.
 #
 # The `changes` dicts mirror what the services actually record (booleans, floats, ISO
-# datetimes, initials *lists* for garant/helper) — history-feed.js renders unknown keys
+# datetimes, initials *lists* for garant/helper): history-feed.js renders unknown keys
 # raw and string booleans as English literals, so an invented shape shows in screenshots.
 
 
@@ -561,7 +561,7 @@ AUDIT = [
 def _audit_final_pins() -> tuple[dict, dict]:
     """Values the audit trail narrates reaching, folded out of AUDIT (last write wins,
     made structural by sorting on days-before). The generator pins the current state to
-    these so the history tab and the pages it describes agree — kept as a derivation, not
+    these so the history tab and the pages it describes agree, kept as a derivation, not
     a second hand-maintained table that could drift."""
     tag_pins: dict[tuple[str, str], str] = {}
     need_pins: dict[tuple[str, str], tuple[float, bool]] = {}
@@ -604,7 +604,7 @@ def build(path: str | Path, seed: int = 20260801, calendar_id: str | None = None
         if not _is_demo_db(target):
             raise errors.Invalid(
                 f"{target} exists and does not look like a generated demo database "
-                f"(no camp with slug {SLUG!r}) — refusing to overwrite it."
+                f"(no camp with slug {SLUG!r}); refusing to overwrite it."
             )
         target.unlink()
 
@@ -626,7 +626,7 @@ def _is_demo_db(path: Path) -> bool:
     try:
         with Session(engine) as db:
             return db.scalar(select(Camp).filter_by(slug=SLUG)) is not None
-    except Exception:      # noqa: BLE001 — not a readable DB of ours, treat as foreign
+    except Exception:      # noqa: BLE001  (not a readable DB of ours, treat as foreign)
         return False
     finally:
         engine.dispose()
@@ -634,7 +634,7 @@ def _is_demo_db(path: Path) -> bool:
 
 def _seed_taxonomy(db: Session, camp: Camp, cat_rows, org_rows,
                    tag_rows) -> tuple[dict, dict, dict]:
-    """Categories, orgs and tags for one camp — parameters and the returned triple share
+    """Categories, orgs and tags for one camp. Parameters and the returned triple share
     that order; returned dicts are keyed by key / initials / name."""
     cats, orgs, tags = {}, {}, {}
     for i, (key, label, color) in enumerate(cat_rows):
@@ -695,7 +695,7 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None,
         db.add(slot)
         db.flush()
         all_slots.append(slot)
-        # Meals are nobody's shift — everyone just eats — so they carry no attendants.
+        # Meals are nobody's shift (everyone just eats), so they carry no attendants.
         if act.category_id != cats["jidlo"].id:
             # Two to four orgs staff each block; prep/cleanup are run by a smaller crew.
             size = rnd.randrange(2, 5) if slot.role is SlotRole.main else rnd.randrange(1, 3)
@@ -726,7 +726,7 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None,
             db.add(ActivityAssignment(activity_id=act.id, org_id=helper.id, role=OrgRole.helper))
 
     # Tags: every activity carries the two progress tags, the rest are sprinkled with the
-    # given probability — except values pinned in PINNED_TAG_VALUES, which always emit.
+    # given probability, except values pinned in PINNED_TAG_VALUES, which always emit.
     def put_tag(act: Activity, name: str, value: str | None) -> None:
         db.add(ActivityTag(activity_id=act.id, tag_id=tags[name].id,
                            value=PINNED_TAG_VALUES.get((act.title, name), value)))
@@ -777,7 +777,7 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None,
             db.add(TodoAssignment(todo_id=todo.id, org_id=org.id))
 
     def audit_row_id(entity: EntityType, act: Activity | None, target, changes: dict) -> int:
-        """The row an AUDIT `target` points at — resolved from the relationships of the
+        """The row an AUDIT `target` points at, resolved from the relationships of the
         rows just created, so a typo fails loudly (StopIteration / KeyError) at seed time
         instead of silently mis-filing the entry."""
         if entity in (EntityType.slot, EntityType.todo, EntityType.material_need):
@@ -831,7 +831,7 @@ def _populate(db: Session, rnd: random.Random, calendar_id: str | None,
     db.add(UserCampRole(user_id=editor.id, camp_id=prev.id, role=CampRole.editor))
 
     # A connected camp starts with its outbound queue full, exactly as the app's connect
-    # button leaves it — so `flask sync-google` pushes the schedule with no extra step.
+    # button leaves it, so `flask sync-google` pushes the schedule with no extra step.
     if calendar_id:
         queued_at = datetime.combine(START - timedelta(days=1), time(12, 0))
         db.add_all(GoogleSyncOp(camp_id=camp.id, slot_id=s.id, op=SyncOpKind.upsert,
@@ -975,7 +975,7 @@ def _build_previous_camp(db: Session, rnd: random.Random) -> Camp:
     db.add(camp)
     db.flush()
 
-    # Smaller than this year on every axis — the team grew and the `noc` category
+    # Smaller than this year on every axis: the team grew and the `noc` category
     # only appeared for 2026.
     prev_cats = [c for c in CATEGORIES if c[0] != "noc"]
     cats, org_map, _ = _seed_taxonomy(db, camp, prev_cats, ORGS[:7], TAGS[:5])
@@ -986,7 +986,7 @@ def _build_previous_camp(db: Session, rnd: random.Random) -> Camp:
                        title=title,
                        description_md=rnd.choice(_FILLER),
                        # Explicit, else the default lands on "now" and two runs of the same
-                       # seed differ — the generator promises to be reproducible.
+                       # seed differ; the generator promises to be reproducible.
                        created_at=datetime.combine(start - timedelta(days=40), time(11, 0)),
                        updated_at=datetime.combine(start - timedelta(days=6), time(17, 30)))
         db.add(act)

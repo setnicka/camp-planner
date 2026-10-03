@@ -51,7 +51,7 @@ class User(TimestampMixin, Base):
 class UserCampRole(Base):
     """A role grant: which role a user holds, over which camp.
 
-    camp_id NULL means an *unscoped* grant — the role applies to all camps.
+    camp_id NULL means an *unscoped* grant: the role applies to all camps.
     """
 
     __tablename__ = table_name("user_camp_roles")
@@ -76,7 +76,7 @@ class UserCampRole(Base):
 class ApiToken(TimestampMixin, Base):
     """A bearer token for programmatic API access, scoped to one camp + role.
 
-    Self-contained (not FK'd to User — that table is empty under proxy/embedded).
+    Self-contained (not FK'd to User: that table is empty under proxy/embedded).
     Only the SHA-256 of the secret is stored; the secret is shown once at creation.
     Deleting the camp cascades its tokens away.
     """

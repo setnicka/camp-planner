@@ -1,8 +1,8 @@
 """ORM → response-model adapters.
 
-Builds the pydantic response models from schemas.py out of the ORM rows — handling
+Builds the pydantic response models from schemas.py out of the ORM rows, handling
 the relational flattening (a slot's org initials, a material's catalog name, …) that
-from_attributes can't express — and returns them as JSON-ready dicts for the API
+from_attributes can't express, and returns them as JSON-ready dicts for the API
 envelopes. The shape itself is defined once, in schemas.py.
 
 Each row shape has a private model-builder (_slot, _assignment, …) returning
@@ -178,9 +178,9 @@ def activity_overview(a: Activity) -> dict:
     and sorting are done client-side from this shape."""
     garants = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.garant), key=czech_sort_key)
     helpers = sorted((x.org.initials for x in a.assignments if x.role is OrgRole.helper), key=czech_sort_key)
-    # Every slot (role + span + display name, naive ISO); Activity.slots is time-ordered — the
+    # Every slot (role + span + display name, naive ISO); Activity.slots is time-ordered: the
     # client derives the per-role counts and, for the chronological sort, the main-slot rows.
-    # Lean subset of SlotOut (no id/attendees — the overview loader doesn't fetch slot attendees).
+    # Lean subset of SlotOut (no id/attendees: the overview loader doesn't fetch slot attendees).
     slots = [{"role": s.role.value, "start_at": s.start_at.isoformat(),
               "end_at": s.end_at.isoformat(), "override_name": s.override_name or None}
              for s in a.slots]

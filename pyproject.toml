@@ -1,7 +1,7 @@
 [project]
 name = "camp-planner"
 version = "0.4.0"
-description = "Planning tool for summer camps — Flask + SQLAlchemy, supports SQLite / PostgreSQL / MySQL"
+description = "Planning tool for summer camps: Flask + SQLAlchemy, supports SQLite / PostgreSQL / MySQL"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -14,7 +14,7 @@ dependencies = [
     "pydantic>=2.13.4",        # API request/response schemas (validation + OpenAPI)
     "spectree>=2.0.1",         # OpenAPI spec + Swagger UI from the pydantic schemas
     # Two-way Google Calendar sync (see docs/google_calendar_setup.md). Service-account
-    # auth only — no end-user OAuth, so google-auth-oauthlib is not needed. Imported
+    # auth only: no end-user OAuth, so google-auth-oauthlib is not needed. Imported
     # lazily (services/google_client.py) so it only loads when sync is configured.
     "google-api-python-client>=2",
     "google-auth>=2",

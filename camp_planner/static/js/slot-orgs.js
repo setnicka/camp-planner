@@ -1,4 +1,4 @@
-// Camp Planner — shared slot-edit dialog (attendees, optionally the name override).
+// Camp Planner: shared slot-edit dialog (attendees, optionally the name override).
 //
 // One modal for editing a time block, used by both the timeline editor and the activity
 // detail page so the two stay identical. Multi-select chip group picks who staffs the

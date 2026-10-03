@@ -2,7 +2,7 @@
 
 Every change that should be traceable calls record(); the caller's service owns
 the transaction, so the audit row and the change it describes commit (or roll
-back) together. The log is append-only by convention — never update or delete.
+back) together. The log is append-only by convention: never update or delete.
 list_audit() reads it back for the history views.
 """
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 # belong on an activity's own history. Activities and catalog materials only when added or
 # removed (not their field edits); taxonomy (categories/orgs/tags) and camp-settings changes.
 # Per-activity tag *links* share the `tag` entity_type with taxonomy tag edits, so they're
-# told apart by activity_id — taxonomy edits carry none, links always do.
+# told apart by activity_id: taxonomy edits carry none, links always do.
 _CAMP_LEVEL = or_(
     AuditLog.entity_type.in_([EntityType.camp, EntityType.category, EntityType.org]),
     and_(AuditLog.entity_type == EntityType.tag, AuditLog.activity_id.is_(None)),
@@ -107,7 +107,7 @@ def list_audit(
     structural changes (see _CAMP_LEVEL).
 
     Keyset-paginated: ids are monotonic with insertion, so `id DESC` is newest-first
-    and `before` (an id) fetches the next older page. Returns `next_before` — the
+    and `before` (an id) fetches the next older page. Returns `next_before`: the
     cursor for the following page, or None when this was the last one."""
     query = db.select(AuditLog).filter_by(camp_id=camp.id)
     if camp_level:
@@ -126,7 +126,7 @@ def list_audit(
 
 
 def _names(camp: Camp, model, name_col, ids: set[int]) -> dict[int, str]:
-    """{id: name} for the camp's `model` rows in `ids` that still exist — one batched query,
+    """{id: name} for the camp's `model` rows in `ids` that still exist; one batched query,
     so the view can show an entity's name (and link) instead of a generic noun."""
     if not ids:
         return {}
@@ -136,11 +136,11 @@ def _names(camp: Camp, model, name_col, ids: set[int]) -> dict[int, str]:
 
 
 def activity_titles(camp: Camp, ids: set[int]) -> dict[int, str]:
-    """{id: title} of still-existing activities — links an entry's own activity (create/delete/
+    """{id: title} of still-existing activities; links an entry's own activity (create/delete/
     merge) and labels the parent activity of per-activity detail entries (slot/todo/…)."""
     return _names(camp, Activity, Activity.title, ids)
 
 
 def material_names(camp: Camp, ids: set[int]) -> dict[int, str]:
-    """{id: name} of still-existing catalog materials — links/labels an entry's own material."""
+    """{id: name} of still-existing catalog materials; links/labels an entry's own material."""
     return _names(camp, Material, Material.name, ids)

@@ -1,6 +1,6 @@
 """Slot attendees and the batch timeline save.
 
-All slot placement (add / move / remove) goes through save_timeline — one atomic batch
+All slot placement (add / move / remove) goes through save_timeline: one atomic batch
 under the camp.timeline_rev optimistic lock (no single-slot endpoints; a slot's role is
 fixed at creation). update_slot patches a slot's attendees and/or display-name override,
 neither of which is placement. Slot datetimes are naive local values (see timeline.py);
@@ -50,7 +50,7 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
 
 def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
     """Apply one editing batch atomically (creates + moves + deletes) under the rev
-    optimistic lock (force=True skips the check — the conflict dialog's deliberate
+    optimistic lock (force=True skips the check: the conflict dialog's deliberate
     overwrite). A stale rev raises Conflict carrying the fresh timeline to reconcile
     against. Returns the new rev and the created slots (in `creates` order, for id mapping)."""
     if not payload.force and payload.rev != camp.timeline_rev:
@@ -69,7 +69,7 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
         return slot
 
     def _check_window(start_at, end_at) -> None:
-        # Outside the day windows a slot persists but slice_segments clamps it away — unreachable.
+        # Outside the day windows a slot persists but slice_segments clamps it away: unreachable.
         if not span_in_window(camp, start_at, end_at):
             raise errors.Invalid("Změny: blok leží mimo dny akce.")
 

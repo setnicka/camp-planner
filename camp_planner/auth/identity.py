@@ -20,7 +20,7 @@ class CampRole(str, enum.Enum):
 
 
 class _All:
-    """Sentinel for an unscoped grant (all camps) — a distinct type, not None, so a
+    """Sentinel for an unscoped grant (all camps): a distinct type, not None, so a
     scope is unambiguously ALL or a set of camp ids."""
 
     __slots__ = ()

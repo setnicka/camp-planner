@@ -1,8 +1,8 @@
-// Camp Planner — camp-wide materials overview (Phase 4).
+// Camp Planner: camp-wide materials overview (Phase 4).
 //
 // Renders one row per catalog material (from the JSON the server inlined in
 // #cp-materials-data) with the activity needs that use it, edited in place via the /api
-// endpoints — no reloads (except merge, which reloads since the server re-sums needs).
+// endpoints, no reloads (except merge, which reloads since the server re-sums needs).
 // Edit affordances appear only when data.may_edit; the api re-checks server-side.
 "use strict";
 
@@ -17,7 +17,7 @@
   const U = DATA.urls;
   const mayEdit = DATA.may_edit;
   const MATS = DATA.materials;              // catalog materials with usages; mutated in place
-  const ORGS = DATA.orgs || [];            // camp roster [{id, initials, name}] — edit picker
+  const ORGS = DATA.orgs || [];            // camp roster [{id, initials, name}]; edit picker
   const orgName = new Map(ORGS.map((o) => [o.id, o.name]));
   const hasStock = stock.on(U);             // the Sklad column and the link, unless switched off
   // Fixed column widths so the layout doesn't reflow ("jump") as filtering changes which rows
@@ -125,7 +125,7 @@
   // --- render ----------------------------------------------------------------
   function buildShell() {
     if (!MATS.length) {
-      mount.replaceChildren(el("p", { class: "cp-muted" }, "Zatím žádný materiál — přidej ho z detailu aktivity."));
+      mount.replaceChildren(el("p", { class: "cp-muted" }, "Zatím žádný materiál – přidej ho z detailu aktivity."));
       return;
     }
     // The unit rides along in Množství and the badge in Aktivity carries the activity count,
@@ -158,7 +158,7 @@
 
   const onFilterChange = () => { writeHash(); renderTable(); };
 
-  // Orgs filter — the shared header dropdown (checkbox list, any selected = OR;
+  // Orgs filter: the shared header dropdown (checkbox list, any selected = OR;
   // "bez garanta" matches materials with no responsible org).
   function orgsHead() {
     return orgFilterHead({
@@ -286,7 +286,7 @@
         disabled: m.usages.length && "Používají ho aktivity – nejdřív ho slučte s jiným, nebo ho z aktivit odeberte.",
         onClick: (e) => deleteMaterial(m, e.currentTarget) },
     ])));
-    // toggle expand on a row click — but not when clicking the name link or an action button
+    // toggle expand on a row click, but not when clicking the name link or an action button
     tr.addEventListener("click", (e) => {
       if (e.target.closest("a, button")) return;
       if (expanded.has(m.id)) expanded.delete(m.id); else expanded.add(m.id);
@@ -488,7 +488,7 @@
   }
 
   function openUsageEdit(m, u) {
-    // shared dialog (cpMaterialNeedEdit) — same edit window as the activity detail page
+    // shared dialog (cpMaterialNeedEdit), same edit window as the activity detail page
     window.cpMaterialNeedEdit({
       title: m.name + " — " + u.activity_title, need: u, defaultUnit: m.unit,
       url: withId(U.needItem, u.need_id),
@@ -512,7 +512,7 @@
   // migrates/sums the needs and deletes the source, so we reload rather than reconcile locally.
   function openMaterialMerge(m) {
     const others = MATS.filter((x) => x.id !== m.id);
-    if (!others.length) { toast("Není do čeho slučovat — v katalogu je jen tento materiál.", true); return; }
+    if (!others.length) { toast("Není do čeho slučovat – v katalogu je jen tento materiál.", true); return; }
     mergePicker({
       title: "Sloučit „" + m.name + "“ do…",
       hint: "U všech aktivit se „" + m.name + "“ nahradí vybraným materiálem a „" + m.name + "“ z katalogu zmizí.",
@@ -531,7 +531,7 @@
   else readHash();   // otherwise the hash carries the filters (#label=…&org=…)
 
   // React to external hash changes (links / back button); writeHash uses replaceState
-  // so it doesn't fire hashchange — no loop. A #material-<id> deep link isn't a filter.
+  // so it doesn't fire hashchange (no loop). A #material-<id> deep link isn't a filter.
   window.addEventListener("hashchange", () => {
     if (/^#material-\d+$/.test(location.hash)) return;
     readHash();

@@ -304,7 +304,7 @@ def camp_delete(slug: str):
 # --- api tokens (camp-scoped bearer tokens; managed only by a real user) ------
 
 def _no_api_token() -> None:
-    """A token must never manage tokens — reject a token-authenticated request."""
+    """A token must never manage tokens: reject a token-authenticated request."""
     if g.get("api_token") is not None:
         abort(403, "API token nemůže spravovat tokeny.")
 
@@ -403,7 +403,7 @@ def google_pull_apply(slug: str):
     payload = request.context.json
     return _ok({
         **google_sync.apply_pull(camp, payload.decisions, rev=payload.rev),
-        "google": camps_service.google_status(camp),  # fresh status — saves the client a GET
+        "google": camps_service.google_status(camp),  # fresh status, saves the client a GET
     })
 
 
@@ -470,7 +470,7 @@ def timeline_get(slug: str):
 @spec.validate(json=TimelineSaveIn, resp=Response(HTTP_200=TimelineSaveEnvelope, HTTP_409=ConflictOut, **_AUTH_400),
                tags=["timeline"])
 def timeline_save(slug: str):
-    # Eager-load: save_timeline walks every activity's slots — lazy would be N+1 per save.
+    # Eager-load: save_timeline walks every activity's slots; lazy would be N+1 per save.
     camp = _camp(slug, *loaders.TIMELINE, edit=True)
     return _ok(slots.save_timeline(camp, request.context.json))
 
@@ -553,7 +553,7 @@ def activity_tag_value(activity_id: int, tag_id: int):
 # --- slots -------------------------------------------------------------------
 # Slot placement (add / reposition / remove) is edited only through the timeline
 # batch (PATCH …/timeline); a slot's role is fixed at creation. The one slot-level
-# endpoint patches its attendees and/or display-name override — neither is placement,
+# endpoint patches its attendees and/or display-name override. Neither is placement,
 # so it's grouped under "timeline" too.
 
 @bp.patch("/slots/<int:slot_id>")
@@ -684,7 +684,7 @@ def audit_list(slug: str):
     res = audit.list_audit(
         camp, activity_id=q.activity_id, entity_type=q.entity_type,
         entity_id=q.entity_id, camp_level=q.camp_level, before=q.before, limit=q.limit)
-    # Link activity/material entries to their pages — only on cross-entity (whole-camp)
+    # Link activity/material entries to their pages, only on cross-entity (whole-camp)
     # feeds; within one activity's or one row's thread the target never varies.
     if q.activity_id is None and q.entity_id is None:
         _link_audit_entities(camp, res["entries"])
@@ -693,9 +693,9 @@ def audit_list(slug: str):
 
 def _link_audit_entities(camp: Camp, entries: list[dict]) -> None:
     """Name + link entities on a whole-camp feed (deleted targets stay a plain generic noun):
-      • entity_title/entity_url — the entry's own activity/material when it still exists, so
+      • entity_title/entity_url: the entry's own activity/material when it still exists, so
         the headline shows its name (and the merge target's) instead of a generic noun;
-      • activity_title/activity_url — the parent activity of a per-activity detail entry
+      • activity_title/activity_url: the parent activity of a per-activity detail entry
         (slot/todo/…), shown as a context line.
     Two batched lookups total (activity titles cover both uses; material names)."""
     act, mat = EntityType.activity.value, EntityType.material.value

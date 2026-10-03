@@ -2,7 +2,7 @@
 reviewed inbound (Google→Planner) import.
 
 Write paths (save_timeline, activity update/delete) call enqueue_* to stage a
-GoogleSyncOp on the session — no Google call, no commit — exactly like audit.record;
+GoogleSyncOp on the session (no Google call, no commit), exactly like audit.record;
 their own commit persists it. `drain` later delivers the queued ops to Google, so a slow
 or unreachable Google never blocks nor fails a timeline edit. drain runs from the
 `flask sync-google` cron command and the "Synchronizovat nyní" button.
@@ -31,7 +31,7 @@ from camp_planner.services.timeline import bump_timeline_rev, camp_window, span_
 # An imported event longer than this is treated as a whole-camp span, not a slot, and skipped.
 _MAX_IMPORT_HOURS = 48
 
-# HTTP statuses that mean a patch target is gone upstream — deleted, or a recurring instance
+# HTTP statuses that mean a patch target is gone upstream: deleted, or a recurring instance
 # Google cancelled when its series was re-timed. The drain re-creates the slot instead of
 # retrying a patch that 400s forever. (Our event bodies are server-built, so 400 = dead target.)
 _EVENT_GONE = {400, 404, 410}
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 def _already_queued(camp: Camp, *conditions) -> bool:
     """Whether a matching outbound op is already pending. The query autoflushes the session,
-    so it also sees ops staged earlier in the current transaction — hence repeated enqueues
+    so it also sees ops staged earlier in the current transaction; hence repeated enqueues
     within one request collapse to a single row. (drain() still dedupes, to cover ops raced
     in by a concurrent request whose row this query couldn't yet see.)"""
     return db_session.scalar(
@@ -96,7 +96,7 @@ def pending_count(camp: Camp) -> int:
 def resync_all(camp: Camp) -> dict:
     """Queue an outbound upsert for every slot of the camp, so the next drain re-pushes the
     whole schedule to Google. Use to repair a calendar that drifted (events hand-edited or
-    deleted in Google) — the drain patches events that still exist and re-inserts any missing.
+    deleted in Google): the drain patches events that still exist and re-inserts any missing.
     No-op when the camp isn't connected. Owns its transaction. Returns {queued: # of slots}."""
     if not camp.google_calendar_id:
         return {"queued": 0}
@@ -112,7 +112,7 @@ def resync_all(camp: Camp) -> dict:
 
 
 def failure_summary(camp: Camp) -> tuple[int, str | None]:
-    """(# of queued ops that have failed at least once, the most recent error text) — lets
+    """(# of queued ops that have failed at least once, the most recent error text); lets
     the UI surface a stuck sync, e.g. a calendar shared read-only so every push 403s."""
     failed = db_session.scalars(
         db.select(GoogleSyncOp)
@@ -123,12 +123,12 @@ def failure_summary(camp: Camp) -> tuple[int, str | None]:
 
 
 # Per-camp drain lock: (acquire SQL, release SQL, key-from-camp-id). Both statements take a single
-# :k bind whose type differs by backend — Postgres advisory locks key on a bigint, while MySQL
+# :k bind whose type differs by backend: Postgres advisory locks key on a bigint, while MySQL
 # GET_LOCK needs a string name (an int errors on MySQL 8). Each key is namespaced so it can't
 # collide with another feature's advisory lock: a "cp_drain_<id>" name on MySQL, and on Postgres
 # our namespace in the high 32 bits with the camp id in the low 32. A backend without advisory
-# locks (SQLite) maps to None — drain() then relies on write serialization + idempotent deletion.
-_DRAIN_LOCK_NS = 0x6770  # "gp" — drain-lock namespace, kept clear of other advisory-lock users
+# locks (SQLite) maps to None; drain() then relies on write serialization + idempotent deletion.
+_DRAIN_LOCK_NS = 0x6770  # "gp", drain-lock namespace, kept clear of other advisory-lock users
 _LOCK_SQL = {
     "postgresql": ("SELECT pg_try_advisory_lock(:k)", "SELECT pg_advisory_unlock(:k)",
                    lambda i: (_DRAIN_LOCK_NS << 32) | i),
@@ -141,8 +141,8 @@ def _drain_lock(camp: Camp):
     """Non-blocking, per-camp cross-process mutex: the cron/sidecar and the "Synchronizovat nyní"
     button both call drain(), and without this they could double-insert events. Yields True to
     proceed, False to bow out (the holder delivers our ops too). The lock lives on a dedicated
-    connection for the whole drain — so it outlives drain's mid-flow commit and a pooled-connection
-    swap can't leak it — and is advisory, so it never blocks timeline edits. No-op on SQLite (no
+    connection for the whole drain (so it outlives drain's mid-flow commit and a pooled-connection
+    swap can't leak it) and is advisory, so it never blocks timeline edits. No-op on SQLite (no
     advisory locks), where the idempotent op-deletion in drain() covers the race."""
     # The bind comes off the session: embedded, our own SQLAlchemy may have no engine.
     bind = db_session.get_bind()
@@ -166,10 +166,10 @@ def _drain_lock(camp: Camp):
 
 # Czech descriptions of the failure statuses a push realistically hits.
 _PUSH_ERROR_CZECH = {
-    403: "Kalendář odmítl zápis — zkontrolujte sdílení se service accountem "
+    403: "Kalendář odmítl zápis – zkontrolujte sdílení se service accountem "
          "s právem „Provádět změny v událostech“.",
     404: "Kalendář nebo událost nebyly nalezeny.",
-    429: "Google omezil počet požadavků (kvóta) — zkuste to později.",
+    429: "Google omezil počet požadavků (kvóta) – zkuste to později.",
 }
 
 
@@ -177,7 +177,7 @@ def _czech_push_error(res: google_client.PushResult) -> str:
     if res.status in _PUSH_ERROR_CZECH:
         return _PUSH_ERROR_CZECH[res.status]
     if res.status and res.status >= 500:
-        return f"Chyba na straně Google ({res.status}) — zkuste to později."
+        return f"Chyba na straně Google ({res.status}) – zkuste to později."
     if res.status:
         return f"Google vrátil chybu {res.status}."
     return "Síťová chyba při komunikaci s Google."
@@ -217,7 +217,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
     # whose slot was since deleted is handled in _push: the slot is gone → nothing to send.)
     upserts: dict[int, GoogleSyncOp] = {}
     deletes: dict[str, GoogleSyncOp] = {}
-    done_ids: list[int] = []  # op rows to remove (superseded + delivered) — bulk-deleted below
+    done_ids: list[int] = []  # op rows to remove (superseded + delivered), bulk-deleted below
     for op in ops:
         bucket, key = ((deletes, op.google_event_id) if op.op == SyncOpKind.delete
                        else (upserts, op.slot_id))
@@ -226,7 +226,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
         bucket[key] = op
 
     # Build the concrete API ops, resolving each upsert's current slot state. An upsert whose
-    # slot is gone (deleted before we pushed it) needs no API call — drop it now. Then deliver
+    # slot is gone (deleted before we pushed it) needs no API call; drop it now. Then deliver
     # them all in batched HTTP round-trips (one network call per ≤50 ops, not per op).
     push_ops: list[google_client.PushOp] = []
     op_by_key: dict[str, GoogleSyncOp] = {}
@@ -235,7 +235,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
         key = str(op.id)
         op_by_key[key] = op
         if op.op == SyncOpKind.delete:
-            if not op.google_event_id:  # never synced (enqueue_delete guards this) — nothing to send
+            if not op.google_event_id:  # never synced (enqueue_delete guards this): nothing to send
                 done_ids.append(op.id)
                 result["pushed"] += 1
                 continue
@@ -243,7 +243,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
                                                  calendar_id=cal, event_id=op.google_event_id))
             continue
         slot = db_session.get(Slot, op.slot_id) if op.slot_id else None
-        if slot is None:  # slot deleted before we pushed it — nothing to create
+        if slot is None:  # slot deleted before we pushed it: nothing to create
             done_ids.append(op.id)
             result["pushed"] += 1
             continue
@@ -268,7 +268,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
         slot = db_session.get(Slot, op_by_key[pop.key].slot_id)
         if slot is None:  # slot deleted meanwhile → leave as a normal failure below
             continue
-        slot.google_event_id = None  # dead mapping — drop it; the re-insert remaps the slot
+        slot.google_event_id = None  # dead mapping: drop it; the re-insert remaps the slot
         slot_by_key[pop.key] = slot  # where to write the new event id back
         replacements[pop.key] = google_client.PushOp(key=pop.key, kind="insert", calendar_id=cal,
                                                      body=google_client.event_body(slot))
@@ -281,7 +281,7 @@ def _deliver_queued_ops(camp: Camp) -> dict:
         pop = replacements.get(pop.key, pop)  # the insert that replaced a gone patch, if any
         op = op_by_key[pop.key]
         res = outcomes.get(pop.key)
-        # An insert counts as delivered only if Google returned the new event id — otherwise the
+        # An insert counts as delivered only if Google returned the new event id; otherwise the
         # slot stays unmapped, so we must keep the op and retry rather than drop it (→ duplicate).
         ok = res is not None and res.ok and (pop.kind != "insert" or bool(res.event_id))
         if ok:
@@ -410,7 +410,7 @@ def _detect(camp: Camp) -> list[dict]:
     seen_category: set[int] = set()
     changes: list[dict] = []
     # Inbound edits outside the camp's window are skipped, not imported: a slot there renders
-    # clipped/invisible (slice_segments clamps it) — the same rule save_timeline enforces.
+    # clipped/invisible (slice_segments clamps it), the same rule save_timeline enforces.
     window_start, window_end = camp_window(camp.start_date, camp.length_days, camp.window_start_min)
 
     for slot in camp.all_slots:
@@ -440,7 +440,7 @@ def _detect(camp: Camp) -> list[dict]:
                             "old_initials": _initials(camp, [a.org_id for a in slot.assignments]),
                             "unknown": att_unknown})
 
-        # garants + helpers (activity-level) from LOCATION — one change per activity
+        # garants + helpers (activity-level) from LOCATION, one change per activity
         if activity.id not in seen_garant:
             gar_ids, help_ids, loc_unknown = _parse_location(camp, ev.get("location"))
             cur_gar = {a.org_id for a in activity.assignments if a.role == OrgRole.garant}
@@ -474,7 +474,7 @@ def _detect(camp: Camp) -> list[dict]:
     own_slot_ids = {s.id for s in camp.all_slots}
     # Events we've already queued for deletion (slot deleted here, delete op not yet drained, or
     # the push keeps failing). Their marker is our own now-gone slot id, so they'd otherwise look
-    # "foreign" and be re-offered for import — re-creating the slot we just deleted. Skip them.
+    # "foreign" and be re-offered for import, re-creating the slot we just deleted. Skip them.
     pending_deletes = set(db_session.scalars(
         db.select(GoogleSyncOp.google_event_id).where(
             GoogleSyncOp.camp_id == camp.id, GoogleSyncOp.op == SyncOpKind.delete)
@@ -483,7 +483,7 @@ def _detect(camp: Camp) -> list[dict]:
         if eid in mapped or eid in pending_deletes:
             continue
         # An event tagged with a cpSlotId we don't own (another camp's, or a deleted slot)
-        # is still importable — but flagged `foreign_slot` so the UI warns that the marker
+        # is still importable, but flagged `foreign_slot` so the UI warns that the marker
         # will be rewritten. A marker that *is* one of our current slots is left alone.
         marker = ev.get("extendedProperties", {}).get("private", {}).get(google_client.SLOT_PROP)
         if marker and marker.isdigit() and int(marker) in own_slot_ids:
@@ -729,7 +729,7 @@ def apply_pull(camp: Camp, decisions: list[GooglePullDecisionIn], rev: int | Non
         log.info("Google Calendar import applied (camp %s): created_activities=%d imported_slots=%d "
                  "updated=%d deleted=%d", camp.slug, applied["created_activities"],
                  applied["imported_slots"], applied["updated"], applied["deleted"])
-    camp.google_last_pull_at = datetime.now()  # naive local — display metadata only
+    camp.google_last_pull_at = datetime.now()  # naive local, display metadata only
     db_session.commit()
     # skipped: chosen changes that vanished between preview and apply.
     return {"applied": applied, "skipped": sorted(set(chosen) - seen)}

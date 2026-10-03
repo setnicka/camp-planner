@@ -1,4 +1,4 @@
-// Camp Planner — API tokens tab (camp settings page).
+// Camp Planner: API tokens tab (camp settings page).
 //
 // Renders the token list + create form from #cp-tokens-data (no fetch on load) and drives
 // create / revoke via cpDom.api. The secret is shown once, in a modal, right after creation.
@@ -17,7 +17,7 @@
   const flashArea = root.querySelector("[data-tokens-flash]");
   let tokens = DATA.tokens.slice();
 
-  // created_at / last_used_at are naive UTC (like the audit feed) — mark them UTC so the
+  // created_at / last_used_at are naive UTC (like the audit feed); mark them UTC so the
   // browser renders them in local time; null last_used_at → em dash.
   const fmtTs = (iso) => (iso
     ? asInstant(iso).toLocaleString("cs-CZ",
@@ -105,7 +105,7 @@
     const dialog = el("div", { class: "cp-modal cp-modal-wide" },
       el("div", { class: "cp-modal-head" }, `Token „${token.name}“ vytvořen`),
       el("div", { class: "cp-pane" },
-        el("p", null, "Zkopírujte si tajný klíč hned — ", el("b", null, "už se znovu nezobrazí"), "."),
+        el("p", null, "Zkopírujte si tajný klíč hned – ", el("b", null, "už se znovu nezobrazí"), "."),
         el("div", { class: "cp-token-secretrow" }, field, copy),
         el("div", { class: "cp-field-hint" }, "Použití: hlavička ",
           el("code", null, "Authorization: Bearer <klíč>"), ".")),
