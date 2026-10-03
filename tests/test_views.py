@@ -10,6 +10,12 @@ from camp_planner.extensions import db
 from tests.conftest import ADMIN, editor, make_camp, viewer
 
 
+def test_static_urls_carry_a_version(client, seeded):
+    html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
+    assert re.search(r'/static/js/timeline\.js\?v=\d+"', html)
+    assert re.search(r'/static/css/timeline\.css\?v=\d+"', html)
+
+
 def test_timeline_page_edit_wiring_for_editor(client, seeded):
     slug = seeded["slug"]
     html = client.get(f"/camps/{slug}", headers=ADMIN).get_data(as_text=True)
