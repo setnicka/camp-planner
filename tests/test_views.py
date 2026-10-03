@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from camp_planner import create_app
 from camp_planner.extensions import db
-from tests.conftest import ADMIN, editor, make_camp, viewer
+from tests.conftest import ADMIN, editor, make_camp, make_material, ok, page_data, viewer
 
 
 def test_static_urls_carry_a_version(client, seeded):
@@ -21,10 +23,10 @@ def test_timeline_page_edit_wiring_for_editor(client, seeded):
     html = client.get(f"/camps/{slug}", headers=ADMIN).get_data(as_text=True)
     assert 'id="cp-edit-toggle"' in html
     assert 'id="cp-timeline-edit"' in html          # the edit-config JSON block
-    assert f"/api/camps/{slug}/timeline" in html     # save url resolves
-    assert f"/api/camps/{slug}/activities" in html   # picker url resolves
-    assert 'name="csrf-token"' in html               # needed by the PATCH/POST headers
-    assert 'class="cp-help-edit"' in html            # the edit-mode hint
+    assert f"/api/camps/{slug}/timeline" in html     # save url
+    assert f"/api/camps/{slug}/activities" in html   # picker url
+    assert 'name="csrf-token"' in html
+    assert 'class="cp-help-edit"' in html
 
 
 def test_timeline_page_read_only_for_viewer(client, seeded):
@@ -34,119 +36,72 @@ def test_timeline_page_read_only_for_viewer(client, seeded):
     assert 'id="cp-timeline-edit"' not in html
     # viewers still get the way into the activity detail (slot select → Detail button)
     assert f'data-activity-detail="/camps/{slug}/activities/0"' in html
-    assert 'class="cp-help-view"' in html           # the viewing hint isn't editor-only
+    assert 'class="cp-help-view"' in html
     assert 'class="cp-help-edit"' not in html
 
 
-def test_activity_detail_page_renders_with_data(client, seeded):
-    slug, aid = seeded["slug"], seeded["activity_id"]
-    html = client.get(f"/camps/{slug}/activities/{aid}", headers=ADMIN).get_data(as_text=True)
-    assert 'id="cp-activity-data"' in html              # the embedded JSON the JS renders from
-    assert 'id="cp-activity"' in html                   # the mount point
-    assert "js/activity-detail.js" in html
-    assert f"/api/activities/{aid}/orgs" in html         # an edit url resolves
-    assert f"/api/camps/{slug}/audit" in html             # change-history feed url resolves
-    assert '"may_edit": true' in html                    # admin can edit
+# --- section pages -------------------------------------------------------------------
+
+PAGES = [  # path under the camp, inline JSON, scripts, url keys the script calls
+    ("/activities/{aid}", "cp-activity-data", ["js/activity-detail.js"],
+     {"orgs": "/api/activities/{aid}/orgs", "audit": "/api/camps/t/audit"}),
+    ("/materials", "cp-materials-data", ["js/materials-overview.js"],
+     {"materialItem": "/api/camps/t/materials/0", "needItem": "/api/material-needs/0"}),
+    ("/activities", "cp-overview-data", ["js/activities-overview.js"],
+     {"activityItem": "/api/activities/0", "activityMerge": "/api/activities/0/merge"}),
+    ("/todos", "cp-todos-data", ["js/todos-overview.js", "js/todo-list.js"],
+     {"todoItem": "/api/todos/0"}),
+]
 
 
-def test_activity_detail_viewer_cannot_edit(client, seeded):
-    slug, aid = seeded["slug"], seeded["activity_id"]
-    html = client.get(f"/camps/{slug}/activities/{aid}", headers=viewer(slug)).get_data(as_text=True)
-    assert '"may_edit": false' in html
-
-
-def test_activity_detail_404_for_foreign_camp(client, seeded):
-    # the activity exists, but not under this (other) camp's slug → 404, no cross-camp leak
+@pytest.mark.parametrize("path, script_id, scripts, urls", PAGES)
+def test_section_page(client, seeded, path, script_id, scripts, urls):
     aid = seeded["activity_id"]
-    make_camp(client, "jina", name="Jiná", start_date="2026-08-01")
-    assert client.get(f"/camps/jina/activities/{aid}", headers=ADMIN).status_code == 404
+    url = "/camps/t" + path.format(aid=aid)
+    html = client.get(url, headers=ADMIN).get_data(as_text=True)
+    assert all(script in html for script in scripts)
+    data = page_data(client, url, script=script_id)
+    for key, expected in urls.items():
+        assert data["urls"][key] == expected.format(aid=aid)
+    assert data["may_edit"] is True
+    assert page_data(client, url, viewer("t"), script=script_id)["may_edit"] is False
 
 
-def test_materials_page_renders_with_data(client, seeded):
+@pytest.mark.parametrize("url", [
+    "/camps/neexistuje/activities", "/camps/neexistuje/materials", "/camps/neexistuje/todos",
+    "/camps/jina/activities/{aid}",   # the activity exists, under another camp: no leak
+])
+def test_unknown_camp_is_404(client, seeded, url):
+    make_camp(client, "jina")
+    assert client.get(url.format(aid=seeded["activity_id"]), headers=ADMIN).status_code == 404
+
+
+def test_overview_pages_embed_what_their_scripts_render(client, seeded):
     slug, aid = seeded["slug"], seeded["activity_id"]
-    # seed one catalog material + a need on the seeded activity so a usage is embedded
-    mat = client.post(f"/api/camps/{slug}/materials", json={"name": "Lano", "unit": "m"}, headers=ADMIN)
-    assert mat.status_code == 200
-    mid = mat.get_json()["material"]["id"]
-    assert client.post(f"/api/activities/{aid}/materials",
-                       json={"material_id": mid, "amount": 30}, headers=ADMIN).status_code == 200
+    mid = make_material(client, slug, "Lano", unit="m")["id"]
+    ok(client.post(f"/api/activities/{aid}/materials",
+                   json={"material_id": mid, "amount": 30}, headers=ADMIN))
 
-    html = client.get(f"/camps/{slug}/materials", headers=ADMIN).get_data(as_text=True)
-    assert 'id="cp-materials-data"' in html              # the embedded JSON the JS renders from
-    assert 'id="cp-materials"' in html                   # the mount point
-    assert "js/materials-overview.js" in html
-    assert f"/api/camps/{slug}/materials/0" in html       # materialItem (PATCH/DELETE) url resolves
-    assert "/api/material-needs/0" in html                # needItem url resolves
-    assert '"may_edit": true' in html                     # admin can edit
-    assert "Lano" in html                                 # embedded material, with its usage
-    assert '"orgs"' in html and "Karel" in html           # roster embedded for the edit modal's org picker
+    materials = page_data(client, f"/camps/{slug}/materials", script="cp-materials-data")
+    assert [(m["name"], len(m["usages"])) for m in materials["materials"]] == [("Lano", 1)]
+    assert [o["name"] for o in materials["orgs"]] == ["Karel"]   # the edit modal's org picker
+
+    overview = page_data(client, f"/camps/{slug}/activities", script="cp-overview-data")
+    assert [(a["title"], len(a["slots"])) for a in overview["activities"]] == [("Akce", 0)]
+    # the day window the chronological sort groups slots by
+    assert overview["camp"] == {"start_date": "2026-07-04", "length_days": 3,
+                                "window_start_min": 240}
 
 
-def test_materials_viewer_read_only(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/materials", headers=viewer(slug)).get_data(as_text=True)
-    assert '"may_edit": false' in html
-
-
-def test_materials_404_for_unknown_camp(client, seeded):
-    # the page is camp-scoped (no item id in the URL); a non-existent slug → 404
-    assert client.get("/camps/neexistuje/materials", headers=ADMIN).status_code == 404
-
-
-def test_overview_page_renders_with_data(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/activities", headers=ADMIN).get_data(as_text=True)
-    assert 'id="cp-overview-data"' in html               # the embedded JSON the JS renders from
-    assert 'id="cp-overview"' in html                    # the mount point
-    assert "js/activities-overview.js" in html
-    assert "/api/activities/0" in html                    # activityItem (DELETE) url resolves
-    assert "/api/activities/0/merge" in html              # activityMerge url resolves
-    assert '"may_edit": true' in html                     # admin can edit
-    assert "Akce" in html                                 # the seeded activity
-    assert '"slots"' in html                              # per-activity slot list (counts + chrono spans)
-    assert '"window_start_min": 240' in html              # camp day-window block for chrono grouping
-    assert '"length_days": 3' in html
-
-
-def test_overview_viewer_read_only(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/activities", headers=viewer(slug)).get_data(as_text=True)
-    assert '"may_edit": false' in html
-
-
-def test_overview_404_for_unknown_camp(client, seeded):
-    # the page is camp-scoped (no item id in the URL); a non-existent slug → 404
-    assert client.get("/camps/neexistuje/activities", headers=ADMIN).status_code == 404
-
-
-def test_todos_page_renders_with_data(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/todos", headers=ADMIN).get_data(as_text=True)
-    assert 'id="cp-todos-data"' in html                  # the embedded JSON the JS renders from
-    assert 'id="cp-todos"' in html                       # the mount point
-    assert "js/todo-list.js" in html                     # the shared component
-    assert "js/todos-overview.js" in html
-    assert "/api/todos/0" in html                         # todoItem (PATCH/DELETE) url resolves
-    assert '"may_edit": true' in html                     # admin can edit
-
-
-def test_todos_viewer_read_only(client, seeded):
-    slug = seeded["slug"]
-    html = client.get(f"/camps/{slug}/todos", headers=viewer(slug)).get_data(as_text=True)
-    assert '"may_edit": false' in html
-
-
-def test_todos_404_for_unknown_camp(client, seeded):
-    assert client.get("/camps/neexistuje/todos", headers=ADMIN).status_code == 404
-
+# --- camp detail --------------------------------------------------------------------
 
 def test_camp_detail_has_history_tab(client, seeded):
     slug = seeded["slug"]
     html = client.get(f"/camps/{slug}/detail", headers=ADMIN).get_data(as_text=True)
-    assert 'data-tax-tab="history"' in html              # the tab button
-    assert 'data-history-root' in html                    # the feed mount
+    assert 'data-tax-tab="history"' in html
+    assert 'data-history-root' in html
     assert 'data-history-mode' in html                    # the camp-level / full-history toggle
-    assert f"/api/camps/{slug}/audit" in html             # audit url resolves into the embed
+    assert f"/api/camps/{slug}/audit" in html
     assert "js/history-feed.js" in html
 
 
@@ -155,11 +110,11 @@ def test_camp_detail_token_tab_for_editor(client, seeded):
     # a token is embedded so the list-with-data path renders too
     client.post(f"/api/camps/{slug}/tokens", json={"name": "sync", "role": "editor"}, headers=ADMIN)
     html = client.get(f"/camps/{slug}/detail", headers=editor(slug)).get_data(as_text=True)
-    assert 'data-tax-tab="tokens"' in html               # the tab button (editor sees it)
-    assert 'data-tokens-root' in html                     # the panel mount
-    assert 'id="cp-tokens-data"' in html                  # embedded JSON
+    assert 'data-tax-tab="tokens"' in html
+    assert 'data-tokens-root' in html
+    assert 'id="cp-tokens-data"' in html
     assert "js/token-admin.js" in html
-    assert f"/api/camps/{slug}/tokens" in html            # list/create url resolves
+    assert f"/api/camps/{slug}/tokens" in html
     assert "/api/tokens/0" in html                        # revoke url (0 sentinel)
     assert '"sync"' in html and '"created_by"' in html    # the embedded token, without its secret
     assert "token_hash" not in html
@@ -173,34 +128,34 @@ def test_camp_detail_token_tab_hidden_from_viewer(client, seeded):
     assert "js/token-admin.js" not in html
 
 
-# --- camp settings: delete button ---------------------------------------------------
+# --- camp settings -------------------------------------------------------------------
 
-def test_camp_edit_delete_button_disabled_with_activities(client, seeded):
-    # admin sees the delete button, but the seeded camp has an activity → disabled,
-    # with the reason as visible text (not a hover-only tooltip)
-    html = client.get(f"/camps/{seeded['slug']}/edit", headers=ADMIN).get_data(as_text=True)
-    assert "data-delete-camp" in html
-    assert f"/api/camps/{seeded['slug']}" in html      # the DELETE url resolves
-    assert "js/camp-settings.js" in html
-    button = html[html.index("data-delete-camp"):html.index("</button>", html.index("data-delete-camp"))]
-    assert "disabled" in button
+def _delete_button(html):
+    start = html.index("data-delete-camp")
+    return html[start:html.index("</button>", start)]
+
+
+def test_camp_edit_delete_button(client, seeded):
+    """Admin-only (can_edit_camp_meta), and disabled while the camp has activities, with
+    the reason as visible text rather than a hover-only tooltip."""
+    html = client.get("/camps/t/edit", headers=ADMIN).get_data(as_text=True)
+    assert "/api/camps/t" in html and "js/camp-settings.js" in html
+    assert "disabled" in _delete_button(html)
     assert "Akci nelze smazat, dokud má aktivity" in html
 
+    make_camp(client, "prazdna")
+    empty = client.get("/camps/prazdna/edit", headers=ADMIN).get_data(as_text=True)
+    assert "disabled" not in _delete_button(empty)
 
-def test_camp_edit_delete_button_enabled_when_empty(client, seeded):
-    # a camp with no activities → the button is present and NOT disabled
-    make_camp(client, "prazdna", name="Prázdná")
-    html = client.get("/camps/prazdna/edit", headers=ADMIN).get_data(as_text=True)
-    button = html[html.index("data-delete-camp"):html.index("</button>", html.index("data-delete-camp"))]
-    assert "disabled" not in button
+    as_editor = client.get("/camps/t/edit", headers=editor("t")).get_data(as_text=True)
+    assert "data-delete-camp" not in as_editor
 
 
 def test_camp_edit_form_time_input_roundtrip(client, seeded):
-    # "Začátek dne" is an <input type="time">: pre-filled as HH:MM, posted as HH:MM,
-    # stored as minutes past midnight
+    # "Začátek dne" is an <input type="time">: HH:MM in the form, minutes past midnight stored
     slug = seeded["slug"]
     html = client.get(f"/camps/{slug}/edit", headers=ADMIN).get_data(as_text=True)
-    assert 'type="time" name="window_start_min" value="04:00"' in html   # seeded 240 min
+    assert 'type="time" name="window_start_min" value="04:00"' in html
 
     resp = client.post(f"/camps/{slug}/edit", data={
         "name": "Tábor", "slug": slug, "start_date": "2026-07-04", "length_days": "3",
@@ -211,72 +166,55 @@ def test_camp_edit_form_time_input_roundtrip(client, seeded):
     assert camp["window_start_min"] == 390
 
 
-def test_camp_edit_no_delete_button_for_editor(client, seeded):
-    # delete is admin-only (can_edit_camp_meta) → an editor never sees the button
-    html = client.get(f"/camps/{seeded['slug']}/edit", headers=editor(seeded["slug"])).get_data(as_text=True)
-    assert "data-delete-camp" not in html
+# --- header -------------------------------------------------------------------------
 
+def test_header_carries_heading_links_and_menu(client, seeded):
+    """The bar carries the heading and the section links; account and theme hang in the
+    menu on every screen width."""
+    def header(url):
+        html = client.get(url, headers=ADMIN).get_data(as_text=True)
+        return html[html.index('class="cp-header"'):html.index("</header>")]
 
-# --- condensed header (brand + camp heading + account on one line) ------------------
-
-def test_header_merges_brand_camp_heading_and_account(client, seeded):
-    html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
-    assert 'class="cp-header"' in html
-    assert 'class="cp-nav"' not in html                  # old top bar is gone
-    assert "cp-brand" in html and "Camp Planner" in html  # grey brand
-    assert "cp-camp-name" in html and "Tábor" in html     # camp name now lives in the header
-    assert "cp-account-menu" in html                      # name / user admin / logout, in the menu
-
-
-def test_landing_heading_rides_in_header(client, seeded):
-    html = client.get("/", headers=ADMIN).get_data(as_text=True)
-    assert 'class="cp-header"' in html and "cp-brand" in html
-    # "Akce" sits in the header's camp-name slot (where camp pages show the camp name)
-    head = html[html.index('class="cp-header"'):html.index("</header>")]
-    assert "cp-camp-name" in head and "Akce" in head
-
-
-def test_header_folds_its_controls_into_one_menu(client, seeded):
-    # The bar carries the heading and the section links; everything else (account, theme)
-    # hangs in the menu, on every screen width. The links sit in their own box so a phone
-    # can give them a row of their own.
-    html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
-    head = html[html.index('class="cp-header"'):html.index("</header>")]
+    head = header("/camps/t")
+    assert "cp-brand" in head and "Camp Planner" in head
+    assert "cp-camp-name" in head and "Tábor" in head
     assert "cp-camp-links" in head
     pop = head[head.index("cp-account-pop"):]
-    assert "data-cp-theme-switch" in pop                   # the theme lives in the menu
-    assert head.count("data-cp-theme-switch") == 1         # and only there
+    assert "cp-account-menu" in head and "data-cp-theme-switch" in pop
+    assert head.count("data-cp-theme-switch") == 1
 
-
-def test_landing_page_renders_camp_rows(client, seeded):
-    # the camp list is one row per camp: name, date range + section links
-    html = client.get("/", headers=ADMIN).get_data(as_text=True)
-    assert "css/landing.css" in html
-    assert "cp-camp-rows" in html and "cp-camp-row-name" in html
-    assert "Úkoly" in html                                # row links come from the shared sections list
-    assert "Tábor" in html                                # seeded camp name (3-day camp → a range)
-    assert "4. 7. 2026 – 6. 7. 2026" in html              # start_date.end_date via Camp.end_date
-    assert "3 dny" in html                                # Czech plural for length_days
-
-
-def test_landing_page_orders_newest_first(client, seeded):
-    # a later camp must appear above the earlier seeded one (ordered by start_date desc)
-    make_camp(client, "pozd", name="Pozdější")
-    html = client.get("/", headers=ADMIN).get_data(as_text=True)
-    assert html.index("Pozdější") < html.index("Tábor")   # newest (2026-09) before older (2026-07)
+    # the landing page's "Akce" sits where camp pages show the camp name
+    landing = header("/")
+    assert "cp-brand" in landing and "cp-camp-name" in landing and "Akce" in landing
 
 
 def test_page_carries_csrf_refresh_meta(client, seeded):
-    # every JS-editable page must ship the refresh endpoint URL alongside the token so
-    # dom.js can renew a token that expires on a long-open page (prefix-safe via url_for).
+    # a long-open page renews an expired token from this endpoint (prefix-safe via url_for)
     html = client.get(f"/camps/{seeded['slug']}", headers=ADMIN).get_data(as_text=True)
     assert 'name="csrf-token"' in html
     url = re.search(r'name="csrf-refresh" content="([^"]+)"', html).group(1)
     assert url.endswith("/csrf-token")
 
 
-# --- colour theme -----------------------------------------------------------
+# --- landing ------------------------------------------------------------------------
 
+def test_landing_page_renders_camp_rows(client, seeded):
+    html = client.get("/", headers=ADMIN).get_data(as_text=True)
+    assert "css/landing.css" in html
+    assert "cp-camp-rows" in html and "cp-camp-row-name" in html
+    assert "Úkoly" in html                                # row links come from the shared sections list
+    assert "Tábor" in html
+    assert "4. 7. 2026 – 6. 7. 2026" in html              # start_date.end_date via Camp.end_date
+    assert "3 dny" in html                                # Czech plural for length_days
+
+
+def test_landing_page_orders_newest_first(client, seeded):
+    make_camp(client, "pozd", name="Pozdější")
+    html = client.get("/", headers=ADMIN).get_data(as_text=True)
+    assert html.index("Pozdější") < html.index("Tábor")   # 2026-09 before 2026-07
+
+
+# --- colour theme -----------------------------------------------------------
 
 def test_theme_switch_is_rendered_and_follows_the_os(client):
     """Default deployment: the visitor chooses, so the switch and its script ship. The
@@ -285,7 +223,7 @@ def test_theme_switch_is_rendered_and_follows_the_os(client):
     assert '<html lang="cs" data-cp-theme="auto">' in html
     assert "data-cp-theme-switch" in html
     assert 'data-theme="light"' in html and 'data-theme="auto"' in html and 'data-theme="dark"' in html
-    assert "cp-pill-knob" in html           # the sliding knob of the 3-position toggle
+    assert "cp-pill-knob" in html
     assert "js/theme.js" in html
     # the pre-paint re-apply script, so a reload of a dark page doesn't flash white
     assert 'localStorage.getItem("cp-theme")' in html
@@ -294,8 +232,8 @@ def test_theme_switch_is_rendered_and_follows_the_os(client):
 
 
 def test_pinned_theme_replaces_the_switch(monkeypatch):
-    """CP_FORCE_THEME forces the theme: emitted on <html>, and no switch to contradict it. Read at
-    wire time, hence a fresh app rather than poking config on a live one."""
+    """CP_FORCE_THEME is read at wire time, hence a fresh app rather than poking config
+    on a live one."""
     from camp_planner.config import TestingConfig
 
     monkeypatch.setattr(TestingConfig, "CP_FORCE_THEME", "dark", raising=False)
@@ -306,6 +244,5 @@ def test_pinned_theme_replaces_the_switch(monkeypatch):
         db.session.remove()      # don't leave a session bound for the next test
     assert '<html lang="cs" data-cp-theme="dark">' in html
     assert "data-cp-theme-switch" not in html
-    assert "js/theme.js" not in html          # nothing left for it to wire
+    assert "js/theme.js" not in html
     assert 'localStorage.getItem("cp-theme")' not in html
-

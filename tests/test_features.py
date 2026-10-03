@@ -3,25 +3,16 @@ the links camp materials hold into it survive untouched."""
 
 from __future__ import annotations
 
-import json
-import re
-
 import pytest
 
 from camp_planner import features
 from camp_planner.extensions import db_session
 from camp_planner.models.material import Material
-from tests.conftest import ADMIN, make_item
+from tests.conftest import ADMIN, make_item, page_data
 
 
 def _off(app):
     app.extensions["camp_planner"]["disabled_features"] = features.parse("inventory")
-
-
-def _page_urls(client, url) -> dict:
-    html = client.get(url, headers=ADMIN).get_data(as_text=True)
-    blob = re.search(r'<script id="cp-\w+-data" type="application/json">(.*?)</script>', html, re.S)
-    return json.loads(blob.group(1))["urls"]
 
 
 def test_parse_accepts_a_list_and_refuses_an_unknown_name():
@@ -52,9 +43,10 @@ def test_camp_pages_lose_the_warehouse(app, client, seeded, box):
     _off(app)
 
     assert ">Sklad<" not in client.get("/", headers=ADMIN).get_data(as_text=True)
-    for url in (f"/camps/{seeded['slug']}/materials",
-                f"/camps/{seeded['slug']}/activities/{seeded['activity_id']}"):
-        assert "inventoryItems" not in _page_urls(client, url)
+    for url, script in ((f"/camps/{seeded['slug']}/materials", "cp-materials-data"),
+                        (f"/camps/{seeded['slug']}/activities/{seeded['activity_id']}",
+                         "cp-activity-data")):
+        assert "inventoryItems" not in page_data(client, url, script=script)["urls"]
     listed = client.get(f"/api/camps/{seeded['slug']}/materials", headers=ADMIN).get_json()
     assert [m["inventory_item"] for m in listed["materials"]] == [None]
     activity = client.get(f"/api/activities/{seeded['activity_id']}", headers=ADMIN).get_json()

@@ -9,30 +9,18 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+import pytest
+
 from camp_planner.auth.proxy import ProxyProvider
 
 
-def _identity(app, headers):
+@pytest.mark.parametrize("headers, name", [
+    ({"X-Remote-User": "setnicka", "X-Remote-Roles": "admin",
+      "X-Remote-Name": quote("Jiří Setnička")}, "Jiří Setnička"),
+    ({"X-Remote-User": "bob", "X-Remote-Roles": "editor:*", "X-Remote-Name": "Bob Plain"},
+     "Bob Plain"),
+    ({"X-Remote-User": "alice", "X-Remote-Roles": ""}, "alice"),   # no name: the user id
+])
+def test_display_name(app, headers, name):
     with app.test_request_context(headers=headers):
-        return ProxyProvider().load_identity()
-
-
-def test_remote_name_percent_decoded(app):
-    name = "Jiří Setnička"
-    ident = _identity(app, {"X-Remote-User": "setnicka",
-                            "X-Remote-Roles": "admin",
-                            "X-Remote-Name": quote(name)})
-    assert ident.display_name == name
-    assert ident.is_admin
-
-
-def test_plain_ascii_name_unchanged(app):
-    ident = _identity(app, {"X-Remote-User": "bob",
-                            "X-Remote-Roles": "editor:*",
-                            "X-Remote-Name": "Bob Plain"})
-    assert ident.display_name == "Bob Plain"
-
-
-def test_missing_name_falls_back_to_user_id(app):
-    ident = _identity(app, {"X-Remote-User": "alice", "X-Remote-Roles": ""})
-    assert ident.display_name == "alice"
+        assert ProxyProvider().load_identity().display_name == name

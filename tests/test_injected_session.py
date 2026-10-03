@@ -1,8 +1,8 @@
 """Injected-session mode: register_camp_planner(session=...) makes the planner run on
 the host's session instead of an engine and pool of its own (docs/DEPLOYMENT.md §2).
 
-The API tests are a slice of test_api / test_api_tokens re-run in that mode: what they
-assert is that our commit/flush/rollback flows work on a session we did not create.
+The API tests re-run a slice of the camp, activity, material and token tests in that mode:
+what they assert is that our commit/flush/rollback flows work on a session we did not create.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from sqlalchemy.pool import StaticPool
 from camp_planner import register_camp_planner
 from camp_planner.extensions import Base
 from camp_planner.models.camp import Camp
-from tests.conftest import HOST_ADMIN, make_camp_embedded
+from tests.conftest import HOST_ADMIN, make_camp, ok
 
 
 @pytest.fixture
@@ -58,17 +58,11 @@ def admin(host):
     return client
 
 
-def _ok(resp):
-    assert resp.status_code == 200, resp.get_json()
-    return resp.get_json()
-
-
 # --- the planner's own flows, on the host's session --------------------------
 
 def test_we_add_no_engine_and_no_teardown_to_the_host(host):
-    """The whole point: we call no init_app, so nothing of ours is bound to a database
-    (no second pool) and nothing of ours runs at teardown. The session is the host's to
-    scope and dispose of."""
+    """We call no init_app: nothing of ours binds a database (no second pool) or runs at
+    teardown. The session is the host's to scope and dispose of."""
     from camp_planner.extensions import db
 
     client, _ = host
@@ -80,44 +74,44 @@ def test_we_add_no_engine_and_no_teardown_to_the_host(host):
 
 
 def test_activity_crud(admin):
-    camp = make_camp_embedded(admin)
+    camp = make_camp(admin, "t", prefix="/planner")
     slug = camp["slug"]
-    cat_id = _ok(admin.put(f"/planner/api/camps/{slug}/categories",
+    cat_id = ok(admin.put(f"/planner/api/camps/{slug}/categories",
                            json={"items": [{"key": "hra", "label": "Hra",
                                             "color": "#0b8043"}]}))["items"][0]["id"]
 
-    created = _ok(admin.post(f"/planner/api/camps/{slug}/activities",
+    created = ok(admin.post(f"/planner/api/camps/{slug}/activities",
                              json={"title": "Akce", "category_id": cat_id}))["activity"]
     aid = created["id"]
 
-    updated = _ok(admin.patch(f"/planner/api/activities/{aid}",
+    updated = ok(admin.patch(f"/planner/api/activities/{aid}",
                               json={"title": "Akce II"}))["activity"]
     assert updated["title"] == "Akce II"
 
     # the commit really landed: a fresh request (fresh session) reads it back
-    assert _ok(admin.get(f"/planner/api/activities/{aid}"))["activity"]["title"] == "Akce II"
+    assert ok(admin.get(f"/planner/api/activities/{aid}"))["activity"]["title"] == "Akce II"
 
-    assert _ok(admin.delete(f"/planner/api/activities/{aid}"))["ok"]
+    assert ok(admin.delete(f"/planner/api/activities/{aid}"))["ok"]
     assert admin.get(f"/planner/api/activities/{aid}").status_code == 404
 
 
 def test_material_duplicate_rolls_back_and_leaves_the_session_usable(admin):
     """The IntegrityError branch (create_material): the service rolls back after a failed
     flush, and the request that follows still works, on the host's session too."""
-    slug = make_camp_embedded(admin)["slug"]
-    _ok(admin.post(f"/planner/api/camps/{slug}/materials", json={"name": "A4 papír"}))
+    slug = make_camp(admin, "t", prefix="/planner")["slug"]
+    ok(admin.post(f"/planner/api/camps/{slug}/materials", json={"name": "A4 papír"}))
 
     dup = admin.post(f"/planner/api/camps/{slug}/materials", json={"name": "papír A4"})
     assert dup.status_code == 400 and "existuje" in dup.get_json()["error"]
 
-    _ok(admin.post(f"/planner/api/camps/{slug}/materials", json={"name": "Lano"}))
-    names = [m["name"] for m in _ok(admin.get(f"/planner/api/camps/{slug}/materials"))["materials"]]
+    ok(admin.post(f"/planner/api/camps/{slug}/materials", json={"name": "Lano"}))
+    names = [m["name"] for m in ok(admin.get(f"/planner/api/camps/{slug}/materials"))["materials"]]
     assert names == ["A4 papír", "Lano"]
 
 
 def test_api_tokens(admin):
-    slug = make_camp_embedded(admin)["slug"]
-    body = _ok(admin.post(f"/planner/api/camps/{slug}/tokens",
+    slug = make_camp(admin, "t", prefix="/planner")["slug"]
+    body = ok(admin.post(f"/planner/api/camps/{slug}/tokens",
                           json={"name": "sync", "role": "editor"}))
     assert body["secret"].startswith("cp_")
     token_id = body["token"]["id"]
@@ -127,13 +121,13 @@ def test_api_tokens(admin):
     assert admin.patch(f"/planner/api/camps/{slug}", json={"length_days": 4},
                        headers=bearer).status_code == 200
 
-    _ok(admin.delete(f"/planner/api/tokens/{token_id}"))
+    ok(admin.delete(f"/planner/api/tokens/{token_id}"))
     assert admin.patch(f"/planner/api/camps/{slug}", json={"length_days": 5},
                        headers=bearer).status_code == 401
 
 
 def test_pages_render(admin):
-    slug = make_camp_embedded(admin)["slug"]
+    slug = make_camp(admin, "t", prefix="/planner")["slug"]
     html = admin.get(f"/planner/camps/{slug}").get_data(as_text=True)
     assert 'id="cp-timeline-data"' in html
 
@@ -157,11 +151,10 @@ def test_an_open_transaction_at_request_entry_is_refused(host):
 
 
 def test_the_check_runs_before_the_apis_own_token_hook(admin):
-    """Ordering (see integration._wire_blueprint): a Bearer request makes token.authenticate
-    query the DB, which autobegins. Were the contract check registered after it, that
-    transaction would be ours and every token request would raise."""
-    slug = make_camp_embedded(admin)["slug"]
-    secret = _ok(admin.post(f"/planner/api/camps/{slug}/tokens",
+    """A Bearer request's token lookup autobegins; were the contract check registered after
+    it (integration._wire_blueprint), every token request would raise."""
+    slug = make_camp(admin, "t", prefix="/planner")["slug"]
+    secret = ok(admin.post(f"/planner/api/camps/{slug}/tokens",
                             json={"name": "sync", "role": "viewer"}))["secret"]
 
     resp = admin.get(f"/planner/api/camps/{slug}",
@@ -170,8 +163,8 @@ def test_the_check_runs_before_the_apis_own_token_hook(admin):
 
 
 def test_a_plain_session_works_too():
-    """`session=` takes the session itself, so a host with a single one needn't wrap it;
-    a scoped_session is merely the usual way to have one per request."""
+    """`session=` takes a plain session too; a scoped_session is merely the usual way to
+    have one per request."""
     engine = create_engine("sqlite://", poolclass=StaticPool,
                            connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
@@ -184,10 +177,10 @@ def test_a_plain_session_works_too():
                           url_prefix="/planner", session=plain)
     client = app.test_client()
 
-    assert make_camp_embedded(client)["slug"] == "t"
+    assert make_camp(client, "t", prefix="/planner")["slug"] == "t"
     assert plain.scalar(select(Camp.slug)) == "t"      # the very session we handed over
     plain.rollback()                                   # the read above autobegan one
-    assert _ok(client.get("/planner/api/camps"))["camps"][0]["slug"] == "t"
+    assert ok(client.get("/planner/api/camps"))["camps"][0]["slug"] == "t"
     plain.close()
     engine.dispose()
 
