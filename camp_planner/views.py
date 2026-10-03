@@ -3,6 +3,7 @@ taxonomy management), the global warehouse pages and its photo route."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from zoneinfo import available_timezones
 
 from flask import (
@@ -43,6 +44,17 @@ from camp_planner.services import api_tokens, ical, inventory, loaders, media, s
 from camp_planner.services.timeline import build_timeline
 
 bp = Blueprint("main", __name__, template_folder="templates", static_folder="static")
+
+
+@bp.url_defaults
+def _static_version(endpoint: str, values: dict) -> None:
+    """A static file's URL carries its mtime, so after a deploy a browser can't pair a cached
+    old script with a new stylesheet."""
+    if endpoint == "main.static" and "v" not in values:
+        try:
+            values["v"] = int((Path(bp.static_folder) / values["filename"]).stat().st_mtime)
+        except OSError:
+            pass   # a missing file: the plain URL 404s as before
 
 # Timezone <select> choices, built once at import. Regional zones (Europe/…, …) in
 # one group; intuitive fixed offsets ("GMT+1") in another — the latter map to the

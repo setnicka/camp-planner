@@ -23,6 +23,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline: the controls form one toolbar on top of the grid, the filters above it.
 - Timeline: on a phone the day opens on six hours, the filters and the help fold away, and
   a slot drags after a long press.
+- Static files carry a version in their URL, so after a deploy a browser can't mix its
+  cached old files with the new ones.
 
 ## [0.4.0] - 2026-09-27
 
