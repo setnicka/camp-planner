@@ -96,8 +96,7 @@ def test_activity_crud(admin):
 
 
 def test_material_duplicate_rolls_back_and_leaves_the_session_usable(admin):
-    """The IntegrityError branch (create_material): the service rolls back after a failed
-    flush, and the request that follows still works, on the host's session too."""
+    """A refused duplicate leaves the host's session working for the next request."""
     slug = make_camp(admin, "t", prefix="/planner")["slug"]
     ok(admin.post(f"/planner/api/camps/{slug}/materials", json={"name": "A4 papír"}))
 

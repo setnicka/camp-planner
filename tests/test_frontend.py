@@ -1,3 +1,5 @@
+"""Page chrome and the section pages: header, theme, CSRF meta, static URLs, inline data."""
+
 from __future__ import annotations
 
 import re
@@ -42,6 +44,7 @@ def test_section_page(client, seeded, path, script_id, scripts, urls):
     url = "/camps/t" + path.format(aid=aid)
     html = client.get(url, headers=ADMIN).get_data(as_text=True)
     assert all(script in html for script in scripts)
+    assert f'id="{script_id.removesuffix("-data")}"' in html   # the mount the script fills
     data = page_data(client, url, script=script_id)
     for key, expected in urls.items():
         assert data["urls"][key] == expected.format(aid=aid)

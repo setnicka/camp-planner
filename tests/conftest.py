@@ -23,6 +23,7 @@ from urllib.parse import urlencode  # noqa: E402
 
 import pytest  # noqa: E402
 from flask import g  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 
 from camp_planner import create_app  # noqa: E402
 from camp_planner.extensions import db  # noqa: E402
@@ -217,3 +218,17 @@ def upload(client, item_id, data=None):
     return client.post(f"/api/inventory/items/{item_id}/photos", headers=ADMIN,
                        data={"photos": (io.BytesIO(data or png()), "foto.png")},
                        content_type="multipart/form-data")
+
+
+def count_queries(fn) -> int:
+    statements: list[str] = []
+
+    def listener(conn, cursor, statement, *_, **__):
+        statements.append(statement)
+
+    event.listen(db.engine, "before_cursor_execute", listener)
+    try:
+        fn()
+    finally:
+        event.remove(db.engine, "before_cursor_execute", listener)
+    return len(statements)

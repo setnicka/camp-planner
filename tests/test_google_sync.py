@@ -228,6 +228,7 @@ def synced(queued, gcal):
     """...and drained, so the slot has its Google event."""
     camp, slot = queued
     google_sync.drain(camp)
+    assert slot.google_event_id
     return camp, slot
 
 
@@ -691,7 +692,7 @@ def test_the_import_window(client, synced, gcal):
 
 def test_apply_time_change_and_import_new(client, seeded, synced, gcal):
     camp, slot = synced
-    _move_event(gcal, slot, "2026-07-04T15:00:00", "2026-07-04T17:00:00")
+    _move_event(gcal, slot, "2026-07-04T14:00:00", "2026-07-04T17:00:00")   # only the end moves
     gcal.add_external("ext1", "Táborák", "2026-07-06T20:00:00", "2026-07-06T22:00:00")
 
     resp = _apply(client, [{"key": f"time:{slot.id}", "action": "apply"},
@@ -700,7 +701,10 @@ def test_apply_time_change_and_import_new(client, seeded, synced, gcal):
         "created_activities": 1, "imported_slots": 1, "updated": 1, "deleted": 0}
 
     db.session.expire_all()
-    assert db.session.get(Slot, slot.id).start_at == datetime(2026, 7, 4, 15)
+    assert db.session.get(Slot, slot.id).end_at == datetime(2026, 7, 4, 17)
+    row = db.session.scalars(db.select(AuditLog).filter_by(entity_type=EntityType.slot,
+                                                         entity_id=slot.id)).one()
+    assert row.changes == {"end_at": ["2026-07-04T16:00:00", "2026-07-04T17:00:00"]}
     imported = db.session.scalar(db.select(Slot).where(Slot.google_event_id == "ext1"))
     assert imported is not None and imported.activity.title == "Táborák"
     # importing queued an upsert, so the next drain stamps the cpSlotId marker on ext1
@@ -800,6 +804,10 @@ def test_event_body_maps_garants_helpers_and_attendants(app, seeded):
     marek = add_org(seeded["camp_id"], "M", "Marek")
     petr = add_org(seeded["camp_id"], "P", "Petr")
     activity = db.session.get(Activity, seeded["activity_id"])
+    activity.assignments = [ActivityAssignment(org_id=seeded["org_id"], role=OrgRole.garant)]
+    db.session.commit()
+    assert google_client.event_body(_slot(activity.id))["location"] == "K"   # one garant, no '+'
+
     activity.assignments = [
         ActivityAssignment(org_id=seeded["org_id"], role=OrgRole.garant),  # K
         ActivityAssignment(org_id=marek.id, role=OrgRole.garant),
@@ -824,6 +832,8 @@ def test_inbound_attendants_change_skips_unknown_orgs(client, seeded, synced, gc
     _apply(client, [{"key": att["key"], "action": "apply"}])
     db.session.expire_all()
     assert {a.org_id for a in db.session.get(Slot, slot.id).assignments} == {seeded["org_id"]}
+    row = db.session.scalars(db.select(AuditLog).filter_by(entity_type=EntityType.slot)).one()
+    assert row.changes == {"orgs": [[], ["K"]]}
 
 
 def test_inbound_garant_change(client, seeded, synced, gcal):
@@ -856,7 +866,11 @@ def test_inbound_category_change(client, seeded, synced, gcal, color_id, label):
     red = Category(camp_id=camp.id, key="vystraha", label="Výstraha", color="#d50000", sort_order=1)
     db.session.add(red)
     db.session.commit()
-    gcal.events[slot.google_event_id]["colorId"] = color_id   # "11" is #d50000, None removed
+    event = gcal.events[slot.google_event_id]
+    if color_id:
+        event["colorId"] = color_id   # "11" is #d50000
+    else:
+        del event["colorId"]          # Google drops the key, it never sends a null
 
     cat = _change(_preview(client), "category_change")
     assert (cat["old_label"], cat["new_label"]) == ("Hra", label)

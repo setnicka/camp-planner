@@ -24,3 +24,10 @@ from camp_planner.auth.proxy import ProxyProvider
 def test_display_name(app, headers, name):
     with app.test_request_context(headers=headers):
         assert ProxyProvider().load_identity().display_name == name
+
+
+@pytest.mark.parametrize("dev_user, is_admin", [("dev admin", True), ("dev", False)])
+def test_dev_user_stands_in_for_the_headers(app, dev_user, is_admin):
+    with app.test_request_context():
+        ident = ProxyProvider(dev_user=dev_user).load_identity()
+    assert (ident.user_id, ident.is_admin) == ("dev", is_admin)

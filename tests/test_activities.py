@@ -21,6 +21,7 @@ from camp_planner.services import serialize
 from tests.conftest import (
     ADMIN,
     audit,
+    count_queries,
     get_json,
     make_activity,
     make_camp,
@@ -347,3 +348,21 @@ def test_todo_overview_lists_all_with_activity(client, seeded):
     assert titles["Koupit lano"]["activity_title"] == "Akce"
     assert titles["Z druhé"]["activity_id"] == aid2
     assert titles["Hotovo"]["is_done"] is True
+
+
+def test_activity_list_query_count_is_flat(client, seeded):
+    """Each need nests its material with the material's orgs (loaders.ACTIVITIES): no N+1."""
+    slug, url = seeded["slug"], f"/api/camps/{seeded['slug']}/activities"
+
+    def wire(activity_id, name):   # a need on a material with a responsible org
+        mid = make_material(client, slug, name)["id"]
+        ok(client.patch(f"/api/camps/{slug}/materials/{mid}", json={"org_ids": [seeded["org_id"]]},
+                        headers=ADMIN))
+        ok(client.post(f"/api/activities/{activity_id}/materials", json={"material_id": mid},
+                       headers=ADMIN))
+
+    wire(seeded["activity_id"], "Lano")
+    one = count_queries(lambda: ok(client.get(url, headers=ADMIN)))
+    for i in range(3):
+        wire(make_activity(client, slug, f"B{i}"), f"Lano {i}")
+    assert count_queries(lambda: ok(client.get(url, headers=ADMIN))) == one

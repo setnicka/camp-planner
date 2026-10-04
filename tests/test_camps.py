@@ -141,6 +141,15 @@ def test_camp_create_duplicate_slug(client, seeded):
     assert resp.status_code == 400 and "Slug" in resp.get_json()["error"]
 
 
+def test_camp_form_survives_a_slug_clash(client, seeded):
+    """The form re-renders, querying the session the failed flush left behind: only the
+    service's rollback keeps that working."""
+    form = {"name": "Jiný", "slug": seeded["slug"], "start_date": "2026-08-01", "length_days": "3",
+            "window_start_min": "240", "snap_minutes": "15"}
+    resp = client.post("/camps/new", data=form, headers=ADMIN)
+    assert resp.status_code == 200 and "Slug" in resp.get_data(as_text=True)
+
+
 def test_camp_create_forbidden_for_editor(client, seeded):
     resp = client.post("/api/camps", json=_NEW_CAMP, headers=editor(seeded["slug"]))
     assert resp.status_code == 403

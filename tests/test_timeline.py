@@ -10,9 +10,6 @@ from __future__ import annotations
 from datetime import date, datetime
 from types import SimpleNamespace
 
-from sqlalchemy import event
-
-from camp_planner.extensions import db
 from camp_planner.models.activity import OrgRole
 from camp_planner.models.slot import SlotRole
 from camp_planner.schemas import ConflictOut
@@ -20,6 +17,7 @@ from camp_planner.services.timeline import build_timeline, slice_segments
 from tests.conftest import (
     ADMIN,
     audit,
+    count_queries,
     get_json,
     make_activity,
     make_slot,
@@ -290,20 +288,6 @@ def test_timeline_span_seconds_are_dropped(client, seeded):
     assert created["end_at"] == "2026-07-04T16:00:00"
 
 
-def _count_queries(fn) -> int:
-    statements: list[str] = []
-
-    def listener(conn, cursor, statement, *_, **__):
-        statements.append(statement)
-
-    event.listen(db.engine, "before_cursor_execute", listener)
-    try:
-        fn()
-    finally:
-        event.remove(db.engine, "before_cursor_execute", listener)
-    return len(statements)
-
-
 def test_timeline_query_count_is_flat(client, seeded):
     """Read and save are eager-loaded (loaders.TIMELINE): their query count must not grow
     with the number of activities (N+1 guard)."""
@@ -318,10 +302,10 @@ def test_timeline_query_count_is_flat(client, seeded):
         return sid
 
     def read_and_save(hour):
-        read = _count_queries(lambda: ok(client.get(url, headers=ADMIN)))
+        read = count_queries(lambda: ok(client.get(url, headers=ADMIN)))
         body = {"rev": get_json(client, url)["camp"]["rev"], "moves": [
             {"slot_id": moved, "start_at": f"2026-07-04T{hour}:00", "end_at": f"2026-07-04T{hour}:30"}]}
-        save = _count_queries(lambda: ok(client.patch(url, json=body, headers=ADMIN)))
+        save = count_queries(lambda: ok(client.patch(url, json=body, headers=ADMIN)))
         return read, save
 
     moved = wire(seeded["activity_id"])

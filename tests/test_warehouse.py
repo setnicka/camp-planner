@@ -320,7 +320,7 @@ def test_completion_applies_the_last_observation(client, box, observations, coun
     check = start_check(client)
     for body in observations:
         assert observe(client, box["id"], item["id"], **body).status_code == 200
-    complete(client, check)
+    assert complete(client, check).status_code == 200
     after = get_item(client, item["id"])
     assert (after["count"], after["unit"]) == (count, unit)
     assert (after["discarded_at"] is not None, after["box_id"] is None) == (discarded, discarded)
