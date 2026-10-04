@@ -10,6 +10,7 @@ from camp_planner.extensions import db, db_session
 from camp_planner.models.audit import AuditLog, EntityType
 from camp_planner.models.material import Material
 from tests.conftest import (
+    add_need,
     ADMIN,
     box_state,
     discard,
@@ -34,11 +35,6 @@ def material_from(client, slug, item_id, headers=ADMIN, **fields):
 
 def patch_material(client, slug, material_id, **fields):
     return client.patch(f"/api/camps/{slug}/materials/{material_id}", json=fields, headers=ADMIN)
-
-
-def add_need(client, activity_id, material_id, **fields) -> dict:
-    return ok(client.post(f"/api/activities/{activity_id}/materials",
-                          json={"material_id": material_id, **fields}, headers=ADMIN))["need"]
 
 
 def start_camp_check(client, camp_id, name="Po táboře") -> dict:

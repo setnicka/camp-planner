@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tests.conftest import (
+    add_need,
     ADMIN,
     get_json,
     make_material,
@@ -28,9 +29,7 @@ def test_material_catalog_create_list_and_dedup(client, seeded):
 def test_material_need_add_by_id(client, seeded):
     slug, aid = seeded["slug"], seeded["activity_id"]
     material_id = make_material(client, slug, unit="ks")["id"]
-    resp = client.post(f"/api/activities/{aid}/materials",
-                       json={"material_id": material_id, "amount": 10}, headers=ADMIN)
-    n = ok(resp)["need"]
+    n = add_need(client, aid, material_id, amount=10)
     assert n["amount"] == 10 and n["material"]["name"] == "A4 papír" and n["material"]["unit"] == "ks"
 
     # one catalog material at most once per activity
@@ -48,9 +47,7 @@ def test_material_need_amount_must_be_a_finite_number(client, seeded, amount):
                        json={"material_id": material_id, "amount": amount}, headers=ADMIN)
     assert resp.status_code == 422
 
-    resp = client.post(f"/api/activities/{aid}/materials",
-                       json={"material_id": material_id, "amount": 3}, headers=ADMIN)
-    need_id = ok(resp)["need"]["id"]
+    need_id = add_need(client, aid, material_id, amount=3)["id"]
     patched = client.patch(f"/api/material-needs/{need_id}", json={"amount": amount}, headers=ADMIN)
     assert patched.status_code == 422
     assert get_json(client, f"/api/activities/{aid}")["activity"]["material_needs"][0]["amount"] == 3
@@ -60,7 +57,7 @@ def test_material_merge_migrates_usages_and_pins_unit(client, seeded):
     slug, aid = seeded["slug"], seeded["activity_id"]
     src = make_material(client, slug, "papír", unit="ks")["id"]
     dst = make_material(client, slug, "kancelářský papír", unit="balení")["id"]
-    client.post(f"/api/activities/{aid}/materials", json={"material_id": src, "amount": 5}, headers=ADMIN)
+    add_need(client, aid, src, amount=5)
 
     resp = client.post(f"/api/camps/{slug}/materials/{src}/merge", json={"into": dst}, headers=ADMIN)
     assert ok(resp)["material"]["id"] == dst
@@ -77,8 +74,8 @@ def _two_materials_needed(client, slug, aid, *, src_unit="ks"):
     """Two catalog materials, both needed by the activity (50 dst + 20 src); returns (src, dst)."""
     dst = make_material(client, slug, "papíry", unit="ks")["id"]
     src = make_material(client, slug, "papíry A4", unit=src_unit)["id"]
-    client.post(f"/api/activities/{aid}/materials", json={"material_id": dst, "amount": 50}, headers=ADMIN)
-    client.post(f"/api/activities/{aid}/materials", json={"material_id": src, "amount": 20}, headers=ADMIN)
+    add_need(client, aid, dst, amount=50)
+    add_need(client, aid, src, amount=20)
     return src, dst
 
 
@@ -101,9 +98,7 @@ def test_material_delete_waits_for_its_needs(client, seeded):
         return [m["id"] for m in get_json(client, f"/api/camps/{slug}/materials")["materials"]]
 
     mid = make_material(client, slug)["id"]
-    resp = client.post(f"/api/activities/{aid}/materials",
-                       json={"material_id": mid, "amount": 3}, headers=ADMIN)
-    need_id = ok(resp)["need"]["id"]
+    need_id = add_need(client, aid, mid, amount=3)["id"]
 
     resp = client.delete(f"/api/camps/{slug}/materials/{mid}", headers=ADMIN)
     assert resp.status_code == 400 and "nelze smazat" in resp.get_json()["error"]
@@ -206,8 +201,7 @@ def test_material_update_rename_collision(client, seeded):
 def test_material_overview_lists_usages(client, seeded):
     slug, aid = seeded["slug"], seeded["activity_id"]
     mid = make_material(client, slug, "papír", unit="ks")["id"]
-    client.post(f"/api/activities/{aid}/materials",
-                json={"material_id": mid, "amount": 30, "is_ready": True}, headers=ADMIN)
+    add_need(client, aid, mid, amount=30, is_ready=True)
     m = next(x for x in get_json(client, f"/api/camps/{slug}/materials/overview")["materials"]
              if x["id"] == mid)
     assert len(m["usages"]) == 1

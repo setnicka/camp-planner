@@ -23,6 +23,7 @@ from urllib.parse import urlencode  # noqa: E402
 
 import pytest  # noqa: E402
 from flask import g  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 
 from camp_planner import create_app  # noqa: E402
 from camp_planner.extensions import db  # noqa: E402
@@ -116,14 +117,23 @@ def make_material(client, slug, name="A4 papír", **fields) -> dict:
                           headers=ADMIN))["material"]
 
 
+def add_need(client, activity_id, material_id, **fields) -> dict:
+    return ok(client.post(f"/api/activities/{activity_id}/materials",
+                          json={"material_id": material_id, **fields}, headers=ADMIN))["need"]
+
+
+def save_timeline(client, slug, headers=ADMIN, **changes):
+    """PATCH one timeline batch at the camp's current rev."""
+    url = f"/api/camps/{slug}/timeline"
+    rev = get_json(client, url)["camp"]["rev"]
+    return client.patch(url, json={"rev": rev, **changes}, headers=headers)
+
+
 def make_slot(client, slug, activity_id, start="2026-07-04T14:00", end="2026-07-04T16:00",
               role="main") -> int:
     """Create a slot via the timeline batch (the only placement path) and return its id."""
-    rev = get_json(client, f"/api/camps/{slug}/timeline")["camp"]["rev"]
     created = {"activity_id": activity_id, "role": role, "start_at": start, "end_at": end}
-    resp = client.patch(f"/api/camps/{slug}/timeline", json={"rev": rev, "creates": [created]},
-                        headers=ADMIN)
-    return ok(resp)["created"][0]["id"]
+    return ok(save_timeline(client, slug, creates=[created]))["created"][0]["id"]
 
 
 def add_org(camp_id, initials, name) -> Org:
@@ -217,3 +227,17 @@ def upload(client, item_id, data=None):
     return client.post(f"/api/inventory/items/{item_id}/photos", headers=ADMIN,
                        data={"photos": (io.BytesIO(data or png()), "foto.png")},
                        content_type="multipart/form-data")
+
+
+def count_queries(fn) -> int:
+    statements: list[str] = []
+
+    def listener(conn, cursor, statement, *_, **__):
+        statements.append(statement)
+
+    event.listen(db.engine, "before_cursor_execute", listener)
+    try:
+        fn()
+    finally:
+        event.remove(db.engine, "before_cursor_execute", listener)
+    return len(statements)

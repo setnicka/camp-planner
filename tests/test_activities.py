@@ -19,21 +19,18 @@ from camp_planner.models.org import Org
 from camp_planner.models.slot import Slot, SlotRole
 from camp_planner.services import serialize
 from tests.conftest import (
+    add_need,
     ADMIN,
     audit,
+    count_queries,
     get_json,
     make_activity,
     make_camp,
     make_material,
     make_slot,
     ok,
+    save_timeline,
 )
-
-
-def _delete_slot(client, slug, slot_id):
-    rev = get_json(client, f"/api/camps/{slug}/timeline")["camp"]["rev"]
-    ok(client.patch(f"/api/camps/{slug}/timeline", json={"rev": rev, "deletes": [slot_id]},
-                    headers=ADMIN))
 
 
 # --- activities --------------------------------------------------------------
@@ -184,7 +181,7 @@ def test_set_tags_records_value_diff_in_audit(client, seeded):
 
     def put(tags):
         ok(client.put(f"/api/activities/{aid}/tags", json={"tags": tags}, headers=ADMIN))
-        return [e["changes"] for e in audit(client, slug, entity_type="tag") if e["changes"]]
+        return [e["changes"] for e in audit(client, slug, entity_type="tag")]
 
     assert put([{"tag_id": tid, "value": "ano"}])[0] == {"Důležité": [None, "ano"]}
     assert put([{"tag_id": tid, "value": "ne"}])[0] == {"Důležité": ["ano", "ne"]}
@@ -225,7 +222,7 @@ def test_activity_delete_waits_for_its_slots(client, seeded):
     assert resp.status_code == 400 and "naplánované sloty" in resp.get_json()["error"]
     assert aid in listed()
 
-    _delete_slot(client, slug, sid)
+    ok(save_timeline(client, slug, deletes=[sid]))
     assert ok(client.delete(f"/api/activities/{aid}", headers=ADMIN))["id"] == aid
     assert aid not in listed()
 
@@ -237,8 +234,8 @@ def test_activity_merge_transfers_slots_todos_and_joins_needs(client, seeded):
     client.post(f"/api/activities/{src}/todos",
                 json={"title": "Koupit lano", "org_ids": [oid]}, headers=ADMIN)
     mid = make_material(client, slug, "lano", unit="m")["id"]
-    client.post(f"/api/activities/{src}/materials", json={"material_id": mid, "amount": 30}, headers=ADMIN)
-    client.post(f"/api/activities/{dst}/materials", json={"material_id": mid, "amount": 20}, headers=ADMIN)
+    add_need(client, src, mid, amount=30)
+    add_need(client, dst, mid, amount=20)
 
     resp = client.post(f"/api/activities/{src}/merge", json={"into": dst}, headers=ADMIN)
     assert ok(resp)["activity"]["id"] == dst
@@ -262,19 +259,11 @@ def test_activity_merge_rejects_cross_camp(client, seeded):
 def test_slot_orgs_set_and_audited(client, seeded):
     slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
     slot_id = make_slot(client, slug, aid)
-    resp = client.patch(f"/api/slots/{slot_id}", json={"org_ids": [oid]}, headers=ADMIN)
-    assert [o["initials"] for o in ok(resp)["orgs"]] == ["K"]
-
-    def org_audits():
-        return [e for e in audit(client, slug, entity_type="slot")
-                if e["changes"] and "orgs" in e["changes"]]
-
-    changes = org_audits()
-    assert len(changes) == 1
-    assert changes[0]["activity_id"] == aid and changes[0]["changes"]["orgs"] == [[], ["K"]]
-
-    client.patch(f"/api/slots/{slot_id}", json={"org_ids": [oid]}, headers=ADMIN)   # no-op
-    assert len(org_audits()) == 1
+    for _ in range(2):   # the second is a no-op
+        resp = client.patch(f"/api/slots/{slot_id}", json={"org_ids": [oid]}, headers=ADMIN)
+        assert [o["initials"] for o in ok(resp)["orgs"]] == ["K"]
+    update, = [e for e in audit(client, slug, entity_type="slot") if e["action"] == "update"]
+    assert update["activity_id"] == aid and update["changes"] == {"orgs": [[], ["K"]]}
 
 
 def test_slot_override_name_set_clear_and_combined(client, seeded):
@@ -347,3 +336,20 @@ def test_todo_overview_lists_all_with_activity(client, seeded):
     assert titles["Koupit lano"]["activity_title"] == "Akce"
     assert titles["Z druhé"]["activity_id"] == aid2
     assert titles["Hotovo"]["is_done"] is True
+
+
+def test_activity_list_query_count_is_flat(client, seeded):
+    """Each need nests its material with the material's orgs (loaders.ACTIVITIES): no N+1."""
+    slug, url = seeded["slug"], f"/api/camps/{seeded['slug']}/activities"
+
+    def wire(activity_id, name):   # a need on a material with a responsible org
+        mid = make_material(client, slug, name)["id"]
+        ok(client.patch(f"/api/camps/{slug}/materials/{mid}", json={"org_ids": [seeded["org_id"]]},
+                        headers=ADMIN))
+        add_need(client, activity_id, mid)
+
+    wire(seeded["activity_id"], "Lano")
+    one = count_queries(lambda: ok(client.get(url, headers=ADMIN)))
+    for i in range(3):
+        wire(make_activity(client, slug, f"B{i}"), f"Lano {i}")
+    assert count_queries(lambda: ok(client.get(url, headers=ADMIN))) == one

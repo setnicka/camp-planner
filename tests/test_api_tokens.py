@@ -89,7 +89,11 @@ def test_revoke_removes_the_token_and_both_ends_are_audited(client, seeded):
 def test_token_scope(client, seeded, role, method, url, body, status):
     make_camp(client, "jina")
     secret = ok(_create(client, seeded["slug"], role=role))["secret"]
-    assert client.open(url, method=method, json=body, headers=_bearer(secret)).status_code == status
+    resp = client.open(url, method=method, json=body, headers=_bearer(secret))
+    assert resp.status_code == status
+    if status == 200:   # its own camp, and an editor's write lands
+        camp = resp.get_json()["camp"]
+        assert (camp["slug"], camp["length_days"]) == ("t", (body or {}).get("length_days", 3))
 
 
 def test_revoked_and_malformed_tokens_fail_closed(client, seeded):

@@ -1,3 +1,5 @@
+"""Page chrome and the section pages: header, theme, CSRF meta, static URLs, inline data."""
+
 from __future__ import annotations
 
 import re
@@ -7,10 +9,10 @@ import pytest
 from camp_planner import create_app
 from camp_planner.extensions import db
 from tests.conftest import (
+    add_need,
     ADMIN,
     make_camp,
     make_material,
-    ok,
     page_data,
     viewer,
 )
@@ -42,6 +44,7 @@ def test_section_page(client, seeded, path, script_id, scripts, urls):
     url = "/camps/t" + path.format(aid=aid)
     html = client.get(url, headers=ADMIN).get_data(as_text=True)
     assert all(script in html for script in scripts)
+    assert f'id="{script_id.removesuffix("-data")}"' in html   # the mount the script fills
     data = page_data(client, url, script=script_id)
     for key, expected in urls.items():
         assert data["urls"][key] == expected.format(aid=aid)
@@ -61,8 +64,7 @@ def test_unknown_camp_is_404(client, seeded, url):
 def test_overview_pages_embed_what_their_scripts_render(client, seeded):
     slug, aid = seeded["slug"], seeded["activity_id"]
     mid = make_material(client, slug, "Lano", unit="m")["id"]
-    ok(client.post(f"/api/activities/{aid}/materials",
-                   json={"material_id": mid, "amount": 30}, headers=ADMIN))
+    add_need(client, aid, mid, amount=30)
 
     materials = page_data(client, f"/camps/{slug}/materials", script="cp-materials-data")
     assert [(m["name"], len(m["usages"])) for m in materials["materials"]] == [("Lano", 1)]
