@@ -32,8 +32,8 @@
     <div class="cp-tl-toolbar">
       <div class="cp-tl-view">
         <span class="cp-seg cp-tl-zoom">
-          <button type="button" id="cp-zoom-out" class="cp-seg-btn" title="Oddálit (Ctrl + kolečko)">−</button>
-          <button type="button" id="cp-zoom-in" class="cp-seg-btn" title="Přiblížit (Ctrl + kolečko)">+</button>
+          <button type="button" id="cp-zoom-out" class="cp-seg-btn" title="Oddálit (−, Ctrl + kolečko)">−</button>
+          <button type="button" id="cp-zoom-in" class="cp-seg-btn" title="Přiblížit (+, Ctrl + kolečko)">+</button>
         </span>
         <button type="button" id="cp-dn-toggle" class="cp-tl-btn" title="Pozadí den/noc"
                 aria-label="Pozadí den/noc">🌙<span class="cp-tl-long"> Den/noc</span></button>
@@ -44,7 +44,8 @@
       {# what the mode does, in the gestures of the device; between the groups (timeline.css) #}
       <p class="cp-tl-help" id="cp-tl-help">
         <span class="cp-help-view"><span class="cp-help-mouse"><b>Kliknutím na slot</b> otevřeš menu.
-          <b>Ctrl + kolečko</b> přibližuje, <b>Shift + kolečko</b> posouvá do stran.</span><span
+          <b>Ctrl + kolečko</b> přibližuje, <b>Shift + kolečko</b> posouvá do stran. Klávesové
+          zkratky ukáže <b>?</b>.</span><span
           class="cp-help-touch"><b>Klepnutím na slot</b> otevřeš menu. <b>Prstem do stran</b> posouváš,
           <b>roztažením dvěma prsty</b> přibližuješ.</span></span>
         {%- if can_edit(camp) %}
@@ -68,7 +69,8 @@
     </div>
 
     {# the activity-detail URL template rides on the mount for viewers and editors alike #}
-    <div id="cp-timeline"
+    {# one Tab stop: reached by keyboard it selects a slot to walk from (timeline.js) #}
+    <div id="cp-timeline" tabindex="0" role="application" aria-label="Rozvrh" aria-describedby="cp-tl-help"
          data-activity-detail="{{ url_for('main.activity_detail', slug=camp.slug, activity_id=0) }}"></div>
   </div>
   <script id="cp-timeline-data" type="application/json">{{ timeline | tojson }}</script>

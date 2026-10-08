@@ -15,6 +15,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Added
 
 - Timeline:
+  - Keyboard control. Arrows and Tab walk the slots, edit mode moves, resizes,
+    adds and deletes them, and `?` lists the shortcuts.
   - Edit mode can duplicate a slot, with its orgs and name.
   - Today is marked in the day column.
 
@@ -43,6 +45,9 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Fixed
 
+- Timeline:
+  - A slot over midnight can no longer be dragged partly out of the camp's days
+    (the save refused it).
 - Activity detail: with the warehouse off, a material no longer links to
   a warehouse box; the API also lists its responsible orgs.
 - Embedded:
