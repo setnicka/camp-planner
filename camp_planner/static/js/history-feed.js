@@ -32,9 +32,11 @@ window.cpHistoryFeed = (function () {
     url: "Odkaz", unit: "Jednotka", amount: "Množství", is_ready: "Připraveno",
     is_done: "Hotovo", due_date: "Termín", material: "Materiál", merged_from: "Sloučeno z",
     role: "Typ slotu", start_at: "Začátek", end_at: "Konec", garant: "Garant",
+    override_name: "Název slotu",
     inventory_item: "Věc ve skladu",
     orgs: "Organizátoři", google_calendar_id: "Google kalendář", items: "Položky",
-    moved: "přesunuto", created: "vytvořeno", retyped: "přetypováno", deleted: "smazáno",
+    moved: "přesunuto", created: "vytvořeno", retyped: "přetypováno", updated: "upraveno",
+    deleted: "smazáno",
   };
 
   const DT_FMT = { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" };

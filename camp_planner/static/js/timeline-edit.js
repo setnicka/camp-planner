@@ -1,7 +1,7 @@
 // Camp Planner: timeline editor (loaded only when the user can edit).
 //
 // Split out of timeline.js: drag/resize existing slots, double-tap to add (with an
-// activity-picker modal), tap-select + action bar to delete, undo/redo, an unsaved-
+// activity-picker modal), tap-select + action bar to edit or delete, undo/redo, an unsaved-
 // changes list, and a batched PATCH save under the timeline_rev optimistic lock.
 // timeline.js calls window.cpTimelineEdit(ctx) with the render context it shares.
 "use strict";
@@ -18,9 +18,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   const reload = () => { reloading = true; location.reload(); };
   // Net batch sent on Save; kept in sync by every change's apply/revert.
   const moves = new Map();    // slot_id -> {start_at, end_at}  (existing slots repositioned)
-  const retypes = new Map();  // slot_id -> role               (existing slots whose type changed)
+  const updates = new Map();  // slot_id -> {role?, org_ids?, override_name?}
   const deletes = new Set();  // slot_id                        (existing slots removed)
-  const creates = new Map();  // item id (string) -> {activity_id, role, start_at, end_at}
+  const creates = new Map();  // item id (string) -> {activity_id, role, start_at, end_at, …}
   // One entry per user action (drag / resize / create / delete); each can undo()/redo().
   const history = [];
   const redoStack = [];
@@ -398,45 +398,41 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     }
   }
 
-  // --- change slot type (role) ----------------------------------------------
-  // Re-render the given items with a new role (mutating their _seg). One item for a pending
-  // create, every segment for an existing (possibly multi-day) slot.
-  function rerenderRole(itemList, role) {
+  // Re-render items from a patched copy of their _seg: an unedited slot's _seg is its saved
+  // segment.
+  function reseg(itemList, patch) {
     itemList.forEach((it) => {
       if (!it._seg) return;
-      it._seg.role = role;
-      items.update({ id: it.id, ...segData(it._seg, it.slotId == null) });
+      const seg = { ...it._seg, ...patch };
+      items.update({ id: it.id, _seg: seg, ...segData(seg, it.slotId == null) });
     });
   }
+  const piecesOf = (item) => creates.has(String(item.id)) ? [items.get(item.id)] : segsOf(item.slotId);
+
+  // --- change slot type (role) ----------------------------------------------
   function changeSlotType(item, newRole) {
-    const key = String(item.id), before = item.role || "main";
+    const before = item.role || "main", slotId = item.slotId;
     if (newRole === before) return;
-    const label = `Změněn typ „${item._title || "slot"}“: ${ROLE_LABEL[before]} → ${ROLE_LABEL[newRole]}`;
-    if (creates.has(key)) {
-      const spec = creates.get(key);
-      const apply = (role) => { spec.role = role; rerenderRole([items.get(key)], role); };
-      apply(newRole);
-      record({ label, undo: () => apply(before), redo: () => apply(newRole) });
-    } else if (item.slotId != null) {
-      const slotId = item.slotId;
-      const segs = () => segsOf(slotId);
-      const prev = retypes.has(slotId) ? retypes.get(slotId) : undefined;  // undefined = no pending retype
-      const apply = (role) => { retypes.set(slotId, role); rerenderRole(segs(), role); };
-      apply(newRole);
-      record({
-        label,
-        undo: () => { rerenderRole(segs(), before); if (prev === undefined) retypes.delete(slotId); else retypes.set(slotId, prev); },
-        redo: () => apply(newRole),
-      });
-    }
+    const spec = creates.get(String(item.id)), prev = updates.get(slotId);
+    const set = (role, net) => {   // net: the slot's batch entry, undefined for none
+      reseg(piecesOf(item), { role });
+      if (spec) spec.role = role;
+      else if (net) updates.set(slotId, net); else updates.delete(slotId);
+    };
+    const next = { ...prev, role: newRole };
+    set(newRole, next);
+    record({
+      label: `Změněn typ „${item._title || "slot"}“: ${ROLE_LABEL[before]} → ${ROLE_LABEL[newRole]}`,
+      undo: () => set(before, prev), redo: () => set(newRole, next),
+    });
   }
 
   // role-picker modal (chips, current role pre-selected); used from the edit-mode action bar
   function openSlotType(item) {
-    const current = creates.has(String(item.id)) ? creates.get(String(item.id)).role : (item.role || "main");
-    const roles = chipGroup(Object.entries(ROLE_LABEL), { selected: current });
+    const roles = chipGroup(Object.entries(ROLE_LABEL), { selected: item.role || "main" });
     formModal({
       title: "Typ slotu",
+      okLabel: "Použít",   // into the batch, saved by Uložit
       pane: el("div", { class: "cp-pane" }, roles.node),
       onSubmit: (close) => { close(); changeSlotType(item, roles.get()); },
     });
@@ -444,45 +440,62 @@ window.cpTimelineEdit = function setupEditing(ctx) {
 
   // --- floating action bar (timeline.js): this mode's actions -----------------------
   setBarActions((it) => {
-    const saved = it.slotId != null;   // attendees and a name override need a saved slot id
     return editing ? [
-      saved && { label: "✎ Upravit slot", onClick: () => openSlotDialog(it, true) },
+      it._seg && { label: "✎ Upravit slot", onClick: () => editSlot(it) },
       { label: "↺ Typ slotu", onClick: () => openSlotType(it) },
       { label: "🗑 Smazat blok", danger: true, onClick: deleteSelected },
     ] : [
-      saved && { label: "Přiřadit orgy", onClick: () => openSlotDialog(it, false) },
+      it.slotId != null && { label: "Přiřadit orgy", onClick: () => assignOrgs(it) },
       { label: "ℹ️ Detail", onClick: () => openDetail(it) },
     ];
   });
 
-  // Re-render every on-screen segment of a slot after a standalone edit: patch each
-  // segment's local data via `mutate(seg)`, then rebuild its content (the card reads the data).
-  function rerenderSegments(slotId, mutate) {
-    segsOf(slotId).forEach((it) => {
-      if (it._seg) {
-        mutate(it._seg);
-        items.update({ id: it.id, content: segmentContent(it._seg) });
-      }
+  // --- slot attendees and name override --------------------------------------
+  // The shared dialog (cpSlotOrgsEdit) of the activity detail page: outside edit mode a
+  // standalone PATCH of the attendees, in edit mode attendees and name join the batch.
+  const orgInitials = Object.fromEntries(payload.orgs.map((o) => [o.id, o.initials]));
+  const initialsOf = (ids) => ids.map((id) => orgInitials[id] ?? "?").join(", ") || "nikdo";
+  const sameIds = (a, b) => [...a].sort().join() === [...b].sort().join();
+  const nameText = (name) => name ? `„${name}“` : "podle aktivity";
+  function editSlot(item) {
+    const seg = item._seg;
+    window.cpSlotOrgsEdit({
+      orgs: payload.orgs, selected: seg.attending,
+      withName: true, name: seg.override_name || "", namePlaceholder: seg.title,
+      onApply: (ids, name) => changeDetails(item, ids, (name || "").trim() || null),
     });
   }
-
-  // --- slot attendees, and in edit mode the name override ---------------------
-  // The shared dialog (cpSlotOrgsEdit) of the activity detail page. Its PATCH is a standalone
-  // commit (not part of the move/create/delete batch; doesn't touch timeline_rev). An empty
-  // name clears the override, so the slot shows the activity title.
-  function openSlotDialog(item, withName) {
+  function changeDetails(item, orgIds, name) {
+    const key = String(item.id), slotId = item.slotId, cur = item._seg;
+    const before = { org_ids: cur.attending, override_name: cur.override_name || null };
+    const after = { org_ids: orgIds, override_name: name };
+    const parts = [];
+    if (!sameIds(before.org_ids, orgIds)) parts.push(`účastníci ${initialsOf(before.org_ids)} → ${initialsOf(orgIds)}`);
+    if (before.override_name !== name) parts.push(`název ${nameText(before.override_name)} → ${nameText(name)}`);
+    if (!parts.length) return;
+    const spec = creates.get(key), prev = updates.get(slotId);
+    const set = (v, net) => {   // net: the slot's batch entry, undefined for none
+      reseg(piecesOf(item), { attending: v.org_ids, override_name: v.override_name });
+      if (spec) Object.assign(spec, v);
+      else if (net) updates.set(slotId, net); else updates.delete(slotId);
+    };
+    const next = { ...prev, ...after };
+    set(after, next);
+    record({
+      label: `Upraven slot „${item._title || "slot"}“: ${parts.join("; ")}`,
+      undo: () => set(before, prev), redo: () => set(after, next),
+    });
+  }
+  function assignOrgs(item) {
     const slotId = item.slotId;
-    const seg = item._seg || {};
     window.cpSlotOrgsEdit({
       orgs: payload.orgs,
-      selected: seg.attending || [],
+      selected: item._seg?.attending || [],
       url: withId(EDIT.slot, slotId),
-      ...(withName && { withName, name: seg.override_name || "", namePlaceholder: seg.title || "" }),
-      onSaved: (_orgs, ids, overrideName) => {
-        rerenderSegments(slotId, (s) => {
-          s.attending = ids;
-          if (withName) s.override_name = overrideName;
-        });
+      onSaved: (_orgs, ids) => {
+        // committed, so the saved state follows
+        payload.segments.forEach((g) => { if (g.slot_id === slotId) g.attending = ids; });
+        reseg(segsOf(slotId), { attending: ids });
         applyHeights();   // attendees changed → refresh the display filter's dim (e.g. an "attending:" filter)
         showBar();        // and the card
       },
@@ -495,12 +508,13 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   async function save(force) {
     if (!hasPending()) return;
     saveBtn.disabled = true;
+    const kept = (map) => [...map].filter(([slotId]) => !deletes.has(slotId));   // a deleted slot's edits go unsent
     const body = {
       rev: camp.rev,
       force: !!force,
-      moves: [...moves.entries()].map(([slot_id, t]) => ({ slot_id, ...t })),
+      moves: kept(moves).map(([slot_id, t]) => ({ slot_id, ...t })),
       creates: [...creates.values()],
-      retypes: [...retypes.entries()].map(([slot_id, role]) => ({ slot_id, role })),
+      updates: kept(updates).map(([slot_id, v]) => ({ slot_id, ...v })),
       deletes: [...deletes],
     };
     try {
@@ -515,7 +529,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     // authoritative state rather than leave committed changes shown as pending.
     try {
       const fresh = await api("GET", EDIT.save);  // same URL, GET = the re-sliced timeline
-      moves.clear(); retypes.clear(); deletes.clear(); creates.clear();
+      moves.clear(); updates.clear(); deletes.clear(); creates.clear();
       history.length = 0; redoStack.length = 0;
       rehydrate(fresh);      // rebuild the items + fresh rev, no page reload
       recomputeSegCount();

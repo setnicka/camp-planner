@@ -1,10 +1,10 @@
 """Slot attendees and the batch timeline save.
 
 All slot placement (add / move / remove) goes through save_timeline: one atomic batch
-under the camp.timeline_rev optimistic lock (no single-slot endpoints; a slot's role is
-fixed at creation). update_slot patches a slot's attendees and/or display-name override,
-neither of which is placement. Slot datetimes are naive local values (see timeline.py);
-the schemas enforce start<end.
+under the camp.timeline_rev optimistic lock (no single-slot endpoints). update_slot patches
+a slot's attendees and/or display-name override, which are not placement; the batch can
+carry the same edits and a role change. Slot datetimes are naive local values (see
+timeline.py); the schemas enforce start<end.
 """
 
 from __future__ import annotations
@@ -28,6 +28,16 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
     this does not bump timeline_rev; both feed the Google event (orgs → description, name →
     title), so any change re-pushes it."""
     camp = slot.activity.camp
+    if changes := _apply_update(slot, camp, payload):  # unchanged → no write, audit or re-push
+        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
+                     entity_id=slot.id, action=AuditAction.update, changes=changes)
+        google_sync.enqueue_upsert(camp, slot)
+        db_session.commit()
+    return {"orgs": serialize.slot_orgs(slot), "override_name": slot.override_name}
+
+
+def _apply_update(slot: Slot, camp: Camp, payload: SlotUpdateIn) -> dict:
+    """Apply the fields present in `payload`; returns the audit diff, {} when nothing changed."""
     fields = payload.model_fields_set
     changes: dict = {}
 
@@ -39,17 +49,11 @@ def update_slot(slot: Slot, payload: SlotUpdateIn) -> dict:
         if new_name != slot.override_name:
             changes["override_name"] = [slot.override_name, new_name]
             slot.override_name = new_name
-
-    if changes:  # nothing changed → no write, no audit row, no Google re-push
-        audit.record(camp_id=camp.id, activity_id=slot.activity_id, entity_type=EntityType.slot,
-                     entity_id=slot.id, action=AuditAction.update, changes=changes)
-        google_sync.enqueue_upsert(camp, slot)
-        db_session.commit()
-    return {"orgs": serialize.slot_orgs(slot), "override_name": slot.override_name}
+    return changes
 
 
 def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
-    """Apply one editing batch atomically (creates + moves + deletes) under the rev
+    """Apply one editing batch atomically (creates, moves, updates, deletes) under the rev
     optimistic lock (force=True skips the check: the conflict dialog's deliberate
     overwrite). A stale rev raises Conflict carrying the fresh timeline to reconcile
     against. Returns the new rev and the created slots (in `creates` order, for id mapping)."""
@@ -80,26 +84,26 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
                      entity_id=slot.id, action=action, changes=changes)
 
     # The batch summary goes first: the feed orders by id.
-    retyped = sum(_slot(r.slot_id).role != r.role for r in payload.retypes)
     audit.record(camp_id=camp.id, entity_type=EntityType.timeline, entity_id=None, action=AuditAction.update,
                  changes={"moved": len(payload.moves), "created": len(payload.creates),
-                          "retyped": retyped, "deleted": len(payload.deletes)})
+                          "updated": len(payload.updates), "deleted": len(payload.deletes)})
 
     # Each change is mirrored to Google as it is made (a no-op unless the camp is
     # connected); drain delivers it out of band.
-    created: list[Slot] = []
+    created: list[tuple[Slot, dict]] = []
     for spec in payload.creates:
         if spec.activity_id not in activity_ids:
             raise errors.Invalid("Změny: aktivita nepatří této akci.")
         _check_window(spec.start_at, spec.end_at)
         slot = Slot(activity_id=spec.activity_id, role=spec.role,
                     start_at=spec.start_at, end_at=spec.end_at)
+        changes = {"role": [None, slot.role], "start_at": [None, slot.start_at],
+                   "end_at": [None, slot.end_at]} | _apply_update(slot, camp, spec)
         db_session.add(slot)
-        created.append(slot)
+        created.append((slot, changes))
     db_session.flush()  # ids for the created slots' audit rows, which keep their place in the feed
-    for slot in created:
-        _record(slot, AuditAction.create, {"role": [None, slot.role], "start_at": [None, slot.start_at],
-                                           "end_at": [None, slot.end_at]})
+    for slot, changes in created:
+        _record(slot, AuditAction.create, changes)
         google_sync.enqueue_upsert(camp, slot)
 
     for move in payload.moves:
@@ -110,9 +114,12 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
             _record(slot, AuditAction.update, changes)
             google_sync.enqueue_upsert(camp, slot)
 
-    for retype in payload.retypes:
-        slot = _slot(retype.slot_id)
-        if changes := audit.apply_changes(slot, {"role": retype.role}):
+    for update in payload.updates:
+        slot = _slot(update.slot_id)
+        changes = _apply_update(slot, camp, update)
+        if update.role is not None:
+            changes |= audit.apply_changes(slot, {"role": update.role})
+        if changes:
             _record(slot, AuditAction.update, changes)
             google_sync.enqueue_upsert(camp, slot)
 
@@ -125,4 +132,4 @@ def save_timeline(camp: Camp, payload: TimelineSaveIn) -> dict:
 
     bump_timeline_rev(camp)
     db_session.commit()
-    return {"rev": camp.timeline_rev, "created": [serialize.slot(s) for s in created]}
+    return {"rev": camp.timeline_rev, "created": [serialize.slot(s) for s, _ in created]}

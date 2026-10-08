@@ -204,7 +204,7 @@ def test_timeline_retype_changes_role_and_audits(client, seeded):
     s1 = make_slot(client, slug, aid, role="main")
 
     def retype(rev):
-        body = {"rev": rev, "retypes": [{"slot_id": s1, "role": "cleanup"}]}
+        body = {"rev": rev, "updates": [{"slot_id": s1, "role": "cleanup"}]}
         return ok(client.patch(url, json=body, headers=ADMIN))
 
     def role_diffs():
@@ -218,6 +218,43 @@ def test_timeline_retype_changes_role_and_audits(client, seeded):
 
     retype(rev + 1)   # the same role again changes nothing and writes no audit row
     assert role_diffs() == [["main", "cleanup"]]
+
+
+def test_timeline_create_carries_orgs_and_name(client, seeded):
+    """A duplicated slot keeps its source's attendees and name."""
+    slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
+    url = f"/api/camps/{slug}/timeline"
+
+    def create(**extra):
+        return client.patch(url, json={"rev": get_json(client, url)["camp"]["rev"], "creates": [
+            {"activity_id": aid, "start_at": "2026-07-04T13:00", "end_at": "2026-07-04T14:00",
+             **extra}]}, headers=ADMIN)
+
+    slot = ok(create(org_ids=[oid], override_name="Hra"))["created"][0]
+    assert slot["override_name"] == "Hra" and [o["initials"] for o in slot["orgs"]] == ["K"]
+    changes = audit(client, slug, entity_type="slot")[0]["changes"]
+    assert changes["orgs"] == [[], ["K"]] and changes["override_name"] == [None, "Hra"]
+
+    assert create(org_ids=[99999]).status_code == 400
+
+
+def test_timeline_update_changes_orgs_and_name(client, seeded):
+    slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
+    url = f"/api/camps/{slug}/timeline"
+    s1 = make_slot(client, slug, aid)
+
+    def update(**fields):
+        rev = get_json(client, url)["camp"]["rev"]
+        ok(client.patch(url, json={"rev": rev, "updates": [{"slot_id": s1, **fields}]},
+                        headers=ADMIN))
+        return [e["changes"] for e in audit(client, slug, entity_type="slot")
+                if e["action"] == "update"]
+
+    assert update(org_ids=[oid], override_name="Hra") == [
+        {"orgs": [[], ["K"]], "override_name": [None, "Hra"]}]
+    seg = get_json(client, url)["segments"][0]
+    assert seg["attending"] == [oid] and seg["override_name"] == "Hra"
+    assert len(update(org_ids=[oid])) == 1   # unchanged: no audit row
 
 
 def test_timeline_create_rejects_foreign_activity(client, seeded):

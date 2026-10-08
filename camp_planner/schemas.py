@@ -239,27 +239,27 @@ class MoveIn(_TimeSpan):
     slot_id: int
 
 
-class RetypeIn(BaseModel):
-    """Change an existing slot's role (main/prep/cleanup); placement is unaffected."""
-    slot_id: int
-    role: SlotRole
-
-
-class TimelineCreate(_TimeSpan):
+class TimelineCreate(_TimeSpan, SlotUpdateIn):
     """A new slot to add in a timeline batch (activity_id says which activity it joins)."""
     activity_id: int
     role: SlotRole = SlotRole.main
 
 
+class TimelineSlotUpdate(SlotUpdateIn):
+    """An existing slot's role, attendees and/or name override, changed in a timeline batch."""
+    slot_id: int
+    role: SlotRole | None = None
+
+
 class TimelineSaveIn(BaseModel):
-    """One atomic editing-session save: reposition (moves), add (creates) and remove
-    (deletes) slots together, guarded by the optimistic-lock rev."""
+    """One atomic editing-session save of slot changes, guarded by the optimistic-lock rev."""
     model_config = ConfigDict(json_schema_extra={"examples": [{
         "rev": 7,
         "moves": [{"slot_id": 12, "start_at": "2026-07-04T14:00:00", "end_at": "2026-07-04T16:00:00"}],
         "creates": [{"activity_id": 4, "role": "prep",
                      "start_at": "2026-07-04T13:30:00", "end_at": "2026-07-04T14:00:00"}],
-        "retypes": [{"slot_id": 9, "role": "cleanup"}],
+        "updates": [{"slot_id": 9, "role": "cleanup", "org_ids": [3, 5],
+                     "override_name": "Ranní kolo"}],
         "deletes": [18],
     }]})
     rev: int = Field(description="Revize, kterou klient načetl (optimistický zámek).")
@@ -268,7 +268,7 @@ class TimelineSaveIn(BaseModel):
         description="Vědomé přepsání: přeskočí kontrolu revize (tlačítko „Přepsat“ v konfliktním dialogu).")
     moves: list[MoveIn] = []
     creates: list[TimelineCreate] = []
-    retypes: list[RetypeIn] = []
+    updates: list[TimelineSlotUpdate] = []
     deletes: list[int] = []
 
 
