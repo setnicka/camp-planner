@@ -15,6 +15,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Added
 
 - Timeline:
+  - Edit mode can duplicate a slot, with its orgs and name.
   - Today is marked in the day column.
 
 ### Changed

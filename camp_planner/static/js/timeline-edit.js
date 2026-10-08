@@ -1,13 +1,13 @@
 // Camp Planner: timeline editor (loaded only when the user can edit).
 //
 // Split out of timeline.js: drag/resize existing slots, double-tap to add (with an
-// activity-picker modal), tap-select + action bar to edit or delete, undo/redo, an unsaved-
-// changes list, and a batched PATCH save under the timeline_rev optimistic lock.
+// activity-picker modal), tap-select + action bar to edit, duplicate or delete, undo/redo,
+// an unsaved-changes list, and a batched PATCH save under the timeline_rev optimistic lock.
 // timeline.js calls window.cpTimelineEdit(ctx) with the render context it shares.
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, selectItem, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
   const { el, api, withId, canHover, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -398,6 +398,26 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     }
   }
 
+  // --- duplicate (a pending create on the same spot, to drag elsewhere) --------
+  // A cut piece (multi-row or clamped) is not offered: it is not the whole slot.
+  function duplicate(it) {
+    const src = it._seg;
+    const id = "new-" + (++tempSeq);
+    const seg = { ...src, idx: id, slot_id: null };
+    const spec = { activity_id: src.activity_id, role: src.role, ...itemTimes(it),
+                   org_ids: src.attending, override_name: src.override_name || null };
+    const data = { id, group: it.group, start: it.start, end: it.end, slotId: null,
+                   _seg: seg, _title: it._title, ...segData(seg, true) };
+    const add = () => { creates.set(id, spec); items.add(data); };
+    add();
+    selectItem(id);   // the bar and card move to the copy, uncovering the original
+    record({
+      label: `Duplikován slot „${it._title || "slot"}“: ${rangeLabel(it.group, it.start, it.end)}`,
+      undo: () => { creates.delete(id); items.remove(id); },
+      redo: add,
+    });
+  }
+
   // Re-render items from a patched copy of their _seg: an unedited slot's _seg is its saved
   // segment.
   function reseg(itemList, patch) {
@@ -442,6 +462,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   setBarActions((it) => {
     return editing ? [
       it._seg && { label: "✎ Upravit slot", onClick: () => editSlot(it) },
+      it._seg && !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", onClick: () => duplicate(it) },
       { label: "↺ Typ slotu", onClick: () => openSlotType(it) },
       { label: "🗑 Smazat blok", danger: true, onClick: deleteSelected },
     ] : [
