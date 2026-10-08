@@ -141,7 +141,8 @@ tentýž slot nebo `Esc` výběr zruší.
 Jedna aktivita může mít slotů kolik chce, i žádný. Úpravy probíhají v **editačním módu**
 (tlačítko *Upravit sloty a časy*): dvojklik na prázdné místo založí slot, tažení slot
 posune nebo změní jeho délku (do puštění zůstává na původním místě šrafovaný obrys),
-kliknutí nabídne úpravu účastníků a názvu a smazání. Na telefonu se slot táhne po podržení
+kliknutí nabídne úpravu účastníků a názvu, duplikaci (kopie s účastníky a názvem vznikne na
+stejném místě, odkud se přetáhne jinam) a smazání. Na telefonu se slot táhne po podržení
 prstu (nebo po vybrání klepnutím); rychlý tah přes nevybraný slot jen posouvá rozvrhem. Změny
 se hromadí a ukládají se až tlačítkem **Uložit**; odchod ze stránky s neuloženými změnami si
 vyžádá potvrzení.

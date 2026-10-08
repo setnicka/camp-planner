@@ -12,6 +12,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Timeline: edit mode can duplicate a slot, with its orgs and name.
+
 ### Changed
 
 - Timeline: slot boxes with square corners, even gaps and text colour by contrast.

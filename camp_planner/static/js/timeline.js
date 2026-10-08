@@ -337,10 +337,11 @@
     if (act !== selActivity) { selActivity = act; applyHeights(); }
     if (lastSel != null) showBar(); else hideBar();
   }
-  function clearSelection() {
-    timeline.setSelection([]);
+  function selectItem(id) {   // null clears
+    timeline.setSelection(id == null ? [] : [id]);
     selectionChanged();
   }
+  function clearSelection() { selectItem(null); }
   timeline.on("select", (props) => {
     // only a tap toggles: vis also selects on a long press, which starts a touch drag
     if (props.event?.type === "tap" && props.items.length === 1 && props.items[0] === lastSel) {
@@ -794,7 +795,7 @@
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
       fmtClock, mToDate, applyHeights, segmentContent, segmentBase,
-      rehydrate, clearSelection, openDetail,
+      rehydrate, selectItem, clearSelection, openDetail,
       setBarActions: (fn) => { barActions = fn; }, showBar, hideBar,
     });
   } else {
