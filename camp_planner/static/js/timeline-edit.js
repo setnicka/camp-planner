@@ -1,13 +1,9 @@
 // Camp Planner: timeline editor (loaded only when the user can edit).
-//
-// Split out of timeline.js: drag/resize existing slots, double-tap to add (with an
-// activity-picker modal), tap-select + action bar to edit, duplicate or delete, undo/redo,
-// an unsaved-changes list, and a batched PATCH save under the timeline_rev optimistic lock.
 // timeline.js calls window.cpTimelineEdit(ctx) with the render context it shares.
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, selectItem, clearSelection, openDetail, setBarActions, showBar, hideBar } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, dayName, mToDate, applyHeights, segmentContent, buildItem, orgById, rehydrate, selectItem, openDetail, setBarActions, setPending, showBar, hideBar } = ctx;
   const { el, api, withId, canHover, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -21,7 +17,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   const updates = new Map();  // slot_id -> {role?, org_ids?, override_name?}
   const deletes = new Set();  // slot_id                        (existing slots removed)
   const creates = new Map();  // item id (string) -> {activity_id, role, start_at, end_at, …}
-  // One entry per user action (drag / resize / create / delete); each can undo()/redo().
+  // One entry per user action, each with undo()/redo() and `of`, its slot's slotKey.
   const history = [];
   const redoStack = [];
 
@@ -65,18 +61,35 @@ window.cpTimelineEdit = function setupEditing(ctx) {
 
   // --- change log (undo / redo) ----------------------------------------------
   const snapshot = (id) => { const it = items.get(id); return it ? { start: it.start, end: it.end, group: it.group } : null; };
-  const clockOf = (group, date) => fmtClock(absMinOf(group, date));
-  const rangeLabel = (group, start, end) => `${clockOf(group, start)}–${clockOf(group, end)}`;
-  // "<day>. HH:MM" for an absolute camp-minute, used to label a multi-row slot's range,
-  // which a single group's HH:MM–HH:MM can't express.
-  function dayClock(abs) {
-    const i = Math.max(0, Math.min(payload.groups.length - 1, Math.floor((abs - WINDOW_START) / DAY_MIN)));
-    const g = payload.groups[i];
-    const dom = g && g.iso_date ? g.iso_date.slice(8).replace(/^0/, "") + ". " : "";
-    return dom + fmtClock(abs);
+  // An absolute range in text: "po 3. 8. 16:45–18:45", across rows "po 3. 8. 22:00 – út 4. 8.
+  // 02:00". A single-row range leaves out its day when that is `skipDay`.
+  const rowOf = (abs) => Math.max(0, Math.min(payload.groups.length - 1, Math.floor((abs - WINDOW_START) / DAY_MIN)));
+  function spanLabel(s, e, skipDay) {
+    const r = rowOf(s), rEnd = rowOf(e - 1);   // the end's row holds e - 1
+    if (r !== rEnd) return `${dayName(r)} ${fmtClock(s)} – ${dayName(rEnd)} ${fmtClock(e)}`;
+    return `${r === skipDay ? "" : dayName(r) + " "}${fmtClock(s)}–${fmtClock(e)}`;
   }
-  const slotRangeLabel = (aStart, aEnd) => `${dayClock(aStart)} → ${dayClock(aEnd)}`;
-  const hasPending = () => history.length > 0;
+  // the target's day only when it differs from the source's
+  const moveLabel = ([s0, e0], [s1, e1]) =>
+    `${spanLabel(s0, e0)} → ${spanLabel(s1, e1, rowOf(s0) === rowOf(e0 - 1) ? rowOf(s0) : null)}`;
+  // Changes of one kind to one slot share a fold key; the list shows their net change as one
+  // row, or none.
+  const nameOf = (item) => item._seg ? item._seg.override_name || item._seg.title : "slot";
+  const slotKey = (item) => creates.has(String(item.id)) ? "new:" + item.id : "slot:" + item.slotId;
+  const moveFold = (key, title, from, to) => ({
+    key: "move:" + key, from, to,
+    same: (a, b) => a[0] === b[0] && a[1] === b[1],
+    label: (a, b) => `${b[1] - b[0] === a[1] - a[0] ? "Přesunut" : "Změněna velikost"} „${title}“: ${moveLabel(a, b)}`,
+  });
+  // A new slot's one row in the change list, read off the slot as it is now: its later
+  // edits fold into it.
+  const newSlotLabel = (verb, id) => () => {
+    const it = items.get(id), seg = it._seg;
+    return `${verb} slot „${nameOf(it)}“: ${spanLabel(seg.abs_start_min, seg.abs_end_min)}`
+      + (seg.role !== "main" ? `, ${ROLE_LABEL[seg.role]}` : "")
+      + (seg.attending.length ? `, účastníci ${initialsOf(seg.attending)}` : "");
+  };
+  const hasPending = () => foldedChangeLines().length > 0;
 
   // record() only logs (the caller has already applied the forward effect); undo()/redo()
   // re-apply the before/after state to both the items DataSet and the net batch maps.
@@ -89,34 +102,37 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     return `${n} ${plural(n, "změna", "změny", "změn")}`;
   }
   function refresh() {
-    if (saveBtn) saveBtn.disabled = !history.length;
+    const lines = foldedChangeLines(), n = lines.length;
+    if (saveBtn) saveBtn.disabled = !n;
     if (undoBtn) undoBtn.disabled = !history.length;
     if (redoBtn) redoBtn.disabled = !redoStack.length;
-    if (changesBtn) { const n = foldedChangeLines().length; changesBtn.hidden = !n; changesBtn.textContent = pluralChanges(n); }
-    if (changesOpen) renderChangeList();
+    if (changesBtn) { changesBtn.hidden = !n; changesBtn.textContent = pluralChanges(n); }
+    if (changesOpen) renderChangeList(lines);
   }
 
-  // Fold every move/resize of one block (change.fold) into a single row at its first
-  // occurrence, showing the net first→last range, even when interleaved with other blocks.
-  // Drives both the rows and the "N změn" counter; undo/redo still steps through each.
+  // A new slot deleted again leaves no row at all; a deleted saved slot only its delete.
+  function gone(c) {
+    const [kind, id] = c.of.split(":");
+    return kind === "new" ? !creates.has(id) : deletes.has(Number(id)) && !c.deleting;
+  }
+  // The change list's rows, folded; they also drive the counter and whether anything is pending.
   function foldedChangeLines() {
-    const rows = [];            // display rows in first-occurrence order
-    const byKey = new Map();    // fold.key -> its row (later moves of that block merge in)
+    const rows = [];
+    const byKey = new Map();    // fold.key -> its row
     for (const c of history) {
-      if (!c.fold) { rows.push({ label: c.label }); continue; }
+      if (gone(c) || (c.of.startsWith("new:") && !c.creating)) continue;
+      if (!c.fold) { rows.push(c.creating ? c.label() : c.label); continue; }
       const seen = byKey.get(c.fold.key);
-      if (seen) seen.last = c.fold;                 // extend the net range to this move
+      if (seen) seen.last = c.fold;
       else { const row = { first: c.fold, last: c.fold }; byKey.set(c.fold.key, row); rows.push(row); }
     }
-    return rows.map((r) => {
-      if (r.label != null) return r.label;
-      const verb = r.first.durFrom === r.last.durTo ? "Přesunut" : "Změněna velikost";
-      return `${verb} „${r.first.title}“: ${r.first.from} → ${r.last.to}`;
-    });
+    return rows.flatMap((r) => typeof r === "string" ? [r]
+      : r.first.same(r.first.from, r.last.to) ? [] : [r.first.label(r.first.from, r.last.to)]);
   }
   // Numbered rows, shared by the popover and the Save/Discard confirm dialog.
-  function changeRows() {
-    return foldedChangeLines().map((txt, i) => el("div", { class: "cp-change-row" }, (i + 1) + ". " + txt));
+  function changeRows(lines = foldedChangeLines()) {
+    return lines.map((txt, i) => el("div", { class: "cp-change-row" },
+      el("span", { class: "cp-change-n" }, (i + 1) + "."), el("span", null, txt)));
   }
 
   // --- unsaved-changes list popover ------------------------------------------
@@ -124,13 +140,13 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   const changesPanel = el("div", { class: "cp-changes-panel", hidden: true });
   document.body.append(changesPanel);
   const closeChanges = () => { changesOpen = false; changesPanel.hidden = true; };
-  function renderChangeList() {
-    if (!history.length) { closeChanges(); return; }
-    changesPanel.replaceChildren(...changeRows());
+  function renderChangeList(lines = foldedChangeLines()) {
+    if (!lines.length) { closeChanges(); return; }
+    changesPanel.replaceChildren(...changeRows(lines));
   }
   function toggleChanges() {
     changesOpen = !changesOpen;
-    if (!changesOpen || !history.length) { closeChanges(); return; }
+    if (!changesOpen || !hasPending()) { closeChanges(); return; }
     renderChangeList();
     changesPanel.hidden = false;
     const r = changesBtn.getBoundingClientRect();
@@ -144,8 +160,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   });
 
   // --- move / resize ---------------------------------------------------------
-  // vis applies the visual move via callback(item); we sync the batch map + log a
-  // change. A same-duration drag is "Přesunut"; a changed duration is "Změněna velikost".
+  // vis applies the visual move via callback(item); we sync the batch map + log a change.
   function onMove(item, callback) {
     dropGhost();
     showBar();   // back after the drag hid it, also when nothing changed; it waits a frame for vis
@@ -158,7 +173,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const id = item.id, key = String(id);
     const cur = items.get(id) || {};
     const seg = cur._seg;
-    const title = cur._title || "slot";
+    const title = nameOf(cur);
     const before = snapshot(id);
     const after = { start: item.start, end: item.end, group: item.group };
     if (before && +before.start === +after.start && +before.end === +after.end &&
@@ -166,21 +181,17 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       callback(item); return;  // dropped back where it started → not a change
     }
     const afterTimes = itemTimes(item);
-    // Re-render the box from the new time: its .ev-time and the card's clock derive from the
-    // segment's abs range, so rebuild it from a copy with the new range.
+    // .ev-time and the card read the segment's abs range
     const afterSeg = seg && { ...seg, day: Number(after.group),
       abs_start_min: absMinOf(after.group, after.start), abs_end_min: absMinOf(after.group, after.end),
       rel_start_min: relMin(after.start), rel_end_min: relMin(after.end) };
     const afterRender = afterSeg
       ? { _seg: afterSeg, content: segmentContent(afterSeg) } : {};
     const beforeRender = seg ? { _seg: seg, content: cur.content } : {};
-    const durFrom = (before.end - before.start) / 60000, durTo = (after.end - after.start) / 60000;
-    const verb = durFrom === durTo ? "Přesunut" : "Změněna velikost";
-    const rFrom = rangeLabel(before.group, before.start, before.end);
-    const rTo = rangeLabel(after.group, after.start, after.end);
-    const label = `${verb} „${title}“: ${rFrom} → ${rTo}`;
-    const fold = { key: creates.has(key) ? "create:" + key : "slot:" + item.slotId,
-                   title, from: rFrom, to: rTo, durFrom, durTo };
+    const of = slotKey(cur);
+    const fold = moveFold(of, title,
+      [absMinOf(before.group, before.start), absMinOf(before.group, before.end)],
+      [absMinOf(after.group, after.start), absMinOf(after.group, after.end)]);
 
     let change = null;
     if (creates.has(key)) {
@@ -188,7 +199,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       const beforeTimes = { start_at: spec.start_at, end_at: spec.end_at };
       Object.assign(spec, afterTimes);
       change = {
-        label, fold,
+        of, fold,
         undo: () => { items.update({ id, ...before, ...beforeRender }); Object.assign(spec, beforeTimes); },
         redo: () => { items.update({ id, ...after, ...afterRender }); Object.assign(spec, afterTimes); },
       };
@@ -197,7 +208,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       const prev = moves.has(slotId) ? moves.get(slotId) : null;
       moves.set(slotId, afterTimes);
       change = {
-        label, fold,
+        of, fold,
         undo: () => { items.update({ id, ...before, ...beforeRender }); if (prev) moves.set(slotId, prev); else moves.delete(slotId); },
         redo: () => { items.update({ id, ...after, ...afterRender }); moves.set(slotId, afterTimes); },
       };
@@ -234,7 +245,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       box.before(ghost);
     }
     callback(item);
-    if (movingTimeEl) movingTimeEl.textContent = rangeLabel(item.group, item.start, item.end);
+    if (movingTimeEl) {
+      movingTimeEl.textContent = `${fmtClock(absMinOf(item.group, item.start))}–${fmtClock(absMinOf(item.group, item.end))}`;
+    }
     hideBar();   // the bar and card stay behind as the box moves; back on drop
   }
 
@@ -252,7 +265,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       content: '<div class="ev"><div class="ev-title">Nový blok…</div></div>',
       className: "cp-placeholder",
     });
-    clearSelection();
+    selectItem(null);
     window.cpActivityPicker({   // shared two-tab picker (activity-picker.js)
       activitiesUrl: EDIT.activities, createUrl: EDIT.createActivity,
       campSlug: camp.slug, categories: payload.categories, roleLabels: ROLE_LABEL,
@@ -262,14 +275,8 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   }
 
   // Renderable vis-item fields derived from a segment object (the renderer's `_seg`). Shared
-  // by persisted slots and pending creates, so both go through one rendering path; a create
-  // (slot_id still null) gets the dashed `cp-new` class. `_base` is the class applyHeights toggles.
-  function segData(seg, isCreate) {
-    const base = segmentBase(seg) + (isCreate ? " cp-new" : "");
-    return { role: seg.role, className: base, _base: base,
-             content: segmentContent(seg) };
-  }
-
+  // by persisted slots and pending creates, so both go through one rendering path.
+  // `_base` is the class applyHeights builds on.
   // --- multi-row (window-crossing) slot editing ------------------------------
   // A slot whose [start,end] crosses the daily window renders as several items, one per
   // row. We keep the slot's absolute [start,end] canonical (carried on every segment as
@@ -281,10 +288,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // metadata from `tmpl`. Clamped to real rows; returns [] if nothing lands on a row.
   function sliceSlot(absStart, absEnd, tmpl) {
     const segs = [];
-    const lastRow = payload.groups.length - 1;
-    const first = Math.max(0, Math.floor((absStart - WINDOW_START) / DAY_MIN));
-    const last = Math.min(lastRow, Math.floor((absEnd - 1 - WINDOW_START) / DAY_MIN));
-    for (let day = first; day <= last; day++) {
+    for (let day = rowOf(absStart), last = rowOf(absEnd - 1); day <= last; day++) {
       const winLo = day * DAY_MIN + WINDOW_START, winHi = winLo + DAY_MIN;
       const lo = Math.max(absStart, winLo), hi = Math.min(absEnd, winHi);
       if (hi <= lo) continue;                         // slot doesn't reach this row's window
@@ -300,18 +304,16 @@ window.cpTimelineEdit = function setupEditing(ctx) {
 
   // A renderable vis item for one freshly-sliced segment (fresh string id; no DB meaning).
   function segItem(seg) {
-    const id = "rs" + (++tempSeq);
-    seg.idx = id;                                     // segmentContent keys its .ev-time on seg.idx
-    return { id, group: seg.day, start: mToDate(seg.rel_start_min), end: mToDate(seg.rel_end_min),
-             slotId: seg.slot_id, _seg: seg, _title: seg.title, ...segData(seg, false) };
+    seg.idx = "rs" + (++tempSeq);
+    return buildItem(seg);
   }
 
   // Map a drag/resize of ONE segment onto its owning slot, then re-slice. Returns a
-  // change ({label, undo, redo}) to record, or null for a no-op / out-of-range edit.
+  // change to record, or null for a no-op / out-of-range edit.
   function lockedSlotEdit(item) {
     const slotId = item.slotId;
     const cur = items.get(item.id);
-    const seg = cur._seg, title = cur._title || "slot";
+    const seg = cur._seg, title = nameOf(cur);
     const winLo = seg.day * DAY_MIN + WINDOW_START;
     const dStart = Math.round(absMinOf(item.group, item.start) - (winLo + seg.rel_start_min));
     const dEnd = Math.round(absMinOf(item.group, item.end) - (winLo + seg.rel_end_min));
@@ -333,13 +335,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const oldIds = oldItems.map((it) => it.id);
     const newTimes = { start_at: absToNaive(s), end_at: absToNaive(e) };
     const prevMove = moves.has(slotId) ? moves.get(slotId) : null;
-    const verb = dStart === dEnd ? "Přesunut" : "Změněna velikost";
-    const from = slotRangeLabel(seg.abs_start_min, seg.abs_end_min), to = slotRangeLabel(s, e);
-    const label = `${verb} „${title}“: ${from} → ${to}`;
     return {
-      label,
-      fold: { key: "slot:" + slotId, title, from, to,
-              durFrom: seg.abs_end_min - seg.abs_start_min, durTo: e - s },
+      of: "slot:" + slotId,
+      fold: moveFold("slot:" + slotId, title, [seg.abs_start_min, seg.abs_end_min], [s, e]),
       redo: () => { items.remove(oldIds); items.add(newItems); moves.set(slotId, newTimes); segCount[slotId] = newIds.length; },
       undo: () => { items.remove(newIds); items.add(oldItems); if (prevMove) moves.set(slotId, prevMove); else moves.delete(slotId); segCount[slotId] = oldIds.length; },
     };
@@ -352,35 +350,89 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     // a pending create is a real segment with no slot_id yet, rendered like any other.
     const seg = {
       idx: id, title: activity.title, role, cat_key: catKey, activity_id: activity.id, slot_id: null,
-      abs_start_min: sAbs, abs_end_min: eAbs, garants: [], helpers: [], attending: [],
-      tag_ids: [], cont_back: false, cont_fwd: false,
+      abs_start_min: sAbs, abs_end_min: eAbs, day: group, rel_start_min: sRel, rel_end_min: eRel,
+      garants: [], helpers: [], attending: [], tag_ids: [], cont_back: false, cont_fwd: false,
     };
-    const data = { id, group, start: mToDate(sRel), end: mToDate(eRel), slotId: null,
-                   _seg: seg, _title: activity.title, ...segData(seg, true) };
+    const data = buildItem(seg);
     items.update(data);          // convert the placeholder into the real (pending) slot
     creates.set(id, spec);
-    const when = `${fmtClock(sAbs)}–${fmtClock(eAbs)}`;
     record({
-      label: `Vytvořen slot „${roleHeading(role, activity.title)}“: ${when}`,
+      of: "new:" + id, creating: true,
+      label: newSlotLabel("Vytvořen", id),
       undo: () => { creates.delete(id); items.remove(id); },
       redo: () => { creates.set(id, spec); items.update(data); },
     });
   }
+
+  // --- unsaved state: a dashed ring on the box, the saved values in its card and title ----
+  // An edit that restores the saved value counts as none. payload.segments holds the saved
+  // slots: edits re-render from copies (reseg), and only a save replaces them.
+  const initialsOf = (ids) => ids.map((id) => orgById[id]?.initials ?? "?").join(", ") || "nikdo";
+  const sameIds = (a, b) => [...a].sort().join() === [...b].sort().join();
+  const nameText = (name) => name ? `„${name}“` : "podle aktivity";
+  const NEW_NOTE = "Nový slot, zatím neuložený";
+  const savedOf = (id) => payload.segments.find((g) => g.slot_id === id);
+  const isMoved = (id) => {
+    const moved = moves.get(id), saved = savedOf(id);
+    return !!moved && (moved.start_at !== absToNaive(saved.abs_start_min)
+      || moved.end_at !== absToNaive(saved.abs_end_min));
+  };
+  // Only the fields that differ from the saved slot: one sent unchanged would overwrite a
+  // concurrent edit of it, as the slot PATCH (attendees outside edit mode) keeps the rev.
+  function changedFields(id) {
+    const upd = updates.get(id) || {}, saved = savedOf(id), out = {};
+    if (upd.role != null && upd.role !== saved.role) out.role = upd.role;
+    if (upd.override_name !== undefined && upd.override_name !== (saved.override_name || null)) {
+      out.override_name = upd.override_name;
+    }
+    if (upd.org_ids && !sameIds(upd.org_ids, saved.attending)) out.org_ids = upd.org_ids;
+    return out;
+  }
+  function pendingOf(it) {
+    if (creates.has(String(it.id))) return { cls: "cp-new", title: NEW_NOTE, footer: NEW_NOTE };
+    const id = it.slotId;
+    if (!moves.has(id) && !updates.has(id)) return null;
+    const saved = savedOf(id);
+    const was = {}, parts = [];   // parts: the title's one-line summary
+    if (isMoved(id)) {   // the day only if it changed
+      was.when = spanLabel(saved.abs_start_min, saved.abs_end_min, rowOf(it._seg.abs_start_min));
+      parts.push(was.when);
+    }
+    const diff = changedFields(id);
+    const retyped = "role" in diff, renamed = "override_name" in diff;
+    if (retyped) parts.push(`typ ${ROLE_LABEL[saved.role]}`);
+    if (renamed) parts.push(`název ${nameText(saved.override_name)}`);
+    if (retyped || renamed) was.heading = roleHeading(saved.role, saved.override_name || saved.title);
+    if (diff.org_ids) {
+      was.attending = saved.attending;
+      parts.push(`účastníci ${initialsOf(saved.attending)}`);
+    }
+    return parts.length ? { cls: "cp-changed", title: `Neuloženo, původně ${parts.join("; ")}`,
+                            footer: "Obsahuje neuložené změny", was } : null;
+  }
+  setPending(pendingOf);
+  // the hover title, set as the pointer arrives so it is current (vis re-renders boxes)
+  container.addEventListener("mouseover", (e) => {
+    if (!editing) return;
+    const box = e.target.closest(".vis-item"), id = timeline.getEventProperties(e).item;
+    if (!box || id == null) return;
+    const title = pendingOf(items.get(id))?.title;
+    if (title) box.title = title; else box.removeAttribute("title");
+  });
 
   // --- delete (action bar on the selected slot) ------------------------------
   function deleteSelected() {
     const [id] = timeline.getSelection();
     if (id == null) return;
     const snap = items.get(id);
-    if (!snap) return;
+    if (!snap?._seg) return;
     const key = String(id);
-    const when = rangeLabel(snap.group, snap.start, snap.end);
-    const title = snap._title || "slot";
     if (creates.has(key)) {
       const spec = creates.get(key);
       creates.delete(key); items.remove(id);
       record({
-        label: `Smazán nový slot „${title}“: ${when}`,
+        of: "new:" + key,
+        label: `Smazán nový slot „${nameOf(snap)}“: ${spanLabel(snap._seg.abs_start_min, snap._seg.abs_end_min)}`,
         undo: () => { creates.set(key, spec); items.add(snap); },
         redo: () => { creates.delete(key); items.remove(id); },
       });
@@ -388,10 +440,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       const slotId = snap.slotId;
       const segs = segsOf(slotId);   // every row of a multi-row slot
       const ids = segs.map((it) => it.id);
-      const label = snap._seg ? slotRangeLabel(snap._seg.abs_start_min, snap._seg.abs_end_min) : when;
+      // named as saved: its pending edits leave the list (see gone)
+      const saved = savedOf(slotId);
       deletes.add(slotId); items.remove(ids);
       record({
-        label: `Smazán slot „${title}“: ${label}`,
+        of: "slot:" + slotId, deleting: true,
+        label: `Smazán slot „${nameOf({ _seg: saved })}“: ${spanLabel(saved.abs_start_min, saved.abs_end_min)}`,
         undo: () => { deletes.delete(slotId); items.add(segs); },
         redo: () => { deletes.add(slotId); items.remove(ids); },
       });
@@ -406,13 +460,13 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const seg = { ...src, idx: id, slot_id: null };
     const spec = { activity_id: src.activity_id, role: src.role, ...itemTimes(it),
                    org_ids: src.attending, override_name: src.override_name || null };
-    const data = { id, group: it.group, start: it.start, end: it.end, slotId: null,
-                   _seg: seg, _title: it._title, ...segData(seg, true) };
+    const data = buildItem(seg);
     const add = () => { creates.set(id, spec); items.add(data); };
     add();
     selectItem(id);   // the bar and card move to the copy, uncovering the original
     record({
-      label: `Duplikován slot „${it._title || "slot"}“: ${rangeLabel(it.group, it.start, it.end)}`,
+      of: "new:" + id, creating: true,
+      label: newSlotLabel("Duplikován", id),
       undo: () => { creates.delete(id); items.remove(id); },
       redo: add,
     });
@@ -423,8 +477,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function reseg(itemList, patch) {
     itemList.forEach((it) => {
       if (!it._seg) return;
-      const seg = { ...it._seg, ...patch };
-      items.update({ id: it.id, _seg: seg, ...segData(seg, it.slotId == null) });
+      items.update(buildItem({ ...it._seg, ...patch }));
     });
   }
   const piecesOf = (item) => creates.has(String(item.id)) ? [items.get(item.id)] : segsOf(item.slotId);
@@ -442,7 +495,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const next = { ...prev, role: newRole };
     set(newRole, next);
     record({
-      label: `Změněn typ „${item._title || "slot"}“: ${ROLE_LABEL[before]} → ${ROLE_LABEL[newRole]}`,
+      of: slotKey(item),
+      fold: { key: "role:" + slotKey(item), from: before, to: newRole, same: (a, b) => a === b,
+              label: (a, b) => `Změněn typ „${nameOf(item)}“: ${ROLE_LABEL[a]} → ${ROLE_LABEL[b]}` },
       undo: () => set(before, prev), redo: () => set(newRole, next),
     });
   }
@@ -460,9 +515,10 @@ window.cpTimelineEdit = function setupEditing(ctx) {
 
   // --- floating action bar (timeline.js): this mode's actions -----------------------
   setBarActions((it) => {
+    if (!it._seg) return [];   // the new-slot placeholder while its picker is open
     return editing ? [
-      it._seg && { label: "✎ Upravit slot", onClick: () => editSlot(it) },
-      it._seg && !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", onClick: () => duplicate(it) },
+      { label: "✎ Upravit slot", onClick: () => editSlot(it) },
+      !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", onClick: () => duplicate(it) },
       { label: "↺ Typ slotu", onClick: () => openSlotType(it) },
       { label: "🗑 Smazat blok", danger: true, onClick: deleteSelected },
     ] : [
@@ -474,10 +530,6 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- slot attendees and name override --------------------------------------
   // The shared dialog (cpSlotOrgsEdit) of the activity detail page: outside edit mode a
   // standalone PATCH of the attendees, in edit mode attendees and name join the batch.
-  const orgInitials = Object.fromEntries(payload.orgs.map((o) => [o.id, o.initials]));
-  const initialsOf = (ids) => ids.map((id) => orgInitials[id] ?? "?").join(", ") || "nikdo";
-  const sameIds = (a, b) => [...a].sort().join() === [...b].sort().join();
-  const nameText = (name) => name ? `„${name}“` : "podle aktivity";
   function editSlot(item) {
     const seg = item._seg;
     window.cpSlotOrgsEdit({
@@ -490,10 +542,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const key = String(item.id), slotId = item.slotId, cur = item._seg;
     const before = { org_ids: cur.attending, override_name: cur.override_name || null };
     const after = { org_ids: orgIds, override_name: name };
-    const parts = [];
-    if (!sameIds(before.org_ids, orgIds)) parts.push(`účastníci ${initialsOf(before.org_ids)} → ${initialsOf(orgIds)}`);
-    if (before.override_name !== name) parts.push(`název ${nameText(before.override_name)} → ${nameText(name)}`);
-    if (!parts.length) return;
+    const sameOrgs = (a, b) => sameIds(a.org_ids, b.org_ids), sameName = (a, b) => a.override_name === b.override_name;
+    const same = (a, b) => sameOrgs(a, b) && sameName(a, b);
+    if (same(before, after)) return;
     const spec = creates.get(key), prev = updates.get(slotId);
     const set = (v, net) => {   // net: the slot's batch entry, undefined for none
       reseg(piecesOf(item), { attending: v.org_ids, override_name: v.override_name });
@@ -503,7 +554,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const next = { ...prev, ...after };
     set(after, next);
     record({
-      label: `Upraven slot „${item._title || "slot"}“: ${parts.join("; ")}`,
+      of: slotKey(item),
+      fold: { key: "details:" + slotKey(item), from: before, to: after, same,
+              label: (a, b) => `Upraven slot „${nameOf(item)}“: ` + [
+                !sameOrgs(a, b) && `účastníci ${initialsOf(a.org_ids)} → ${initialsOf(b.org_ids)}`,
+                !sameName(a, b) && `název ${nameText(a.override_name)} → ${nameText(b.override_name)}`,
+              ].filter(Boolean).join("; ") },
       undo: () => set(before, prev), redo: () => set(after, next),
     });
   }
@@ -529,13 +585,14 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   async function save(force) {
     if (!hasPending()) return;
     saveBtn.disabled = true;
-    const kept = (map) => [...map].filter(([slotId]) => !deletes.has(slotId));   // a deleted slot's edits go unsent
+    const kept = (map) => [...map.keys()].filter((slotId) => !deletes.has(slotId));   // a deleted slot's edits go unsent
     const body = {
       rev: camp.rev,
       force: !!force,
-      moves: kept(moves).map(([slot_id, t]) => ({ slot_id, ...t })),
+      moves: kept(moves).filter(isMoved).map((slot_id) => ({ slot_id, ...moves.get(slot_id) })),
       creates: [...creates.values()],
-      updates: kept(updates).map(([slot_id, v]) => ({ slot_id, ...v })),
+      updates: kept(updates).map((slot_id) => ({ slot_id, ...changedFields(slot_id) }))
+        .filter((u) => Object.keys(u).length > 1),
       deletes: [...deletes],
     };
     try {
@@ -605,7 +662,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     editing = on;
     frame.classList.toggle("cp-editing", on);   // the CSS hangs every edit-mode look off it
     toggleBtn.innerHTML = on ? "Zrušit" : toggleLabel;
-    if (!on) { clearSelection(); closeChanges(); }
+    if (!on) { selectItem(null); closeChanges(); }
     // No per-item `editable`: that overrides itemsAlwaysDraggable and would force a
     // select-first step. The global editable + itemsAlwaysDraggable make every box
     // drag/resize directly; multi-segment slots are guarded in onMove. A touch screen keeps
@@ -637,14 +694,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     setEditing(false);
   }
   toggleBtn.addEventListener("click", () => {
-    if (editing && hasPending()) {
-      openChangesConfirm({
-        question: "Zahodit tyto změny?", confirmLabel: "Zahodit", danger: true,
-        onConfirm: discardChanges,
-      });
-      return;
-    }
-    setEditing(!editing);
+    if (!editing) setEditing(true);
+    else if (!hasPending()) discardChanges();   // undoes changes that net out to nothing
+    else openChangesConfirm({
+      question: "Zahodit tyto změny?", confirmLabel: "Zahodit", danger: true,
+      onConfirm: discardChanges,
+    });
   });
   if (saveBtn) saveBtn.addEventListener("click", () => {
     if (hasPending()) openChangesConfirm({ question: "Uložit tyto změny?", confirmLabel: "Uložit", onConfirm: save });
