@@ -25,6 +25,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Timeline: edit mode saves a slot's orgs and name with the other edits. In the timeline save
   API, `creates` take `org_ids` and `override_name`, and a new `updates` list changes a saved
   slot's `role`, `org_ids` and `override_name`, replacing `retypes`.
+- Timeline: a slot with unsaved edits is outlined and its card shows the saved values; the
+  change list shows only net changes.
 - Timeline: a lighter grid, with crescents and stars marking the night.
 - Timeline: today is marked in the day column.
 - Timeline: the controls form one toolbar on top of the grid, the filters above it.

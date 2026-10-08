@@ -144,8 +144,9 @@ posune nebo změní jeho délku (do puštění zůstává na původním místě 
 kliknutí nabídne úpravu účastníků a názvu, duplikaci (kopie s účastníky a názvem vznikne na
 stejném místě, odkud se přetáhne jinam) a smazání. Na telefonu se slot táhne po podržení
 prstu (nebo po vybrání klepnutím); rychlý tah přes nevybraný slot jen posouvá rozvrhem. Změny
-se hromadí a ukládají se až tlačítkem **Uložit**; odchod ze stránky s neuloženými změnami si
-vyžádá potvrzení.
+se hromadí a ukládají se až tlačítkem **Uložit**; nový slot má modrý čárkovaný rámeček,
+změněný oranžový a jeho detail ukáže i původní hodnoty. Odchod ze stránky s neuloženými
+změnami si vyžádá potvrzení.
 
 ### Klávesové zkratky
 

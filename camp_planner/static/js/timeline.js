@@ -150,13 +150,18 @@
 
   const CZ_WEEKDAYS = ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"]; // by getUTCDay(): 0 = Sunday
 
-  // Format a row label from its ISO date. Parse as UTC (split, not new Date(str)) so the
+  // [weekday, "d. m."] of an ISO date. Parse as UTC (split, not new Date(str)) so the
   // weekday can't roll a day in a negative-offset browser timezone.
-  function dayLabel(iso) {
+  function dayParts(iso) {
     const [y, m, d] = iso.split("-").map(Number);
-    const weekday = CZ_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-    return `${weekday}<span class="day-dom">${d}. ${m}.</span>`;
+    return [CZ_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], `${d}. ${m}.`];
   }
+  function dayLabel(iso) {
+    const [weekday, date] = dayParts(iso);
+    return `${weekday}<span class="day-dom">${date}</span>`;
+  }
+  // a row's day in running text: "ne 5. 7."
+  const dayName = (row) => dayParts(payload.groups[row].iso_date).join(" ").toLowerCase();
 
   const groups = new vis.DataSet(
     // always a class: vis throws on className "" (see markToday)
@@ -193,17 +198,22 @@
   }
 
   // The card under a selected slot: heading + clock, then full org names grouped by role
-  // (empty groups omitted). Shown for every slot, even one with no orgs assigned yet.
-  function segmentCard(s) {
-    const names = (ids) => ids.map((id) => escapeHtml(orgById[id]?.name ?? "?")).join(", ");
+  // (empty groups omitted). Shown for every slot, even one with no orgs assigned yet. `was`:
+  // the saved values an unsaved edit replaced, shown beside the new ones.
+  function segmentCard(s, was = {}) {
+    const names = (ids) => ids.map((id) => escapeHtml(orgById[id]?.name ?? "?")).join(", ") || "nikdo";
+    const prior = (v) => v == null ? "" : ` <i class="cp-tl-pending">(původně ${v})</i>`;
     const when = `${fmtClock(s.abs_start_min)}–${fmtClock(s.abs_end_min)}`;
     const lines = [
-      `<b>${escapeHtml(roleHeading(s.role, s.override_name || s.title))}</b>`,
-      when,
+      `<b>${escapeHtml(roleHeading(s.role, s.override_name || s.title))}</b>` +
+        prior(was.heading && escapeHtml(was.heading)),
+      when + prior(was.when),
     ];
     if (s.garants.length) lines.push(`<b>Garant:</b> ${names(s.garants)}`);
     if (s.helpers.length) lines.push(`<b>Pomocník:</b> ${names(s.helpers)}`);
-    if (s.attending.length) lines.push(`<b>Účastní se:</b> ${names(s.attending)}`);
+    if (s.attending.length || was.attending) {
+      lines.push(`<b>Účastní se:</b> ${names(s.attending)}` + prior(was.attending && names(was.attending)));
+    }
     return lines.join("<br>");
   }
 
@@ -232,7 +242,6 @@
       role: s.role,
       _seg: s,             // the source segment, for attendee re-render in the editor
       _base: base,         // class without `solo`, for live height recompute
-      _title: s.title,     // for the change-log labels
     };
   }
 
@@ -243,6 +252,8 @@
   // background items (no _base) are skipped. Also fades the activities other than the
   // selected one (cp-unfocus); the selected activity is never dimmed by the filter.
   let selActivity = null;   // activity of the selected slot (see selectionChanged)
+  // the editor's unsaved state of a box: { cls, title, footer, was } | null (see segmentCard)
+  let pendingOf = () => null;
   function applyHeights() {
     const rows = {};
     items.get().forEach((it) => { if (it._base != null) (rows[it.group] ??= []).push(it); });
@@ -257,7 +268,8 @@
         // one fade at most: the display filter's, else stepping back from the selection
         const fade = !mine && it._seg && !segMatches(it._seg) ? " cp-dim"
           : selActivity != null && !mine ? " cp-unfocus" : "";
-        const cls = it._base + (over.has(it.id) ? "" : " solo") + fade;
+        const pending = pendingOf(it);
+        const cls = it._base + (over.has(it.id) ? "" : " solo") + fade + (pending ? " " + pending.cls : "");
         if (cls !== it.className) updates.push({ id: it.id, className: cls });
       });
     });
@@ -759,7 +771,10 @@
       const sel = selectedBox(), it = selectedItem();
       if (!sel || !it) return hideBar();
       bar.replaceChildren(actionGroup(barActions(it)));
-      card.innerHTML = it._seg ? segmentCard(it._seg) : "";   // a placeholder has nothing to tell yet
+      const pending = pendingOf(it);
+      card.innerHTML = it._seg   // a placeholder has nothing to tell yet
+        ? segmentCard(it._seg, pending?.was) +
+          (pending ? `<br><i class="cp-tl-pending">${pending.footer}</i>` : "") : "";
       bar.hidden = false;
       card.hidden = !it._seg;
       placeBar(sel);
@@ -794,9 +809,10 @@
       EDIT: JSON.parse(editEl.textContent),
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
-      fmtClock, mToDate, applyHeights, segmentContent, segmentBase,
+      fmtClock, dayName, mToDate, applyHeights, segmentContent, segmentBase,
       rehydrate, selectItem, clearSelection, openDetail,
-      setBarActions: (fn) => { barActions = fn; }, showBar, hideBar,
+      setBarActions: (fn) => { barActions = fn; }, setPending: (fn) => { pendingOf = fn; },
+      showBar, hideBar,
     });
   } else {
     barActions = (it) => [{ label: "ℹ️ Detail", onClick: () => openDetail(it) }];

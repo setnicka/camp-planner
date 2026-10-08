@@ -199,7 +199,8 @@
    can't skew them; a border, as a shadow blurs at fractional positions */
 #cp-timeline .vis-item.vis-selected::before,
 #cp-timeline .vis-item.cp-placeholder::before,
-#cp-timeline .vis-item.cp-new::before {
+#cp-timeline .vis-item.cp-new::before,
+#cp-timeline .vis-item.cp-changed::before {
   content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   border: 2px solid;
 }
@@ -267,6 +268,8 @@
   outline: 1px dashed var(--cp-text-dim); outline-offset: -3px;
 }
 #cp-timeline .vis-item.cp-new::before { border-style: dashed; border-color: var(--cp-accent); }
+/* a saved slot with unsaved edits (timeline-edit.js) */
+#cp-timeline .vis-item.cp-changed::before { border-style: dashed; border-color: var(--cp-warning); }
 
 /* unsaved-changes counter + its popover list */
 .cp-tl-changes { background: var(--cp-warning-subtle); border-color: var(--cp-warning); color: var(--cp-warning-text); }
@@ -275,7 +278,12 @@
   background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 8px;
   box-shadow: 0 6px 20px var(--cp-shadow-2); padding: 0.4rem;
 }
-.cp-change-row { font-size: 12px; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--cp-border-subtle); white-space: nowrap; }
+/* a long row wraps under its text, past the number */
+.cp-change-row {
+  display: flex; gap: 0.3em; font-size: 12px; padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--cp-border-subtle); overflow-wrap: anywhere;
+}
+.cp-change-n { flex: none; }
 .cp-change-row:last-child { border-bottom: 0; }
 
 /* floating action bar over the selected slot, its card under it: neutral and raised over the
@@ -289,6 +297,7 @@
 }
 .cp-tl-actions .cp-seg-btn { font-size: 13px; padding: 0.35rem 0.7rem; }
 .cp-tl-card { max-width: min(22rem, calc(100vw - 8px)); }
+.cp-tl-pending { color: var(--cp-warning-text); }
 
 /* activity-picker modal */
 /* Generic modal scaffold, chips, search/list and modal buttons now live in
