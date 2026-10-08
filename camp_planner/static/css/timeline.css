@@ -189,6 +189,9 @@
   mask-image: linear-gradient(to left, transparent 2px, var(--cp-text) 10px);
 }
 #cp-timeline .ev-title { font-weight: 600; }
+/* focus by keyboard rings the grid until a slot is selected, which then shows it */
+#cp-timeline:focus-visible { outline: 2px solid var(--cp-accent); outline-offset: -2px; }
+#cp-timeline:focus:has(.vis-selected), #cp-timeline:focus:not(:focus-visible) { outline: none; }
 #cp-timeline .ev-meta { opacity: .9; font-size: 10px; }
 /* a full-height box gives the orgs their own line; the time wraps at its dash */
 #cp-timeline .vis-item.solo .ev-meta { white-space: normal; }
@@ -298,6 +301,16 @@
 .cp-tl-actions .cp-seg-btn { font-size: 13px; padding: 0.35rem 0.7rem; }
 .cp-tl-card { max-width: min(22rem, calc(100vw - 8px)); }
 .cp-tl-pending { color: var(--cp-warning-text); }
+/* read out to a screen reader only (timeline.js) */
+.cp-tl-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+/* the ? shortcut list */
+.cp-keys td, .cp-keys th { padding: 0.3rem 0.5rem; }
+.cp-keys th { padding-top: 1rem; }
+.cp-keys td:first-child { white-space: nowrap; }
+.cp-keys kbd {
+  font: inherit; font-size: 13px; padding: 0 0.4em; margin-right: 0.25em; white-space: nowrap;
+  border: 1px solid var(--cp-border); border-radius: 3px; background: var(--cp-surface-2);
+}
 
 /* activity-picker modal */
 /* Generic modal scaffold, chips, search/list and modal buttons now live in

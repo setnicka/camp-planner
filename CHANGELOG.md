@@ -15,6 +15,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Added
 
 - Timeline: edit mode can duplicate a slot, with its orgs and name.
+- Timeline: keyboard control. Arrows and Tab walk the slots, Shift+arrows move one in edit
+  mode, a letter underlined in the slot's menu runs that action, and `?` lists the shortcuts.
 
 ### Changed
 
@@ -40,6 +42,8 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ### Fixed
 
+- Timeline: a slot over midnight can no longer be dragged partly out of the camp's days,
+  which the save then refused.
 - Activity detail: with the warehouse off, a material no longer links to a warehouse box;
   the API also lists its responsible orgs.
 - Embedded: an `AUTH_LOGIN_ENDPOINT` key in the host's config no longer redirects the

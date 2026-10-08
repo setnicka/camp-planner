@@ -150,12 +150,30 @@ změnami si vyžádá potvrzení.
 
 ### Klávesové zkratky
 
+Přehled ukáže v rozvrhu klávesa `?`.
+
 | Zkratka | Co udělá |
 | --- | --- |
-| `Ctrl` + kolečko | přiblížení a oddálení rozvrhu |
-| `Esc` | zrušení výběru slotu |
-| `Ctrl+Z` | zpět, jen v editačním módu |
-| `Ctrl+Y` nebo `Ctrl+Shift+Z` | vpřed |
+| `Ctrl` + kolečko, `+` `-` | přiblížení a oddálení rozvrhu |
+| `Tab` | na rozvrhu vybere slot (během tábora první dnešní, který ještě neskončil) |
+| `Tab` / `Shift+Tab` | s vybraným slotem výběr dalšího / předchozího slotu v čase |
+| `←` `→`, `Home` `End` | předchozí / další, první / poslední slot v témže dni |
+| `↑` `↓` | slot v předchozím / dalším dni, který se s vybraným časově nejvíc kryje |
+| `Enter` | detail vybraného slotu, v editačním módu jeho úprava |
+| písmeno podtržené v nabídce | akce nabídky vybraného slotu, např. `D` duplikuje nebo otevře detail |
+| `Esc` | zrušení výběru slotu; další `Tab` pak rozvrh opustí |
+
+V editačním módu navíc (na Macu místo `Ctrl` klávesa `Cmd`):
+
+| Zkratka | Co udělá |
+| --- | --- |
+| `Shift+E` | zapnutí / vypnutí editačního módu (funguje i mimo něj) |
+| `Shift` + šipka | posun vybraného slotu o krok mřížky nebo o den |
+| `Ctrl+Shift+←` `Ctrl+Shift+→` | zkrácení / prodloužení vybraného slotu o krok mřížky |
+| `N` | nový slot hned za vybraným |
+| `Delete`, `Backspace` | smazání vybraného slotu |
+| `Ctrl+Z`, `Ctrl+Y` nebo `Ctrl+Shift+Z` | zpět, vpřed |
+| `Ctrl+S` | uložení změn |
 
 ### Víc slotů jedné aktivity
 

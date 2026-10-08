@@ -7,7 +7,7 @@
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, dayName, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, selectItem, clearSelection, openDetail, setBarActions, setPending, showBar, hideBar } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, dayName, mToDate, applyHeights, segmentContent, segmentBase, rehydrate, selectItem, clearSelection, openDetail, busy, setBarActions, setPending, showBar, hideBar } = ctx;
   const { el, api, withId, canHover, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -256,6 +256,11 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (s < 0) { e -= s; s = 0; }
     if (e > DAY_MIN) { s -= e - DAY_MIN; e = DAY_MIN; }
     if (s < 0) s = 0;
+    addSlot(group, s, e);
+  }
+  // A placeholder over [s, e] of the row while the activity picker is open. From the keyboard's
+  // N, `fromId` is the slot it came from: the new slot is selected once made, else that again.
+  function addSlot(group, s, e, fromId) {
     const id = "new-" + (++tempSeq);
     items.add({
       id, group, start: mToDate(s), end: mToDate(e),
@@ -266,8 +271,8 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     window.cpActivityPicker({   // shared two-tab picker (activity-picker.js)
       activitiesUrl: EDIT.activities, createUrl: EDIT.createActivity,
       campSlug: camp.slug, categories: payload.categories, roleLabels: ROLE_LABEL,
-      onConfirm: (activity, role) => bindNewSlot(id, group, s, e, activity, role),
-      onCancel: () => items.remove(id),
+      onConfirm: (activity, role) => { bindNewSlot(id, group, s, e, activity, role); if (fromId != null) selectItem(id); },
+      onCancel: () => { items.remove(id); if (fromId != null && items.get(fromId)) selectItem(fromId); },
     });
   }
 
@@ -333,9 +338,12 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (e <= s) e = s + MIN;
     if (s === seg.abs_start_min && e === seg.abs_end_min) return null;   // nothing changed (e.g. cut-edge drag)
 
+    if (s < WINDOW_START || e > WINDOW_START + payload.groups.length * DAY_MIN) {
+      toast("Mimo rozsah tábora.", true);
+      return null;
+    }
     const oldItems = segsOf(slotId);
     const segs = sliceSlot(s, e, { ...oldItems[0]._seg });
-    if (!segs.length) { toast("Mimo rozsah tábora.", true); return null; }
     const newItems = segs.map(segItem), newIds = newItems.map((it) => it.id);
     const oldIds = oldItems.map((it) => it.id);
     const newTimes = { start_at: absToNaive(s), end_at: absToNaive(e) };
@@ -513,13 +521,13 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   setBarActions((it) => {
     if (!it._seg) return [];   // the new-slot placeholder while its picker is open
     return editing ? [
-      { label: "✎ Upravit slot", onClick: () => editSlot(it) },
-      !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", onClick: () => duplicate(it) },
-      { label: "↺ Typ slotu", onClick: () => openSlotType(it) },
+      { label: "✎ Upravit slot", key: "u", main: true, onClick: () => editSlot(it) },
+      !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", key: "d", onClick: () => duplicate(it) },
+      { label: "↺ Typ slotu", key: "t", onClick: () => openSlotType(it) },
       { label: "🗑 Smazat blok", danger: true, onClick: deleteSelected },
     ] : [
-      it.slotId != null && { label: "Přiřadit orgy", onClick: () => assignOrgs(it) },
-      { label: "ℹ️ Detail", onClick: () => openDetail(it) },
+      it.slotId != null && { label: "Přiřadit orgy", key: "o", onClick: () => assignOrgs(it) },
+      { label: "ℹ️ Detail", key: "d", main: true, onClick: () => openDetail(it) },
     ];
   });
 
@@ -604,8 +612,11 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       const fresh = await api("GET", EDIT.save);  // same URL, GET = the re-sliced timeline
       moves.clear(); updates.clear(); deletes.clear(); creates.clear();
       history.length = 0; redoStack.length = 0;
+      // fresh items get new ids: a saved slot stays selected by its slot id (a new one has none yet)
+      const keptSlot = items.get(timeline.getSelection()[0] ?? -1)?.slotId;
       rehydrate(fresh);      // rebuild the items + fresh rev, no page reload
       recomputeSegCount();
+      if (keptSlot != null) selectItem(segsOf(keptSlot)[0]?.id ?? null);
       setEditing(false);     // leave edit mode, as the old reload did
       toast("Časový plán uložen");
     } catch (e) {
@@ -658,7 +669,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     frame.classList.toggle("cp-editing", on);   // the CSS hangs every edit-mode look off it
     toggleBtn.innerHTML = on ? "Zrušit" : toggleLabel;
     for (const b of [saveBtn, changesBtn]) if (b) b.hidden = !on;
-    if (!on) { clearSelection(); closeChanges(); }
+    if (!on) closeChanges();
     // No per-item `editable`: that overrides itemsAlwaysDraggable and would force a
     // select-first step. The global editable + itemsAlwaysDraggable make every box
     // drag/resize directly; multi-segment slots are guarded in onMove. A touch screen keeps
@@ -675,10 +686,11 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     // vis bakes editability into each item's DOM at render time, so re-add the program
     // items to make them pick up the new editable/itemsAlwaysDraggable options (per the mock).
     const ids = items.getIds({ filter: (it) => it._base != null });
-    const data = items.get(ids);
+    const data = items.get(ids), [sel] = timeline.getSelection();
     items.remove(ids);
     items.add(data);
-    applyHeights();   // the removal may have dropped the selection; re-bake the fades
+    if (sel != null && items.get(sel)) selectItem(sel);   // the removal dropped it; keys go on from it
+    applyHeights();   // re-bake the fades
     refresh();
   }
 
@@ -703,11 +715,65 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   if (undoBtn) undoBtn.addEventListener("click", undo);
   if (redoBtn) redoBtn.addEventListener("click", redo);
   if (changesBtn) changesBtn.addEventListener("click", toggleChanges);
+  // The editor's keys (the page's: timeline.js). Shift+E toggles edit mode: Shift because it
+  // works with nothing selected, where a stray E is likeliest. Ctrl/Cmd+Z, Y, S undo, redo and
+  // save (not the browser's "save page"). On the selected slot Shift+arrows step it a snap or a
+  // day, Ctrl/Cmd+Shift+←/→ move its end, Delete removes it, N adds one right after it. A step
+  // goes the drag's way, so it undoes and folds like one. Not Alt+Shift: on Windows that
+  // switches the keyboard layout.
+  const STEPS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  // `moved`: the piece to change, with its new times; `row` keeps a re-sliced slot's selection
+  function keyEdit(it, moved, row) {
+    if (isLocked(it)) {
+      const change = lockedSlotEdit(moved);
+      if (!change) return;
+      change.redo();
+      const pieces = segsOf(it.slotId);
+      selectItem((pieces.find((p) => p.group === row) || pieces[0]).id);
+      record(change);
+    } else if (payload.groups[moved.group] && relMin(moved.start) >= 0 && relMin(moved.end) <= DAY_MIN
+               && moved.end - moved.start >= camp.snap_minutes * 60000) {   // stays in its row, as a drag does
+      onMove(moved, (x) => { if (x) items.update({ id: x.id, group: x.group, start: x.start, end: x.end }); });
+    }
+  }
+  // the piece holding a slot's end (a multi-row slot's last row)
+  const lastPiece = (it) => isLocked(it) ? segsOf(it.slotId).find((p) => !p._seg.cont_fwd) : it;
   document.addEventListener("keydown", (e) => {
-    if (!editing || !(e.ctrlKey || e.metaKey)) return;
-    const k = e.key.toLowerCase();
-    if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
-    else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); redo(); }
+    if (busy(e) || e.altKey) return;
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (k === "e" && e.shiftKey && !mod) { e.preventDefault(); if (!e.repeat) toggleBtn.click(); return; }
+    if (!editing) return;
+    if (mod && !STEPS[e.key]) {
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); redo(); }
+      else if (k === "s" && !e.shiftKey) { e.preventDefault(); if (!e.repeat) saveBtn?.click(); }
+      return;
+    }
+    const [id] = timeline.getSelection();
+    const it = id != null && items.get(id);
+    if (!it?._seg) return;
+    if ((e.key === "Delete" || e.key === "Backspace") && !mod && !e.shiftKey) {
+      e.preventDefault(); deleteSelected(); return;
+    }
+    if (k === "n" && !mod && !e.shiftKey) {   // up to an hour, from its end
+      e.preventDefault();
+      if (e.repeat) return;
+      const last = lastPiece(it), s = relMin(last.end), end = Math.min(s + 60, DAY_MIN);
+      if (end - s < camp.snap_minutes) toast("Za slotem už v tomto dni není místo.", true);
+      else addSlot(Number(last.group), s, end, id);
+      return;
+    }
+    const step = e.shiftKey && STEPS[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const ms = step[0] * camp.snap_minutes * 60000;
+    if (mod) {   // the end, on the piece that holds it
+      const last = lastPiece(it);
+      if (ms && last) keyEdit(it, { ...last, end: new Date(+last.end + ms) }, Number(it.group));
+      return;
+    }
+    const row = Number(it.group) + step[1];
+    keyEdit(it, { ...it, group: row, start: new Date(+it.start + ms), end: new Date(+it.end + ms) }, row);
   });
   window.addEventListener("beforeunload", (e) => {
     if (!reloading && hasPending()) { e.preventDefault(); e.returnValue = ""; }

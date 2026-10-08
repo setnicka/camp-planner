@@ -13,7 +13,7 @@
   if (!dataEl || !container) return;
 
   const payload = JSON.parse(dataEl.textContent);
-  const { el, withId, actionGroup } = window.cpDom;
+  const { el, withId, actionGroup, openModal } = window.cpDom;
   const camp = payload.camp;
   const DAY_MIN = 24 * 60;
   const WINDOW_START = camp.window_start_min;
@@ -347,7 +347,7 @@
     lastSel = timeline.getSelection()[0] ?? null;
     const act = selectedItem()?._seg?.activity_id ?? null;
     if (act !== selActivity) { selActivity = act; applyHeights(); }
-    if (lastSel != null) showBar(); else hideBar();
+    if (lastSel != null) showBar(); else { hideBar(); live.textContent = ""; }
   }
   function selectItem(id) {   // null clears
     timeline.setSelection(id == null ? [] : [id]);
@@ -363,11 +363,65 @@
   });
   // vis drops a removed item from the selection without a `select` event
   items.on("remove", () => { if (lastSel != null && !timeline.getSelection().length) clearSelection(); });
-  document.addEventListener("keydown", (e) => {
-    // runs before a dialog's own Escape, so an open dialog is still in the DOM
-    if (e.key === "Escape" && lastSel != null && !document.querySelector(".cp-modal-overlay")) {
-      clearSelection();
+  // Keys act on the page, not while a dialog is open or a field has the focus.
+  const busy = (e) => document.querySelector(".cp-modal-overlay") || e.target.closest("input, textarea, select");
+  // Walking the slots from the selected one: Tab / Shift+Tab in time order (a multi-row slot
+  // once), ←/→ and Home/End within its day, ↑/↓ to the most overlapping slot of the nearest
+  // day that has one. With nothing selected the keys keep their usual job.
+  const slotItems = () => items.get({ filter: (it) => it._seg });
+  function nextInTime(cur, dir) {
+    const list = slotItems()
+      .sort((a, b) => a._seg.abs_start_min - b._seg.abs_start_min || a._seg.abs_end_min - b._seg.abs_end_min
+        || String(a.slotId ?? a.id).localeCompare(String(b.slotId ?? b.id)) || a.group - b.group)
+      .filter((it, i, all) => it.slotId == null || all[i - 1]?.slotId !== it.slotId);
+    const i = list.findIndex((it) => it.id === cur.id || (it.slotId != null && it.slotId === cur.slotId));
+    return list[(i + dir + list.length) % list.length];
+  }
+  const daySlots = (cur) => slotItems().filter((it) => Number(it.group) === Number(cur.group))
+    .sort((a, b) => a.start - b.start || a.end - b.end || String(a.id).localeCompare(String(b.id)));
+  function nextInRow(cur, dir) {
+    const row = daySlots(cur);
+    return row[row.findIndex((it) => it.id === cur.id) + dir];
+  }
+  function nextDay(cur, dir) {
+    const all = slotItems();
+    // overlap is negative for a slot apart from it, so the most is also the nearest
+    const overlap = (it) => Math.min(it.end, cur.end) - Math.max(it.start, cur.start);
+    for (let g = Number(cur.group) + dir; payload.groups[g]; g += dir) {
+      const row = all.filter((it) => Number(it.group) === g);
+      if (row.length) return row.reduce((best, it) => overlap(it) > overlap(best) ? it : best);
     }
+  }
+  const WALK = { ArrowLeft: (it) => nextInRow(it, -1), ArrowRight: (it) => nextInRow(it, 1),
+                 ArrowUp: (it) => nextDay(it, -1), ArrowDown: (it) => nextDay(it, 1),
+                 Home: (it) => daySlots(it)[0], End: (it) => daySlots(it).at(-1) };
+  function goTo(next) {   // select it and bring it into view
+    if (!next) return;
+    selectItem(next.id);
+    const w = timeline.getWindow();
+    if (next.start < w.start || next.end > w.end) {   // not animated, so the box is in place below
+      timeline.moveTo(new Date((+next.start + +next.end) / 2), { animation: false });
+    }
+    // the page only: scrollIntoView would also scroll vis's clipped panels, shifting the grid
+    requestAnimationFrame(() => {
+      const r = selectedBox()?.getBoundingClientRect();
+      if (r && r.top < 0) window.scrollBy(0, r.top - 8);
+      else if (r && r.bottom > innerHeight) window.scrollBy(0, r.bottom - innerHeight + 8);
+    });
+  }
+  // Tabbed onto (not clicked, nor handed back by a closing dialog), the grid selects today's
+  // first slot not yet over during the camp, else the top-left one in view; Escape lets go,
+  // and Tab then moves on. Tab's focus lands between its keydown and keyup.
+  let tabbing = false;
+  document.addEventListener("keydown", (e) => { if (e.key === "Tab") tabbing = true; }, true);
+  document.addEventListener("keyup", () => { tabbing = false; }, true);
+  container.addEventListener("focus", () => {
+    if (lastSel != null || !tabbing) return;
+    const all = slotItems(), now = campNowOnAxis(), today = dayOf(now);
+    const first = (list) => list.sort((a, b) => a.group - b.group || a.start - b.start)[0];
+    const w = timeline.getWindow();
+    goTo((inCamp(today) && first(all.filter((it) => Number(it.group) === today && +it.end > now - today * DAY_MS)))
+      || first(all.filter((it) => it.end > w.start && it.start < w.end)));
   });
 
   // vis keeps its root hidden until a `changed` handler sees this flag, so the
@@ -601,6 +655,42 @@
   const zoomOut = document.getElementById("cp-zoom-out");
   if (zoomIn) zoomIn.addEventListener("click", () => timeline.zoomIn(0.4));
   if (zoomOut) zoomOut.addEventListener("click", () => timeline.zoomOut(0.4));
+  // ? lists the shortcuts, the editing ones to an editor
+  // [keys, what]: each key its own <kbd>, a string the label of a whole group
+  const KEYS = [
+    [["Tab"], "na rozvrhu vybere slot, pak další v čase (Shift+Tab předchozí)"],
+    [["←", "→"], "předchozí / další slot v témže dni"],
+    [["Home", "End"], "první / poslední slot dne"],
+    [["↑", "↓"], "slot v předchozím / dalším dni"],
+    [["Enter"], "detail slotu, v režimu úprav jeho úprava"],
+    ["podtržené písmeno", "akce z nabídky slotu"],
+    [["Esc"], "zrušení výběru"],
+    [["+", "−"], "přiblížení / oddálení"],
+    [["?"], "tento přehled"],
+  ];
+  const EDIT_KEYS = [
+    [["Shift + E"], "zapnutí / vypnutí režimu úprav"],
+    [["Shift + šipka"], "posun slotu o krok mřížky / o den"],
+    [["Ctrl + Shift + ←", "→"], "zkrácení / prodloužení slotu"],
+    [["N"], "nový slot za vybraným"],
+    [["Delete", "Backspace"], "smazání slotu"],
+    [["Ctrl + Z", "Ctrl + Y"], "zpět / vpřed"],
+    [["Ctrl + S"], "uložení změn"],
+  ];
+  function showKeys() {
+    const row = ([keys, what]) => el("tr", null,
+      el("td", null, ...(typeof keys === "string" ? [keys] : keys.map((k) => el("kbd", null, k)))),
+      el("td", null, what));
+    const rows = [...KEYS.map(row), ...(document.getElementById("cp-timeline-edit")
+      ? [el("tr", null, el("th", { colspan: 2 }, "Režim úprav")), ...EDIT_KEYS.map(row)] : [])];
+    const done = el("button", { type: "button", class: "cp-primary" }, "Zavřít");
+    const close = openModal(el("div", { class: "cp-modal cp-modal-wide" },
+      el("div", { class: "cp-modal-head" }, "Klávesové zkratky na timeline"),
+      el("div", { class: "cp-pane" }, el("table", { class: "cp-table cp-keys" }, el("tbody", null, ...rows))),
+      el("div", { class: "cp-modal-foot" }, done)));
+    done.addEventListener("click", close);
+    done.focus();
+  }
 
   // --- filter control (clickable legend + org chips + activity picker) -------
   // The category facet IS the legend (wired here). After it come an activity picker (long list
@@ -743,7 +833,9 @@
   // view moves, back once it settles, and following the slot when the page scrolls.
   const bar = el("div", { class: "cp-tl-actions", hidden: true });
   const card = el("div", { class: "cp-hint cp-tl-card", hidden: true });
-  document.body.append(bar, card);
+  // a screen reader hears the card as the selection or its slot changes
+  const live = el("div", { class: "cp-tl-live", role: "status", "aria-live": "polite" });
+  document.body.append(bar, card, live);
   let barActions = () => [];
   const openDetail = (it) => {
     const aid = it?._seg?.activity_id;
@@ -766,11 +858,35 @@
       top: (below + ch <= window.innerHeight - 4 ? below : Math.max(4, barTop - ch - 6)) + "px" });
   }
   const selectedBox = () => container.querySelector(".vis-item.vis-selected");
+  // An action's `key` presses it while its slot is selected, Enter presses the `main` one; the
+  // label underlines the letter.
+  function withKey(d) {
+    const i = d.key ? d.label.toLowerCase().indexOf(d.key) : -1;
+    return i < 0 ? d : { ...d, label: el("span", null, d.label.slice(0, i),
+      el("u", null, d.label[i]), d.label.slice(i + 1)) };
+  }
+  // The page's keys (the editor's own: timeline-edit.js). A held key repeats only zoom and
+  // walking; Ctrl keeps the browser's zoom.
+  document.addEventListener("keydown", (e) => {
+    // runs before a dialog's own Escape, so an open dialog is still in the DOM
+    if (busy(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === "+" || e.key === "=") return timeline.zoomIn(0.4);
+    if (e.key === "-") return timeline.zoomOut(0.4);
+    if (e.key === "?") { if (!e.repeat) showKeys(); return; }
+    const it = lastSel != null && selectedItem();
+    if (!it) return;
+    if (e.key === "Escape") return clearSelection();
+    const walk = e.key === "Tab" ? (cur) => nextInTime(cur, e.shiftKey ? -1 : 1) : !e.shiftKey && WALK[e.key];
+    if (walk) { e.preventDefault(); return goTo(walk(it)); }
+    if (e.repeat || e.shiftKey || (e.key === "Enter" && e.target.closest("button, a"))) return;   // a control's own Enter
+    const action = barActions(it).find((d) => d && (e.key === "Enter" ? d.main : d.key === e.key.toLowerCase()));
+    if (action) { e.preventDefault(); action.onClick(); }
+  });
   function showBar() {
     requestAnimationFrame(() => {
       const sel = selectedBox(), it = selectedItem();
       if (!sel || !it) return hideBar();
-      bar.replaceChildren(actionGroup(barActions(it)));
+      bar.replaceChildren(actionGroup(barActions(it).filter(Boolean).map(withKey)));
       const pending = pendingOf(it);
       card.innerHTML = it._seg   // a placeholder has nothing to tell yet
         ? segmentCard(it._seg, pending?.was) +
@@ -778,6 +894,8 @@
       bar.hidden = false;
       card.hidden = !it._seg;
       placeBar(sel);
+      const said = card.innerText.replace(/\n+/g, ". ");
+      if (live.textContent !== said) live.textContent = said;
     });
   }
   // a page scroll or resize only moves them (once a frame), leaving the buttons under the finger
@@ -810,11 +928,11 @@
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
       fmtClock, dayName, mToDate, applyHeights, segmentContent, segmentBase,
-      rehydrate, selectItem, clearSelection, openDetail,
+      rehydrate, selectItem, clearSelection, openDetail, busy,
       setBarActions: (fn) => { barActions = fn; }, setPending: (fn) => { pendingOf = fn; },
       showBar, hideBar,
     });
   } else {
-    barActions = (it) => [{ label: "ℹ️ Detail", onClick: () => openDetail(it) }];
+    barActions = (it) => [{ label: "ℹ️ Detail", key: "d", main: true, onClick: () => openDetail(it) }];
   }
 })();
