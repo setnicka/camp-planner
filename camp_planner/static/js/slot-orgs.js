@@ -3,11 +3,12 @@
 // One modal for editing a time block, used by both the timeline editor and the activity
 // detail page so the two stay identical. Multi-select chip group picks who staffs the
 // block; pass `withName: true` to also show a display-name field. PATCHes the given url
-// with the changed fields, then hands the saved state to onSaved(orgs, ids, overrideName).
+// with the changed fields, then hands the saved state to onSaved(orgs, ids, overrideName);
+// with onApply(ids, name) instead of url it saves nothing (the timeline editor's batch).
 // Exposed as window.cpSlotOrgsEdit; load after dom.js.
 "use strict";
 
-window.cpSlotOrgsEdit = function ({ orgs, selected, url, withName, name, namePlaceholder, onSaved }) {
+window.cpSlotOrgsEdit = function ({ orgs, selected, url, withName, name, namePlaceholder, onSaved, onApply }) {
   const { el, api, orgChips, formModal, toast } = window.cpDom;
   const group = orgChips(orgs, selected);
   const nameInput = withName
@@ -20,9 +21,11 @@ window.cpSlotOrgsEdit = function ({ orgs, selected, url, withName, name, namePla
     : null;
   formModal({
     title: withName ? "Upravit slot" : "Orgové bloku",
+    okLabel: onApply ? "Použít" : "Uložit",
     pane: el("div", { class: "cp-pane" }, nameField, group.node),
     onSubmit: async (close) => {
       const ids = group.get();
+      if (onApply) { close(); onApply(ids, nameInput?.value); return; }
       const body = { org_ids: ids };
       if (withName) body.override_name = nameInput.value;
       const json = await api("PATCH", url, body);

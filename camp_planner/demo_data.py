@@ -547,7 +547,7 @@ AUDIT = [
      {"role": [None, "cleanup"], "start_at": [None, _iso(7, "19:00")],
       "end_at": [None, _iso(7, "20:00")]}),
     (5, "A", None, EntityType.timeline, AuditAction.update, None,
-     {"moved": 6, "created": 0, "retyped": 0, "deleted": 0}),
+     {"moved": 6, "created": 0, "updated": 0, "deleted": 0}),
     (4, "K", "Šifrovačka", EntityType.tag, AuditAction.update, "Příprava před akcí",
      {"Příprava před akcí": ["45", "80"]}),
     (3, "H", "Zahajovací táborák", EntityType.todo, AuditAction.update,

@@ -59,8 +59,7 @@
     return chip;
   }
 
-  // shared slot-edit dialog (cpSlotOrgsEdit), same modal as the timeline editor, here with
-  // the name-override field too (the timeline editor has a separate name dialog).
+  // the slot dialog shared with the timeline editor (cpSlotOrgsEdit)
   function openSlotOrgs(s) {
     window.cpSlotOrgsEdit({
       orgs: DATA.orgs,

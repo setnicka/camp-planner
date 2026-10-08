@@ -551,10 +551,9 @@ def activity_tag_value(activity_id: int, tag_id: int):
 
 
 # --- slots -------------------------------------------------------------------
-# Slot placement (add / reposition / remove) is edited only through the timeline
-# batch (PATCH …/timeline); a slot's role is fixed at creation. The one slot-level
-# endpoint patches its attendees and/or display-name override. Neither is placement,
-# so it's grouped under "timeline" too.
+# Slot placement and role are edited only through the timeline batch (PATCH …/timeline).
+# The one slot-level endpoint patches attendees and/or the display-name override, which
+# are not placement; it's grouped under "timeline" too.
 
 @bp.patch("/slots/<int:slot_id>")
 @spec.validate(json=SlotUpdateIn, resp=Response(HTTP_200=SlotEnvelope, **_AUTH_400), tags=["timeline"])

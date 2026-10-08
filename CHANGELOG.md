@@ -20,8 +20,13 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Changed
 
 - API:
+  - The timeline save takes `org_ids` and `override_name` in `creates`, and
+    a new `updates` list (a saved slot's `role`, `org_ids`, `override_name`)
+    replaces `retypes`.  **Upgrade note:** breaking for clients sending
+    `retypes` (used only by the frontend).
   - A duplicated entry in an activity's orgs or tags gets a 422 response.
 - Timeline:
+  - Edit mode saves a slot's orgs and name with the other edits.
   - Restyled slot boxes, a lighter grid with the night marked.
   - A selected slot highlights its sibling slots and shows its actions and details panes.
   - Shadow of original position is shown when the slot is dragged.

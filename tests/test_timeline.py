@@ -20,8 +20,10 @@ from tests.conftest import (
     count_queries,
     get_json,
     make_activity,
+    make_camp,
     make_slot,
     ok,
+    save_timeline,
     viewer,
 )
 
@@ -155,7 +157,7 @@ def test_build_timeline_tags_lookup():
                                {"id": 8, "name": "Riziko", "pinned": False}]
 
 
-# --- timeline ----------------------------------------------------------------
+# --- the save API ------------------------------------------------------------
 
 def test_timeline_save_conflict_on_stale_rev(client, seeded):
     url = f"/api/camps/{seeded['slug']}/timeline"
@@ -185,9 +187,8 @@ def test_timeline_batch_create_move_delete(client, seeded):
     tl = get_json(client, url)
     assert len(tl["segments"]) == 2 and tl["camp"]["rev"] == rev + 1
 
-    # one batch-level summary, plus per-slot rows under the activity carrying the diff
-    kinds = {(e["entity_type"], e["action"]) for e in audit(client, slug)}
-    assert {("timeline", "update"), ("slot", "create"), ("slot", "update")} <= kinds
+    summary = audit(client, slug, entity_type="timeline")[0]   # newest first
+    assert summary["changes"] == {"moved": 1, "created": 1, "updated": 0, "deleted": 0}
     slot_rows = audit(client, slug, entity_type="slot")
     assert all(e["activity_id"] == aid for e in slot_rows)
     move = next(e for e in slot_rows if e["action"] == "update")
@@ -198,49 +199,74 @@ def test_timeline_batch_create_move_delete(client, seeded):
     assert get_json(client, url)["segments"] == []
 
 
-def test_timeline_retype_changes_role_and_audits(client, seeded):
-    slug, aid = seeded["slug"], seeded["activity_id"]
-    url = f"/api/camps/{slug}/timeline"
-    s1 = make_slot(client, slug, aid, role="main")
+def test_timeline_create_carries_orgs_and_name(client, seeded):
+    """A duplicated slot keeps its source's attendees and name."""
+    slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
 
-    def retype(rev):
-        body = {"rev": rev, "retypes": [{"slot_id": s1, "role": "cleanup"}]}
-        return ok(client.patch(url, json=body, headers=ADMIN))
+    def create(**extra):
+        return save_timeline(client, slug, creates=[
+            {"activity_id": aid, "start_at": "2026-07-04T13:00", "end_at": "2026-07-04T14:00",
+             **extra}])
 
-    def role_diffs():
-        return [e["changes"]["role"] for e in audit(client, slug, entity_type="slot")
-                if e["action"] == "update" and "role" in e["changes"]]
+    slot = ok(create(org_ids=[oid], override_name="Hra"))["created"][0]
+    assert slot["override_name"] == "Hra" and [o["initials"] for o in slot["orgs"]] == ["K"]
+    changes = audit(client, slug, entity_type="slot")[0]["changes"]
+    assert changes["orgs"] == [[], ["K"]] and changes["override_name"] == [None, "Hra"]
 
-    rev = get_json(client, url)["camp"]["rev"]
-    assert retype(rev)["rev"] == rev + 1
-    assert get_json(client, url)["segments"][0]["role"] == "cleanup"
-    assert role_diffs() == [["main", "cleanup"]]
-
-    retype(rev + 1)   # the same role again changes nothing and writes no audit row
-    assert role_diffs() == [["main", "cleanup"]]
+    assert create(org_ids=[99999]).status_code == 400
 
 
-def test_timeline_create_rejects_foreign_activity(client, seeded):
-    resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={
-        "rev": 0,
-        "creates": [{"activity_id": 99999, "start_at": "2026-07-04T13:00", "end_at": "2026-07-04T14:00"}],
-    }, headers=ADMIN)
-    assert resp.status_code == 400
+def test_timeline_update_changes_role_orgs_and_name(client, seeded):
+    slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
+    s1 = make_slot(client, slug, aid)
+
+    def update(**fields):
+        ok(save_timeline(client, slug, updates=[{"slot_id": s1, **fields}]))
+        return [e["changes"] for e in audit(client, slug, entity_type="slot")
+                if e["action"] == "update"]
+
+    assert update(role="cleanup", org_ids=[oid], override_name="Hra") == [
+        {"role": ["main", "cleanup"], "orgs": [[], ["K"]], "override_name": [None, "Hra"]}]
+    seg = get_json(client, f"/api/camps/{slug}/timeline")["segments"][0]
+    assert (seg["role"], seg["attending"], seg["override_name"]) == ("cleanup", [oid], "Hra")
+    assert len(update(role="cleanup", org_ids=[oid])) == 1   # unchanged: no audit row
 
 
-def test_timeline_create_rejects_end_before_start(client, seeded):
-    resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={
-        "rev": 0,
-        "creates": [{"activity_id": seeded["activity_id"],
-                     "start_at": "2026-07-04T16:00", "end_at": "2026-07-04T14:00"}],
-    }, headers=ADMIN)
-    assert resp.status_code == 422
+def test_timeline_delete_supersedes_the_slots_other_changes(client, seeded):
+    slug, aid, oid = seeded["slug"], seeded["activity_id"], seeded["org_id"]
+    s1 = make_slot(client, slug, aid)
+    ok(save_timeline(
+        client, slug,
+        moves=[{"slot_id": s1, "start_at": "2026-07-04T15:00", "end_at": "2026-07-04T16:00"}],
+        updates=[{"slot_id": s1, "org_ids": [oid], "override_name": "Hra"}],
+        deletes=[s1]))
+    assert get_json(client, f"/api/camps/{slug}/timeline")["segments"] == []
+    assert [e["action"] for e in audit(client, slug, entity_type="slot")] == ["delete", "create"]
 
 
-def test_timeline_save_requires_rev(client, seeded):
-    # rev is the optimistic lock: omitting it must not silently bypass it
-    resp = client.patch(f"/api/camps/{seeded['slug']}/timeline", json={"moves": []}, headers=ADMIN)
-    assert resp.status_code == 422
+def test_timeline_save_refuses_another_camps_slot(client, seeded):
+    make_camp(client, "jina", start_date="2026-07-04")
+    other = make_slot(client, "jina", make_activity(client, "jina"))
+    for change in ({"moves": [{"slot_id": other, "start_at": "2026-07-04T15:00",
+                               "end_at": "2026-07-04T16:00"}]},
+                   {"updates": [{"slot_id": other, "override_name": "Cizí"}]},
+                   {"deletes": [other]}):
+        resp = save_timeline(client, seeded["slug"], **change)
+        assert resp.status_code == 400 and "nepatří" in resp.get_json()["error"], change
+
+
+def test_timeline_save_rejects_bad_input(client, seeded):
+    url = f"/api/camps/{seeded['slug']}/timeline"
+
+    def save(body):
+        return client.patch(url, json=body, headers=ADMIN).status_code
+
+    def create(start, end, activity_id=seeded["activity_id"]):
+        return {"rev": 0, "creates": [{"activity_id": activity_id, "start_at": start, "end_at": end}]}
+
+    assert save({"moves": []}) == 422   # rev is the lock: omitting it must not bypass it
+    assert save(create("2026-07-04T13:00", "2026-07-04T14:00", activity_id=99999)) == 400
+    assert save(create("2026-07-04T16:00", "2026-07-04T14:00")) == 422
 
 
 def test_timeline_save_force_overrides_stale_rev(client, seeded):
@@ -258,13 +284,11 @@ def test_timeline_save_rejects_slot_outside_camp_days(client, seeded):
     clamps it away), an invisible slot no UI could reach. Camp: 2026-07-04 + 3 days,
     window 04:00 → valid range 07-04T04:00 .. 07-07T04:00."""
     slug, aid = seeded["slug"], seeded["activity_id"]
-    url = f"/api/camps/{slug}/timeline"
 
     def save(start, end, slot_id=None):
-        rev = get_json(client, url)["camp"]["rev"]
         change = ({"moves": [{"slot_id": slot_id, "start_at": start, "end_at": end}]} if slot_id
                   else {"creates": [{"activity_id": aid, "start_at": start, "end_at": end}]})
-        return client.patch(url, json={"rev": rev, **change}, headers=ADMIN)
+        return save_timeline(client, slug, **change)
 
     resp = save("2026-07-08T10:00", "2026-07-08T12:00")
     assert resp.status_code == 400 and "mimo dny akce" in resp.get_json()["error"]
@@ -321,8 +345,8 @@ def test_timeline_page_edit_wiring_for_editor(client, seeded):
     html = client.get(f"/camps/{slug}", headers=ADMIN).get_data(as_text=True)
     assert 'id="cp-edit-toggle"' in html
     assert 'id="cp-timeline-edit"' in html          # the edit-config JSON block
-    assert f"/api/camps/{slug}/timeline" in html     # save url
-    assert f"/api/camps/{slug}/activities" in html   # picker url
+    assert f"/api/camps/{slug}/timeline" in html
+    assert f"/api/camps/{slug}/activities" in html
     assert 'name="csrf-token"' in html
     assert 'class="cp-help-edit"' in html
 

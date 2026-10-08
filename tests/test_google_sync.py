@@ -519,6 +519,13 @@ def test_timeline_create_move_delete(client, seeded, gcal):
     assert len(gcal.events) == 1      # patched in place
     assert gcal.events[event_id]["start"]["dateTime"] == "2026-07-04T15:00:00"
 
+    body = {"rev": camp.timeline_rev, "updates": [{"slot_id": slot.id, "role": "prep",
+            "org_ids": [seeded["org_id"]], "override_name": "Ranní"}]}
+    assert client.patch(url, json=body, headers=hdr).status_code == 200
+    google_sync.drain(camp)
+    event = gcal.events[event_id]
+    assert (event["summary"], event["description"]) == ("Ranní (příprava)", "K")
+
     body = {"rev": camp.timeline_rev, "deletes": [slot.id]}
     assert client.patch(url, json=body, headers=hdr).status_code == 200
     google_sync.drain(camp)
