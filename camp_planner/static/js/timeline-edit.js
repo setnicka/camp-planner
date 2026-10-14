@@ -11,6 +11,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   let editing = false;
   let tempSeq = 0;
   let reloading = false;  // set before our own location.reload() so beforeunload stays quiet
+  let saving = false;     // a save in flight: editing waits, as its success clears the batch
   const reload = () => { reloading = true; location.reload(); };
   // Net batch sent on Save; kept in sync by every change's apply/revert.
   const moves = new Map();    // slot_id -> {start_at, end_at}  (existing slots repositioned)
@@ -103,9 +104,9 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   }
   function refresh() {
     const lines = foldedChangeLines(), n = lines.length;
-    if (saveBtn) saveBtn.disabled = !n;
-    if (undoBtn) undoBtn.disabled = !history.length;
-    if (redoBtn) redoBtn.disabled = !redoStack.length;
+    if (saveBtn) saveBtn.disabled = saving || !n;
+    if (undoBtn) undoBtn.disabled = saving || !history.length;
+    if (redoBtn) redoBtn.disabled = saving || !redoStack.length;
     if (changesBtn) { changesBtn.hidden = !n; changesBtn.textContent = pluralChanges(n); }
     if (changesOpen) renderChangeList(lines);
   }
@@ -163,6 +164,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // vis applies the visual move via callback(item); we sync the batch map + log a change.
   function onMove(item, callback) {
     dropGhost();
+    if (saving) { callback(null); return; }
     showBar();   // back after the drag hid it, also when nothing changed; it waits a frame for vis
     if (isLocked(item)) {  // multi-row (window-crossing) slot: re-slice the whole slot from this one drag
       const change = lockedSlotEdit(item);  // toasts on out-of-range
@@ -230,6 +232,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // the browser taking a drag over (a long-press menu, a scroll) ends it without onMove
   container.addEventListener("pointercancel", () => { if (ghost) { dropGhost(); showBar(); } });
   function onMoving(item, callback) {
+    if (saving) { callback(null); return; }
     const idStr = String(item.id);
     if (!movingTimeEl || movingTimeEl.dataset.id !== idStr || !movingTimeEl.isConnected) {
       movingTimeEl = container.querySelector('.ev-time[data-id="' + cssId(item.id) + '"]');
@@ -254,6 +257,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- add (double-tap empty space) ------------------------------------------
   function onAdd(item, callback) {
     callback(null); // we manage our own placeholder item instead of vis's default
+    if (saving) return;
     const group = Number(item.group ?? payload.groups[0].id);
     let s = relMin(item.start) - 60, e = relMin(item.start) + 60; // ±1h around the tap
     if (s < 0) { e -= s; s = 0; }
@@ -527,7 +531,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
 
   // --- floating action bar (timeline.js): this mode's actions -----------------------
   setBarActions((it) => {
-    if (!it._seg) return [];   // the new-slot placeholder while its picker is open
+    if (!it._seg || saving) return [];   // the new-slot placeholder while its picker is open
     return editing ? [
       { label: "✎ Upravit slot", key: "u", main: true, onClick: () => editSlot(it) },
       !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", key: "d", onClick: () => duplicate(it) },
@@ -594,9 +598,10 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // --- save (one PATCH, then refresh the authoritative state in place) -------
   // force=true makes the server skip the optimistic-lock check and overwrite
   // whatever is there (used from the conflict dialog's "Přepsat").
+  function setSaving(on) { saving = on; toggleBtn.disabled = on; refresh(); showBar(); }
   async function save(force) {
     if (!hasPending()) return;
-    saveBtn.disabled = true;
+    setSaving(true);
     const kept = (map) => [...map.keys()].filter((slotId) => !deletes.has(slotId));   // a deleted slot's edits go unsent
     const body = {
       rev: camp.rev,
@@ -610,9 +615,8 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     try {
       await api("PATCH", EDIT.save, body);        // CSRF refresh-and-retry handled inside
     } catch (e) {
-      if (e.status === 409) { openConflict(); return; }
-      toast(e.message, true);
-      saveBtn.disabled = false;
+      setSaving(false);
+      if (e.status === 409) openConflict(); else toast(e.message, true);
       return;
     }
     // PATCH committed. Refresh in place; if anything about that fails, reload for the
@@ -626,6 +630,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       rehydrate(fresh);      // rebuild the items + fresh rev, no page reload
       recomputeSegCount();
       if (keptSlot != null) selectItem(segsOf(keptSlot)[0]?.id ?? null);
+      setSaving(false);
       setEditing(false);     // leave edit mode, as the old reload did
       toast("Časový plán uložen");
     } catch (e) {
@@ -636,7 +641,6 @@ window.cpTimelineEdit = function setupEditing(ctx) {
 
   // shown when the save hit a stale-rev conflict: explain + offer the three ways out
   function openConflict() {
-    saveBtn.disabled = false; // back to a decision; the save isn't in flight anymore
     const opts = el("ul", { class: "cp-conflict-opts" });
     ["Vrátit se k editaci (a změny případně porovnat v druhém tabu).",
      "Přepsat vzdálené změny svými (force).",
@@ -740,7 +744,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // the piece holding a slot's end (a multi-row slot's last row)
   const lastPiece = (it) => isLocked(it) ? segsOf(it.slotId).find((p) => !p._seg.cont_fwd) : it;
   document.addEventListener("keydown", (e) => {
-    if (busy(e) || e.altKey) return;
+    if (busy(e) || e.altKey || saving) return;
     const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (k === "e" && e.shiftKey && !mod) { e.preventDefault(); if (!e.repeat) toggleBtn.click(); return; }
     if (!editing) return;

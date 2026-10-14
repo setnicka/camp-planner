@@ -46,6 +46,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 ### Fixed
 
 - Timeline:
+  - An edit made during a save is no longer lost; editing waits for the save.
   - A slot over midnight can no longer be dragged partly out of the camp's days
     (the save refused it).
 - Activity detail: with the warehouse off, a material no longer links to
