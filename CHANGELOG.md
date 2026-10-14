@@ -49,6 +49,8 @@ Versioning convention: a release that ships a new DB migration should bump the
   - An edit made during a save is no longer lost; editing waits for the save.
   - A slot over midnight can no longer be dragged partly out of the camp's days
     (the save refused it).
+  - The now line no longer skips a day just after midnight in older browsers,
+    and an unknown timezone falls back to the viewer's, not UTC.
 - Activity detail: with the warehouse off, a material no longer links to
   a warehouse box; the API also lists its responsible orgs.
 - Embedded:

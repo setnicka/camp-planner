@@ -278,19 +278,19 @@
   applyHeights();
 
   // Offset (ms) of the camp timezone at a given instant: how far local wall-clock
-  // leads UTC. Computed via Intl; falls back to 0 for an unknown timezone.
+  // leads UTC. Computed via Intl; a timezone unknown to it falls back to the viewer's offset.
   const tzFormats = {};   // building one is slow, and the now-line asks every redraw
   function tzOffsetMs(tz, date) {
     try {
       const f = tzFormats[tz] ??= new Intl.DateTimeFormat("en-US", {
-        timeZone: tz, hour12: false, year: "numeric", month: "2-digit",
+        timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit",
         day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
       });
       const p = {};
       for (const part of f.formatToParts(date)) p[part.type] = part.value;
       return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - date.getTime();
     } catch (_e) {
-      return 0;
+      return -date.getTimezoneOffset() * 60000;
     }
   }
 
