@@ -118,10 +118,10 @@ aktivity se můžou překrývat.
 ### Orientace
 
 Řádek začíná v nastavenou hodinu (výchozí 04:00). Pozadí je stínované podle výšky slunce
-(pokud má akce vyplněné souřadnice). Kliknutí na kategorii, orga nebo hru v hlavičce filtruje
-zobrazení, tlačítko *Zrušit filtr* ho zruší; tlačítka `+` a `−` mění přiblížení. Během akce
-je dnešní den v levém sloupci označen červeným proužkem a v jeho řádku ukazuje červená čára
-aktuální čas.
+(pokud má akce vyplněné souřadnice), tlačítko *Den/noc* stínování vypne. Kliknutí na
+kategorii, orga nebo hru v hlavičce filtruje zobrazení, tlačítko *Zrušit filtr* ho zruší;
+tlačítka `+` a `−` mění přiblížení. Během akce je dnešní den v levém sloupci označen
+červeným proužkem a v jeho řádku ukazuje červená čára aktuální čas.
 
 Na telefonu se rozvrh otevře jen na části dne: během akce kolem aktuálního času, jinak od
 prvního programu. Zbytek dne se zobrazí posunutím prstem do strany; stín u okraje mřížky
@@ -190,7 +190,7 @@ nová aktivita, nebo se slot přidá k již existující.
 ### Příprava a úklid
 
 Slot má typ **hlavní slot**, **příprava** nebo **úklid**. Příprava a úklid se
-v rozvrhu zobrazují poloprůhledně.
+v rozvrhu zobrazují tlumeně a kurzívou. Typ se v editačním módu mění akcí *Typ slotu*.
 
 ### Účastníci slotu
 
