@@ -55,6 +55,7 @@ Versioning convention: a release that ships a new DB migration should bump the
   - A host's `AUTH_LOGIN_ENDPOINT` config key no longer redirects the planner's
     sign-in.
 - A second Enter in the new-activity or new-token dialog no longer submits it twice.
+- The camp list shows a deleted camp's confirmation.
 
 ## [0.4.0] - 2026-09-27
 

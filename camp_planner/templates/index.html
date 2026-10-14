@@ -1,5 +1,5 @@
 {% extends "_layouts/page.html" %}
-{% from "_macros.html" import camp_sections, css %}
+{% from "_macros.html" import camp_sections, css, js %}
 {% block title %}Akce – Camp Planner{% endblock %}
 {# "Akce" rides in the navigation header (where camp pages show the camp name). The
    warehouse belongs to no camp, so its link sits beside it and the body offers no second
@@ -9,8 +9,14 @@
     <a class="cp-camp-link" href="{{ url_for('main.inventory_overview') }}">Sklad</a>
   {% endif %}{% endblock %}
 
+{# components.css and dom.js only for the toast a deleted camp queues (camp-settings.js) #}
 {% block cp_head %}
+  {{ css('css/components.css') }}
   {{ css('css/landing.css') }}
+{% endblock %}
+
+{% block cp_scripts %}
+  {{ js('js/dom.js') }}
 {% endblock %}
 
 {% block cp_content %}
