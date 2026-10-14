@@ -778,7 +778,7 @@ window.cpDom = (function () {
     node.addEventListener("animationend", () => node.classList.remove("cp-arrive"), { once: true });
   }
 
-  return { el, api, withId, asInstant, canHover, swatch, dash, fmtNum, amountText, amountList,
+  return { el, api, withId, asInstant, canHover, stampTheme, swatch, dash, fmtNum, amountText, amountList,
            czechKey, fuzzyFilter, byName, reveal,
            thumb, lightbox, openModal, submit, formModal,
            searchPicker, mergePicker, filterSlider, orgFilterHead, chipGroup, keyList, toast, toastNext, flash,

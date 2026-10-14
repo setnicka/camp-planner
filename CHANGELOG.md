@@ -56,6 +56,7 @@ Versioning convention: a release that ships a new DB migration should bump the
 - Embedded:
   - A host's `AUTH_LOGIN_ENDPOINT` config key no longer redirects the planner's
     sign-in.
+  - The timeline's unsaved-changes list follows the planner's theme.
 - A second Enter in the new-activity or new-token dialog no longer submits it twice.
 - The camp list shows a deleted camp's confirmation.
 

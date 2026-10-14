@@ -4,7 +4,7 @@
 
 window.cpTimelineEdit = function setupEditing(ctx) {
   const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, dayName, mToDate, applyHeights, segmentContent, buildItem, orgById, rehydrate, selectItem, openDetail, busy, setBarActions, setPending, showBar, hideBar } = ctx;
-  const { el, api, withId, canHover, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
+  const { el, api, withId, canHover, stampTheme, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
 
@@ -149,6 +149,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     changesOpen = !changesOpen;
     if (!changesOpen || !hasPending()) { closeChanges(); return; }
     renderChangeList();
+    stampTheme(changesPanel);   // when shown, as timeline.js's bar
     changesPanel.hidden = false;
     const r = changesBtn.getBoundingClientRect();
     changesPanel.style.top = (r.bottom + 4) + "px";

@@ -13,7 +13,7 @@
   if (!dataEl || !container) return;
 
   const payload = JSON.parse(dataEl.textContent);
-  const { el, withId, actionGroup, openModal } = window.cpDom;
+  const { el, withId, actionGroup, openModal, stampTheme } = window.cpDom;
   const camp = payload.camp;
   const DAY_MIN = 24 * 60;
   const WINDOW_START = camp.window_start_min;
@@ -828,6 +828,7 @@
   const card = el("div", { class: "cp-hint cp-tl-card", hidden: true });
   // a screen reader hears the card as the selection or its slot changes
   const live = el("div", { class: "cp-tl-live", role: "status", "aria-live": "polite" });
+  // at the body, like dom.js's dialogs: a fixed box inside .cp-embed would stack under the host
   document.body.append(bar, card, live);
   let barActions = () => [];
   const openDetail = (it) => {
@@ -879,12 +880,15 @@
     requestAnimationFrame(() => {
       const sel = selectedBox(), it = selectedItem();
       if (!sel || !it) return hideBar();
-      bar.replaceChildren(actionGroup(barActions(it).filter(Boolean).map(withKey)));
+      const acts = barActions(it).filter(Boolean).map(withKey);
+      bar.replaceChildren(actionGroup(acts));
       const pending = pendingOf(it);
       card.innerHTML = it._seg   // a placeholder has nothing to tell yet
         ? segmentCard(it._seg, pending?.was) +
           (pending ? `<br><i class="cp-tl-pending">${pending.footer}</i>` : "") : "";
-      bar.hidden = false;
+      // stamped when shown: at load, theme.js would take a stamped box for a host's pin
+      stampTheme(bar); stampTheme(card);
+      bar.hidden = !acts.length;
       card.hidden = !it._seg;
       card.style.visibility = "";   // innerText of a hidden card is empty; placeBar re-hides it
       const said = card.innerText.replace(/\n+/g, ". ");
@@ -895,12 +899,12 @@
   // a page scroll or resize only moves them (once a frame), leaving the buttons under the finger
   let following = false;
   function follow() {
-    if (bar.hidden || following) return;
+    if ((bar.hidden && card.hidden) || following) return;
     following = true;
-    requestAnimationFrame(() => { following = false; const sel = selectedBox(); if (sel && !bar.hidden) placeBar(sel); });
+    requestAnimationFrame(() => { following = false; const sel = selectedBox(); if (sel && !card.hidden) placeBar(sel); });
   }
   timeline.on("rangechange", hideBar);   // pan/zoom slides the slot out from under it
-  timeline.on("rangechanged", () => { if (lastSel != null) showBar(); });
+  timeline.on("rangechanged", showBar);
   window.addEventListener("scroll", follow, { passive: true });
   window.addEventListener("resize", follow);
   // focus moving away from the timeline lets the selection go
