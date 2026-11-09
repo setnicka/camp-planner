@@ -249,9 +249,9 @@
 
   // Half-height when a box overlaps another in its row, double-height when solo.
   // Called once now and re-run live during editing as drags change overlaps;
-  // background items (no _base) are skipped. Also fades the activities other than the
-  // selected one (cp-unfocus); the selected activity is never dimmed by the filter.
-  let selActivity = null;   // activity of the selected slot (see selectionChanged)
+  // background items (no _base) are skipped. Also fades what the selection leaves out
+  // (cp-unfocus); what it keeps is never dimmed by the filter.
+  let focus = null, focusKey = "";   // the boxes the selection keeps (see selectionChanged)
   // the editor's unsaved state of a box: { cls, title, footer, was } | null (see segmentCard)
   let pendingOf = () => null;
   function applyHeights() {
@@ -264,10 +264,10 @@
         for (let j = i + 1; j < arr.length; j++)
           if (arr[i].start < arr[j].end && arr[j].start < arr[i].end) { over.add(arr[i].id); over.add(arr[j].id); }
       arr.forEach((it) => {
-        const mine = selActivity != null && it._seg?.activity_id === selActivity;
+        const mine = focus?.(it);
         // one fade at most: the display filter's, else stepping back from the selection
         const fade = !mine && it._seg && !segMatches(it._seg) ? " cp-dim"
-          : selActivity != null && !mine ? " cp-unfocus" : "";
+          : focus && !mine ? " cp-unfocus" : "";
         const pending = pendingOf(it);
         const cls = it._base + (over.has(it.id) ? "" : " solo") + fade + (pending ? " " + pending.cls : "");
         if (cls !== it.className) updates.push({ id: it.id, className: cls });
@@ -354,32 +354,51 @@
 
   // --- selection --------------------------------------------------------------
   // A tap selects, a second tap or Escape deselects; every way the selection goes ends in
-  // selectionChanged.
-  let lastSel = null;
+  // selectionChanged. The editor selects several (Ctrl/Shift+click, a band): the last one
+  // added leads, the bar and keys act from it.
+  let lastSel = null, selCount = 0;
+  const selectedItems = () => items.get(timeline.getSelection()).filter(Boolean);
   const selectedItem = () => {
-    const [id] = timeline.getSelection();
+    const id = timeline.getSelection().at(-1);
     return id != null ? items.get(id) : null;
   };
   function selectionChanged() {
-    lastSel = timeline.getSelection()[0] ?? null;
-    const act = selectedItem()?._seg?.activity_id ?? null;
-    if (act !== selActivity) { selActivity = act; applyHeights(); }
+    const sel = selectedItems();
+    lastSel = timeline.getSelection().at(-1) ?? null;
+    selCount = sel.length;
+    // one slot keeps its whole activity, several just themselves (a multi-row slot whole)
+    const slots = new Set(sel.map((it) => it.slotId ?? it.id));
+    const act = slots.size === 1 ? sel[0]._seg?.activity_id : null;
+    const key = act != null ? "a" + act : slots.size > 1 ? "s" + [...slots] : "";
+    if (key !== focusKey) {
+      focusKey = key;
+      container.classList.toggle("cp-multisel", slots.size > 1);
+      focus = act != null ? (it) => it._seg?.activity_id === act
+        : slots.size > 1 ? (it) => slots.has(it.slotId ?? it.id) : null;
+      applyHeights();
+    }
     if (lastSel != null) showBar(); else { hideBar(); live.textContent = ""; }
   }
-  function selectItem(id) {   // null clears
-    timeline.setSelection(id == null ? [] : [id]);
+  function selectItems(ids) {
+    timeline.setSelection(ids);
     selectionChanged();
   }
+  const selectItem = (id) => selectItems(id == null ? [] : [id]);   // null clears
   function clearSelection() { selectItem(null); }
   timeline.on("select", (props) => {
-    // only a tap toggles: vis also selects on a long press, which starts a touch drag
-    if (props.event?.type === "tap" && props.items.length === 1 && props.items[0] === lastSel) {
+    // only a plain tap on the one selected slot toggles: vis also selects on a long press,
+    // which starts a touch drag, and Ctrl/Shift+click adds or removes
+    const src = props.event?.srcEvent;
+    if (props.event?.type === "tap" && !(src?.ctrlKey || src?.metaKey || src?.shiftKey)
+        && selCount === 1 && props.items.length === 1 && props.items[0] === lastSel) {
       timeline.setSelection([]);
     }
     selectionChanged();
   });
   // vis drops a removed item from the selection without a `select` event
-  items.on("remove", () => { if (lastSel != null && !timeline.getSelection().length) clearSelection(); });
+  items.on("remove", () => {
+    if (lastSel != null && timeline.getSelection().length !== selCount) selectionChanged();
+  });
   // Keys act on the page, not while a dialog is open or a field has the focus. Embedded, the
   // page is our part of the host's: focus on the host's controls keeps their keys.
   const page = container.closest(".cp-embed") || document.body;
@@ -675,10 +694,12 @@
   ];
   const EDIT_KEYS = [
     [["Shift + E"], "zapnutí / vypnutí režimu úprav"],
-    [["Shift + šipka"], "posun slotu o krok mřížky / o den"],
+    ["Ctrl / Shift + klik", "přidání slotu do výběru / výběr úseku dne od vybraného slotu"],
+    ["Shift / Ctrl + tažení v prázdnu", "výběr slotů rámečkem / přidání do výběru"],
+    [["Shift + šipka"], "posun vybraných slotů o krok mřížky / o den"],
     [["Ctrl + Shift + ←", "→"], "zkrácení / prodloužení slotu"],
     [["N"], "nový slot za vybraným"],
-    [["Delete", "Backspace"], "smazání slotu"],
+    [["Delete", "Backspace"], "smazání vybraných slotů"],
     [["Ctrl + Z", "Ctrl + Y"], "zpět / vpřed"],
     [["Ctrl + S"], "uložení změn"],
   ];
@@ -831,6 +852,7 @@
   // at the body, like dom.js's dialogs: a fixed box inside .cp-embed would stack under the host
   document.body.append(bar, card, live);
   let barActions = () => [];
+  let multiCard = () => null;   // the editor's card for several selected slots
   const openDetail = (it) => {
     const aid = it?._seg?.activity_id;
     if (aid != null) location.href = withId(container.dataset.activityDetail, aid);
@@ -851,7 +873,10 @@
     Object.assign(card.style, { left: leftOf(cw),
       top: (below + ch <= window.innerHeight - 4 ? below : Math.max(4, barTop - ch - 6)) + "px" });
   }
-  const selectedBox = () => container.querySelector(".vis-item.vis-selected");
+  // the leading slot's box (any selected one for a placeholder, which has no time label)
+  const selectedBox = () =>
+    container.querySelector(`.vis-selected .ev-time[data-id="${lastSel}"]`)?.closest(".vis-item")
+    || container.querySelector(".vis-item.vis-selected");
   // An action's `key` presses it while its slot is selected, Enter presses the `main` one; the
   // label underlines the letter.
   function withKey(d) {
@@ -873,19 +898,20 @@
     const walk = e.key === "Tab" ? (cur) => nextInTime(cur, e.shiftKey ? -1 : 1) : !e.shiftKey && WALK[e.key];
     if (walk) { e.preventDefault(); return goTo(walk(it)); }
     if (e.repeat || e.shiftKey || (e.key === "Enter" && e.target.closest("button, a"))) return;   // a control's own Enter
-    const action = barActions(it).find((d) => d && (e.key === "Enter" ? d.main : d.key === e.key.toLowerCase()));
+    const action = barActions(it, selectedItems()).find((d) => d && (e.key === "Enter" ? d.main : d.key === e.key.toLowerCase()));
     if (action) { e.preventDefault(); action.onClick(); }
   });
   function showBar() {
     requestAnimationFrame(() => {
-      const sel = selectedBox(), it = selectedItem();
+      const sel = selectedBox(), it = selectedItem(), all = selectedItems();
       if (!sel || !it) return hideBar();
-      const acts = barActions(it).filter(Boolean).map(withKey);
+      const acts = barActions(it, all).filter(Boolean).map(withKey);
       bar.replaceChildren(actionGroup(acts));
       const pending = pendingOf(it);
-      card.innerHTML = it._seg   // a placeholder has nothing to tell yet
-        ? segmentCard(it._seg, pending?.was) +
-          (pending ? `<br><i class="cp-tl-pending">${pending.footer}</i>` : "") : "";
+      card.innerHTML = multiCard(all)
+        ?? (it._seg   // a placeholder has nothing to tell yet
+          ? segmentCard(it._seg, pending?.was) +
+            (pending ? `<br><i class="cp-tl-pending">${pending.footer}</i>` : "") : "");
       // stamped when shown: at load, theme.js would take a stamped box for a host's pin
       stampTheme(bar); stampTheme(card);
       bar.hidden = !acts.length;
@@ -926,8 +952,9 @@
       payload, camp, container, items, timeline,
       DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading,
       fmtClock, dayName, mToDate, applyHeights, segmentContent, buildItem, orgById,
-      rehydrate, selectItem, openDetail, busy,
+      rehydrate, selectItem, selectItems, selectedItems, openDetail, busy, escapeHtml,
       setBarActions: (fn) => { barActions = fn; }, setPending: (fn) => { pendingOf = fn; },
+      setMultiCard: (fn) => { multiCard = fn; },
       showBar, hideBar,
     });
   } else {

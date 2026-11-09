@@ -142,12 +142,17 @@ Jedna aktivita může mít slotů kolik chce, i žádný. Úpravy probíhají v 
 (tlačítko *Upravit sloty a časy*): dvojklik na prázdné místo založí slot, tažení slot
 posune nebo změní jeho délku (do puštění zůstává na původním místě šrafovaný obrys),
 kliknutí nabídne úpravu účastníků a názvu, duplikaci (kopie s účastníky a názvem vznikne na
-stejném místě, odkud se přetáhne jinam) a smazání. Na telefonu se slot táhne po podržení
-prstu (nebo po vybrání klepnutím); rychlý tah přes nevybraný slot jen posouvá rozvrhem. Změny
-se hromadí a ukládají se až tlačítkem **Uložit**; nový slot má modrý čárkovaný rámeček,
-změněný oranžový a pod ním se ukážou i uložené hodnoty. Tlačítko s počtem změn ukáže
-jejich seznam, jen s tím, co se od uloženého stavu opravdu liší. Odchod ze stránky
-s neuloženými změnami si vyžádá potvrzení.
+stejném místě, odkud se přetáhne jinam) a smazání. `Ctrl` + kliknutí přidá slot do výběru
+(nebo ho z něj odebere), `Shift` + kliknutí vybere všechny sloty dne mezi vybraným
+a kliknutým. `Shift` + tažení po prázdném místě vybere rámečkem sloty i přes více dnů,
+s `Ctrl` je přidá k výběru. Tažení kteréhokoli z vybraných pak posune všechny naráz, i do
+jiného dne, a smazat se dají najednou. Pod výběrem je jejich seznam, ostatní sloty se
+ztlumí a nabídka má jen smazání, další úpravy jdou po jednom slotu. Výběr víc slotů funguje
+jen s myší. Na telefonu se slot táhne po podržení prstu (nebo po vybrání klepnutím);
+rychlý tah přes nevybraný slot jen posouvá rozvrhem. Změny se hromadí a ukládají se až
+tlačítkem **Uložit**; nový slot má modrý čárkovaný rámeček, změněný oranžový a pod ním se
+ukážou i uložené hodnoty. Tlačítko s počtem změn ukáže jejich seznam, jen s tím, co se od
+uloženého stavu opravdu liší. Odchod ze stránky s neuloženými změnami si vyžádá potvrzení.
 
 ### Klávesové zkratky
 
@@ -168,10 +173,12 @@ Editor má navíc (kromě `Shift+E` jen v editačním módu; na Macu místo `Ctr
 | Zkratka | Co udělá |
 | --- | --- |
 | `Shift+E` | zapnutí / vypnutí editačního módu |
-| `Shift` + šipka | posun vybraného slotu o krok mřížky nebo o den |
+| `Ctrl` / `Shift` + kliknutí | přidání slotu do výběru / výběr úseku dne |
+| `Shift` / `Ctrl` + tažení v prázdnu | výběr slotů rámečkem / přidání do výběru |
+| `Shift` + šipka | posun vybraných slotů o krok mřížky nebo o den |
 | `Ctrl+Shift+←` `Ctrl+Shift+→` | zkrácení / prodloužení vybraného slotu o krok mřížky |
 | `N` | nový slot hned za vybraným |
-| `Delete`, `Backspace` | smazání vybraného slotu |
+| `Delete`, `Backspace` | smazání vybraných slotů |
 | `Ctrl+Z`, `Ctrl+Y` nebo `Ctrl+Shift+Z` | zpět, vpřed |
 | `Ctrl+S` | uložení změn |
 

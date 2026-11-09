@@ -221,6 +221,9 @@
 /* a slot is selected: the other activities step back (timeline.js never dims its own) */
 #cp-timeline .vis-item.cp-unfocus { opacity: .7; }
 #cp-timeline .vis-item.margin.cp-unfocus { opacity: .65; }
+/* several selected (timeline.js): the rest steps further back */
+#cp-timeline.cp-multisel .vis-item.cp-unfocus { opacity: .55; }
+#cp-timeline.cp-multisel .vis-item.margin.cp-unfocus { opacity: .5; }
 /* display filter: slots that don't match it */
 #cp-timeline .vis-item.cp-dim { opacity: .25; }
 #cp-timeline .vis-item.margin.cp-dim { opacity: .2; }
@@ -292,6 +295,11 @@
 /* floating action bar over the selected slot, its card under it: neutral and raised over the
    coloured boxes; the card lets clicks through to the slots beneath */
 .cp-tl-actions, .cp-tl-card { position: fixed; z-index: 1000; }   /* the card's skin: .cp-hint */
+/* Shift/Ctrl+drag selection band (timeline-edit.js) */
+.cp-tl-band {
+  position: fixed; z-index: 1000; pointer-events: none;
+  border: 1px solid var(--cp-accent); background: var(--cp-accent-glow);
+}
 .cp-tl-actions { display: flex; }
 .cp-tl-actions[hidden] { display: none; }  /* beat the display:flex so hidden actually hides */
 .cp-tl-actions .cp-seg, .cp-tl-card {

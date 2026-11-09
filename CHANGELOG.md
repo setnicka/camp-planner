@@ -12,6 +12,12 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+### Added
+
+- Timeline: edit mode selects several slots with Ctrl/Shift+click or a Shift+drag
+  band across days, and moves or deletes them at once (drag, Shift+arrows, Delete),
+  undone as one step.
+
 ## [0.4.1] - 2026-10-14
 
 A reworked timeline: restyled slots, keyboard control, a phone-friendly view and slot

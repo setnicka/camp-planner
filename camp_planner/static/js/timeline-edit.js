@@ -3,7 +3,7 @@
 "use strict";
 
 window.cpTimelineEdit = function setupEditing(ctx) {
-  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, dayName, mToDate, applyHeights, segmentContent, buildItem, orgById, rehydrate, selectItem, openDetail, busy, setBarActions, setPending, showBar, hideBar } = ctx;
+  const { EDIT, payload, camp, container, items, timeline, DAY_MIN, WINDOW_START, winStart, Y, Mo, D, ROLE_LABEL, roleHeading, fmtClock, dayName, mToDate, applyHeights, segmentContent, buildItem, orgById, rehydrate, selectItem, selectItems, selectedItems, openDetail, busy, escapeHtml, setBarActions, setPending, setMultiCard, showBar, hideBar } = ctx;
   const { el, api, withId, canHover, stampTheme, openModal, formModal, chipGroup, toast, toastNext, plural } = window.cpDom;
   const pad = (n) => String(n).padStart(2, "0");
   const catById = Object.fromEntries(payload.categories.map((c) => [c.id, c]));
@@ -77,6 +77,11 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   // row, or none.
   const nameOf = (item) => item._seg ? item._seg.override_name || item._seg.title : "slot";
   const slotKey = (item) => creates.has(String(item.id)) ? "new:" + item.id : "slot:" + item.slotId;
+  // a selection's slots, each once: a multi-row slot's pieces are one
+  function uniqueSlots(list) {
+    const seen = new Set();
+    return list.filter((it) => it._seg && !seen.has(slotKey(it)) && seen.add(slotKey(it)));
+  }
   const moveFold = (key, title, from, to) => ({
     key: "move:" + key, from, to,
     same: (a, b) => a[0] === b[0] && a[1] === b[1],
@@ -91,10 +96,21 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       + (seg.attending.length ? `, účastníci ${initialsOf(seg.attending)}` : "");
   };
   const hasPending = () => foldedChangeLines().length > 0;
+  const OUT_OF_CAMP = "Mimo rozsah tábora.";
 
   // record() only logs (the caller has already applied the forward effect); undo()/redo()
   // re-apply the before/after state to both the items DataSet and the net batch maps.
   function record(change) { history.push(change); redoStack.length = 0; afterChange(); }
+  // The changes one action made to several slots: undone as one, listed each on its own.
+  function recordAll(changes) {
+    if (changes.length === 1) return record(changes[0]);
+    if (!changes.length) return;
+    record({
+      parts: changes,
+      undo: () => changes.slice().reverse().forEach((c) => c.undo()),
+      redo: () => changes.forEach((c) => c.redo()),
+    });
+  }
   function undo() { const c = history.pop(); if (c) { c.undo(); redoStack.push(c); afterChange(); } }
   function redo() { const c = redoStack.pop(); if (c) { c.redo(); history.push(c); afterChange(); } }
   function afterChange() { showBar(); applyHeights(); refresh(); }   // the bar follows its slot
@@ -120,7 +136,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   function foldedChangeLines() {
     const rows = [];
     const byKey = new Map();    // fold.key -> its row
-    for (const c of history) {
+    for (const c of history.flatMap((h) => h.parts || [h])) {
       if (gone(c) || (c.of.startsWith("new:") && !c.creating)) continue;
       if (!c.fold) { rows.push(c.creating ? c.label() : c.label); continue; }
       const seen = byKey.get(c.fold.key);
@@ -162,17 +178,42 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   });
 
   // --- move / resize ---------------------------------------------------------
-  // vis applies the visual move via callback(item); we sync the batch map + log a change.
+  // A drop of several selected boxes calls onMove once per box, all in one go: they gather
+  // here and move as one change, led by the box under the pointer.
+  let dropped = null;   // [{ item, callback }] of the drop under way
+  let grabbed = null;   // id of the box the pointer went down on
+  container.addEventListener("pointerdown", (e) => { grabbed = timeline.getEventProperties(e).item; });
   function onMove(item, callback) {
     dropGhost();
     if (saving) { callback(null); return; }
+    if (!dropped) { dropped = []; queueMicrotask(applyDrop); }
+    dropped.push({ item, callback });
+  }
+  function applyDrop() {
+    const list = dropped;
+    dropped = null;
     showBar();   // back after the drag hid it, also when nothing changed; it waits a frame for vis
+    if (list.length === 1) { moveBox(list[0].item, list[0].callback); return; }
+    list.forEach(({ callback }) => callback(null));   // back in place, moveSlots moves all or none
+    const lead = (list.find(({ item }) => item.id === grabbed) || list[0]).item, cur = items.get(lead.id);
+    moveSlots(list.map(({ item }) => items.get(item.id)), Number(lead.group) - Number(cur.group),
+      lead.start - cur.start);
+  }
+  // vis applies the visual move via callback(item); we sync the batch map + log a change.
+  function moveBox(item, callback) {
     if (isLocked(item)) {  // multi-row (window-crossing) slot: re-slice the whole slot from this one drag
-      const change = lockedSlotEdit(item);  // toasts on out-of-range
+      const change = lockedSlotEdit(item);
       callback(null);                        // always cancel vis's single-piece move; we re-render instead
       if (change) applyLocked(change, item.slotId, Number(item.group));
+      else if (change === false) toast(OUT_OF_CAMP, true);
       return;
     }
+    const change = boxChange(item);
+    callback(item);                              // apply the visual move first…
+    if (change) { change.redo(); record(change); }   // …refresh box, card data and batch, then log
+  }
+  // The change putting a one-row box where `item` has it, null when it stays: redo() applies it.
+  function boxChange(item) {
     const id = item.id, key = String(id);
     const cur = items.get(id) || {};
     const seg = cur._seg;
@@ -181,7 +222,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     const after = { start: item.start, end: item.end, group: item.group };
     if (before && +before.start === +after.start && +before.end === +after.end &&
         String(before.group) === String(after.group)) {
-      callback(item); return;  // dropped back where it started → not a change
+      return null;  // dropped back where it started → not a change
     }
     const afterTimes = itemTimes(item);
     // .ev-time and the card read the segment's abs range
@@ -196,69 +237,143 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       [absMinOf(before.group, before.start), absMinOf(before.group, before.end)],
       [absMinOf(after.group, after.start), absMinOf(after.group, after.end)]);
 
-    let change = null;
     if (creates.has(key)) {
       const spec = creates.get(key);
       const beforeTimes = { start_at: spec.start_at, end_at: spec.end_at };
-      Object.assign(spec, afterTimes);
-      change = {
+      return {
         of, fold,
         undo: () => { items.update({ id, ...before, ...beforeRender }); Object.assign(spec, beforeTimes); },
         redo: () => { items.update({ id, ...after, ...afterRender }); Object.assign(spec, afterTimes); },
       };
-    } else if (item.slotId != null) {
-      const slotId = item.slotId;
-      const prev = moves.has(slotId) ? moves.get(slotId) : null;
-      moves.set(slotId, afterTimes);
-      change = {
-        of, fold,
-        undo: () => { items.update({ id, ...before, ...beforeRender }); if (prev) moves.set(slotId, prev); else moves.delete(slotId); },
-        redo: () => { items.update({ id, ...after, ...afterRender }); moves.set(slotId, afterTimes); },
-      };
     }
-    callback(item);                              // apply the visual move first…
-    if (change) { items.update({ id, ...afterRender }); record(change); }  // …refresh box and card data, then log
+    if (item.slotId == null) return null;   // the new-slot placeholder
+    const slotId = item.slotId;
+    const prev = moves.has(slotId) ? moves.get(slotId) : null;
+    return {
+      of, fold,
+      undo: () => { items.update({ id, ...before, ...beforeRender }); if (prev) moves.set(slotId, prev); else moves.delete(slotId); },
+      redo: () => { items.update({ id, ...after, ...afterRender }); moves.set(slotId, afterTimes); },
+    };
+  }
+
+  // Shifts the slots of `pieces` by `rows` days and `ms`, all or none, as one change. Each box
+  // stays within a day row, as a key step keeps it; a multi-row slot moves whole, re-sliced.
+  function moveSlots(pieces, rows, ms) {
+    if (!rows && !ms) return;
+    const targets = [];
+    for (const it of uniqueSlots(pieces)) {
+      const moved = { ...it, group: Number(it.group) + rows,
+                      start: new Date(+it.start + ms), end: new Date(+it.end + ms) };
+      if (!isLocked(it) && !(payload.groups[moved.group] && relMin(moved.start) >= 0
+                             && relMin(moved.end) <= DAY_MIN)) {
+        toast(OUT_OF_CAMP, true);
+        return;
+      }
+      targets.push(moved);
+    }
+    const keep = keepSelection(rows);
+    const changes = [];
+    for (const moved of targets) {   // each builds on the slot as it is, so all before any applies
+      const change = isLocked(moved) ? lockedSlotEdit(moved) : boxChange(moved);
+      if (change === false) { toast(OUT_OF_CAMP, true); return; }
+      if (change) changes.push(change);
+    }
+    changes.forEach((c) => c.redo());
+    keep();
+    recordAll(changes);
+  }
+  // The selection as slots, to restore once their pieces are re-sliced (new ids): each the
+  // piece in its row moved by `rows`, else its first.
+  function keepSelection(rows) {
+    const was = selectedItems().filter((it) => it._seg)
+      .map((it) => ({ key: slotKey(it), row: Number(it.group) + rows }));
+    return () => selectItems([...new Set(was.map(({ key, row }) => {
+      const pieces = items.get({ filter: (it) => it._seg && slotKey(it) === key });
+      return (pieces.find((p) => Number(p.group) === row) || pieces[0])?.id;
+    }).filter((id) => id != null))]);
   }
 
   // live time-in-box while dragging/resizing: rewrite the .ev-time text directly
   // (mutating item.content would kill the drag). Locked (multi-row) slots get the same
   // live feedback; they re-slice to the final layout on drop.
   const cssId = (id) => (window.CSS && CSS.escape) ? CSS.escape(String(id)) : String(id);
-  let movingTimeEl = null;  // cached across a drag's many onMoving frames (same item id)
-  // A hatched copy of the box stays where the drag started until the drop. A plain node in the
-  // box's row, not a vis item, so it can't push the other boxes into new lanes.
-  let ghost = null;
-  function dropGhost() { ghost?.remove(); ghost = null; }
+  // Per box being dragged (several when a selection moves): its time label, cached across the
+  // drag's many onMoving frames, and a hatched copy that stays where the drag started until the
+  // drop. A plain node in the box's row, not a vis item, so it can't push the other boxes into
+  // new lanes.
+  const dragged = new Map();   // item id -> { time, ghost }
+  function dropGhost() { dragged.forEach((d) => d.ghost?.remove()); dragged.clear(); }
   timeline.on("rangechange", dropGhost);   // a pan or zoom mid-drag would leave it misplaced
   // the browser taking a drag over (a long-press menu, a scroll) ends it without onMove
-  container.addEventListener("pointercancel", () => { if (ghost) { dropGhost(); showBar(); } });
+  container.addEventListener("pointercancel", () => { if (dragged.size) { dropGhost(); showBar(); } });
+  function ghostOf(box) {
+    // held from the row's bottom, as vis lays its lanes, so it stays put while the row restacks
+    const { transform, width } = box.style;
+    const bottom = box.parentNode.offsetHeight - box.offsetTop - box.offsetHeight;
+    const ghost = el("div", { class: "vis-item cp-ghost" });
+    Object.assign(ghost.style, { transform, width, top: "auto", bottom: bottom + "px",
+      height: box.offsetHeight + "px" });
+    box.before(ghost);
+    return ghost;
+  }
   function onMoving(item, callback) {
     if (saving) { callback(null); return; }
-    const idStr = String(item.id);
-    if (!movingTimeEl || movingTimeEl.dataset.id !== idStr || !movingTimeEl.isConnected) {
-      movingTimeEl = container.querySelector('.ev-time[data-id="' + cssId(item.id) + '"]');
-    }
-    const box = movingTimeEl?.closest(".vis-item");
-    if (!ghost && box) {   // first frame, before the callback: the box is still where it started
-      // held from the row's bottom, as vis lays its lanes, so it stays put while the row restacks
-      const { transform, width } = box.style;
-      const bottom = box.parentNode.offsetHeight - box.offsetTop - box.offsetHeight;
-      ghost = el("div", { class: "vis-item cp-ghost" });
-      Object.assign(ghost.style, { transform, width, top: "auto", bottom: bottom + "px",
-        height: box.offsetHeight + "px" });
-      box.before(ghost);
+    let d = dragged.get(item.id);
+    if (!d?.time?.isConnected) {
+      const time = container.querySelector('.ev-time[data-id="' + cssId(item.id) + '"]');
+      const box = time?.closest(".vis-item");
+      // first frame, before the callback: the box is still where it started
+      d = { time, ghost: d ? d.ghost : box && ghostOf(box) };
+      dragged.set(item.id, d);
     }
     callback(item);
-    if (movingTimeEl) {
-      movingTimeEl.textContent = `${fmtClock(absMinOf(item.group, item.start))}–${fmtClock(absMinOf(item.group, item.end))}`;
+    if (d.time) {
+      d.time.textContent = `${fmtClock(absMinOf(item.group, item.start))}–${fmtClock(absMinOf(item.group, item.end))}`;
     }
     hideBar();   // the bar and card stay behind as the box moves; back on drop
   }
 
+  // --- band selection (Shift/Ctrl+drag over empty space, mouse only) ---------
+  // Selects the slots the band touches, across days; Ctrl adds them to the selection. Taken
+  // in the capture phase, before vis would pan.
+  container.addEventListener("pointerdown", (e) => {
+    const add = e.ctrlKey || e.metaKey;
+    if (!editing || saving || e.pointerType !== "mouse" || e.button !== 0 || !(add || e.shiftKey)
+        || !e.target.closest(".vis-center") || e.target.closest(".vis-item")) return;
+    e.preventDefault(); e.stopPropagation();
+    const x0 = e.clientX, y0 = e.clientY;
+    const band = el("div", { class: "cp-tl-band" });
+    let rect = null;
+    const move = (m) => {
+      rect = { left: Math.min(x0, m.clientX), right: Math.max(x0, m.clientX),
+               top: Math.min(y0, m.clientY), bottom: Math.max(y0, m.clientY) };
+      Object.assign(band.style, { left: rect.left + "px", top: rect.top + "px",
+        width: rect.right - rect.left + "px", height: rect.bottom - rect.top + "px" });
+    };
+    container.addEventListener("pointermove", move);
+    container.addEventListener("lostpointercapture", () => {   // released or cancelled
+      container.removeEventListener("pointermove", move);
+      band.remove();
+      if (!rect) return;
+      const hit = new Set([...container.querySelectorAll(".ev-time[data-id]")].filter((t) => {
+        const r = t.closest(".vis-item").getBoundingClientRect();
+        return r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
+      }).map((t) => t.dataset.id));
+      const ids = items.getIds({ filter: (it) => hit.has(String(it.id)) });
+      selectItems(add ? [...new Set([...timeline.getSelection(), ...ids])] : ids);
+    }, { once: true });
+    container.setPointerCapture(e.pointerId);
+    document.body.append(band);
+    stampTheme(band);
+  }, true);
+
   // --- add (double-tap empty space) ------------------------------------------
+  // vis also adds on a Ctrl+drag, here a Ctrl+click on a slot that slipped: not an add
+  let ctrlDown = false;
+  container.addEventListener("pointerdown", (e) => { ctrlDown = e.ctrlKey || e.metaKey; });
   function onAdd(item, callback) {
     callback(null); // we manage our own placeholder item instead of vis's default
-    if (saving) return;
+    if (saving || ctrlDown) return;
     const group = Number(item.group ?? payload.groups[0].id);
     let s = relMin(item.start) - 60, e = relMin(item.start) + 60; // ±1h around the tap
     if (s < 0) { e -= s; s = 0; }
@@ -319,7 +434,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   }
 
   // Map a drag/resize of ONE segment onto its owning slot, then re-slice. Returns a
-  // change to record, or null for a no-op / out-of-range edit.
+  // change to record, null for a no-op, false for an edit out of the camp.
   function lockedSlotEdit(item) {
     const slotId = item.slotId;
     const cur = items.get(item.id);
@@ -338,10 +453,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (e <= s) e = s + MIN;
     if (s === seg.abs_start_min && e === seg.abs_end_min) return null;   // nothing changed (e.g. cut-edge drag)
 
-    if (s < WINDOW_START || e > WINDOW_START + payload.groups.length * DAY_MIN) {
-      toast("Mimo rozsah tábora.", true);
-      return null;
-    }
+    if (s < WINDOW_START || e > WINDOW_START + payload.groups.length * DAY_MIN) return false;
     const oldItems = segsOf(slotId);
     const segs = sliceSlot(s, e, { ...oldItems[0]._seg });
     const newItems = segs.map(segItem), newIds = newItems.map((it) => it.id);
@@ -441,32 +553,36 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (title) box.title = title; else box.removeAttribute("title");
   });
 
-  // --- delete (action bar on the selected slot) ------------------------------
-  function deleteSelected(snap) {
+  // --- delete (action bar on the selected slots) -----------------------------
+  // A multi-row slot goes once, with every row.
+  function deleteSlots(list) {
+    const changes = uniqueSlots(list).map(deleteChange).filter(Boolean);
+    changes.forEach((c) => c.redo());
+    recordAll(changes);
+  }
+  function deleteChange(snap) {
     const id = snap.id, key = String(id);
     if (creates.has(key)) {
       const spec = creates.get(key);
-      creates.delete(key); items.remove(id);
-      record({
+      return {
         of: "new:" + key,
         label: `Smazán nový slot „${nameOf(snap)}“: ${spanLabel(snap._seg.abs_start_min, snap._seg.abs_end_min)}`,
         undo: () => { creates.set(key, spec); items.add(snap); },
         redo: () => { creates.delete(key); items.remove(id); },
-      });
-    } else if (snap.slotId != null) {
-      const slotId = snap.slotId;
-      const segs = segsOf(slotId);   // every row of a multi-row slot
-      const ids = segs.map((it) => it.id);
-      // named as saved: its pending edits leave the list (see gone)
-      const saved = savedOf(slotId);
-      deletes.add(slotId); items.remove(ids);
-      record({
-        of: "slot:" + slotId, deleting: true,
-        label: `Smazán slot „${nameOf({ _seg: saved })}“: ${spanLabel(saved.abs_start_min, saved.abs_end_min)}`,
-        undo: () => { deletes.delete(slotId); items.add(segs); },
-        redo: () => { deletes.add(slotId); items.remove(ids); },
-      });
+      };
     }
+    if (snap.slotId == null) return null;
+    const slotId = snap.slotId;
+    const segs = segsOf(slotId);   // every row of a multi-row slot
+    const ids = segs.map((it) => it.id);
+    // named as saved: its pending edits leave the list (see gone)
+    const saved = savedOf(slotId);
+    return {
+      of: "slot:" + slotId, deleting: true,
+      label: `Smazán slot „${nameOf({ _seg: saved })}“: ${spanLabel(saved.abs_start_min, saved.abs_end_min)}`,
+      undo: () => { deletes.delete(slotId); items.add(segs); },
+      redo: () => { deletes.add(slotId); items.remove(ids); },
+    };
   }
 
   // --- duplicate (a pending create on the same spot, to drag elsewhere) --------
@@ -531,17 +647,30 @@ window.cpTimelineEdit = function setupEditing(ctx) {
   }
 
   // --- floating action bar (timeline.js): this mode's actions -----------------------
-  setBarActions((it) => {
+  const pluralSlots = (n) => `${n} ${plural(n, "slot", "sloty", "slotů")}`;
+  setBarActions((it, sel) => {
     if (!it._seg || saving) return [];   // the new-slot placeholder while its picker is open
+    const slots = uniqueSlots(sel);
+    if (slots.length > 1) return [
+      { label: `🗑 Smazat ${pluralSlots(slots.length)}`, danger: true, onClick: () => deleteSlots(slots) },
+    ];
     return editing ? [
       { label: "✎ Upravit slot", key: "u", main: true, onClick: () => editSlot(it) },
       !it._seg.cont_back && !it._seg.cont_fwd && { label: "⧉ Duplikovat", key: "d", onClick: () => duplicate(it) },
       { label: "↺ Typ slotu", key: "t", onClick: () => openSlotType(it) },
-      { label: "🗑 Smazat blok", danger: true, onClick: () => deleteSelected(it) },
+      { label: "🗑 Smazat blok", danger: true, onClick: () => deleteSlots([it]) },
     ] : [
       it.slotId != null && { label: "Přiřadit orgy", key: "o", onClick: () => assignOrgs(it) },
       { label: "ℹ️ Detail", key: "d", main: true, onClick: () => openDetail(it) },
     ];
+  });
+  // several selected slots: their names and times, in time order
+  setMultiCard((sel) => {
+    const slots = uniqueSlots(sel).sort((a, b) => a._seg.abs_start_min - b._seg.abs_start_min);
+    if (slots.length < 2) return null;
+    return [`<b>Vybrané sloty: ${slots.length}</b>`, ...slots.map((it) =>
+      `${escapeHtml(roleHeading(it._seg.role, nameOf(it)))}: ${spanLabel(it._seg.abs_start_min, it._seg.abs_end_min)}`,
+    )].join("<br>");
   });
 
   // --- slot attendees and name override --------------------------------------
@@ -689,20 +818,26 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     // vis's select-first step (a long press selects), so a swipe over a box pans instead.
     // Only attach the callbacks when enabling: vis rejects `undefined` for them, and with
     // editable:false they never fire anyway, so there's no need to clear them on exit.
+    // With a mouse, Ctrl/Shift+click selects several slots, a drag of one moves them all. vis
+    // would also toggle a slot on a held button, which a drag often starts with: the hold it
+    // takes is set to a day. A touch screen keeps one, as there the long press selects for a drag.
+    const multi = on && canHover();
     const opts = {
       editable: on ? { add: true, updateTime: true, updateGroup: true, remove: false, overrideItems: false } : false,
-      itemsAlwaysDraggable: on && canHover()
-        ? { item: true, range: true } : { item: false, range: false },
+      itemsAlwaysDraggable: multi ? { item: true, range: true } : { item: false, range: false },
+      multiselect: multi, multiselectPerGroup: true,   // Shift+click spans a stretch of one day
+      longSelectPressTime: multi ? DAY_MIN * 60000 : 251,   // vis's default
     };
     if (on) { opts.onMove = onMove; opts.onMoving = onMoving; opts.onAdd = onAdd; }
     timeline.setOptions(opts);
     // vis bakes editability into each item's DOM at render time, so re-add the program
     // items to make them pick up the new editable/itemsAlwaysDraggable options (per the mock).
     const ids = items.getIds({ filter: (it) => it._base != null });
-    const data = items.get(ids), [sel] = timeline.getSelection();
+    // leading last, the one a single selection keeps
+    const data = items.get(ids), sel = timeline.getSelection().slice(multi ? 0 : -1);
     items.remove(ids);
     items.add(data);
-    if (sel != null && items.get(sel)) selectItem(sel);   // the removal dropped it; keys go on from it
+    selectItems(sel.filter((id) => items.get(id)));   // the removal dropped them; keys go on from them
     applyHeights();   // re-bake the fades
     refresh();
   }
@@ -737,9 +872,10 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (isLocked(it)) {
       const change = lockedSlotEdit(moved);
       if (change) applyLocked(change, it.slotId, row);
+      else if (change === false) toast(OUT_OF_CAMP, true);
     } else if (payload.groups[moved.group] && relMin(moved.start) >= 0 && relMin(moved.end) <= DAY_MIN
                && moved.end - moved.start >= camp.snap_minutes * 60000) {   // stays in its row, as a drag does
-      onMove(moved, (x) => { if (x) items.update({ id: x.id, group: x.group, start: x.start, end: x.end }); });
+      moveBox(moved, (x) => { if (x) items.update({ id: x.id, group: x.group, start: x.start, end: x.end }); });
     }
   }
   // the piece holding a slot's end (a multi-row slot's last row)
@@ -755,11 +891,11 @@ window.cpTimelineEdit = function setupEditing(ctx) {
       else if (k === "s" && !e.shiftKey) { e.preventDefault(); if (!e.repeat) saveBtn.click(); }
       return;
     }
-    const [id] = timeline.getSelection();
+    const id = timeline.getSelection().at(-1), sel = selectedItems();
     const it = id != null && items.get(id);
     if (!it?._seg) return;
     if ((e.key === "Delete" || e.key === "Backspace") && !mod && !e.shiftKey) {
-      e.preventDefault(); deleteSelected(it); return;
+      e.preventDefault(); deleteSlots(sel); return;
     }
     if (k === "n" && !mod && !e.shiftKey) {   // up to an hour, from its end
       e.preventDefault();
@@ -775,6 +911,7 @@ window.cpTimelineEdit = function setupEditing(ctx) {
     if (!step) return;
     e.preventDefault();
     const ms = step[0] * camp.snap_minutes * 60000;
+    if (uniqueSlots(sel).length > 1) { if (!mod) moveSlots(sel, step[1], ms); return; }
     if (mod) {   // the end, on the piece that holds it
       const last = lastPiece(it);
       if (ms && last) keyEdit(it, { ...last, end: new Date(+last.end + ms) }, Number(it.group));
