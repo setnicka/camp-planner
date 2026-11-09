@@ -12,6 +12,10 @@ Versioning convention: a release that ships a new DB migration should bump the
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-09
+
+Several slots selected and moved at once in the timeline editor; no migration.
+
 ### Added
 
 - Timeline: edit mode selects several slots with Ctrl/Shift+click or a Shift+drag
@@ -382,7 +386,8 @@ overlapping activities across days.
 - Alembic DB migrations with runtime `DB_TABLE_PREFIX` support.
 - Unit tests, README, and deployment docs.
 
-[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/setnicka/camp-planner/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/setnicka/camp-planner/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/setnicka/camp-planner/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/setnicka/camp-planner/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/setnicka/camp-planner/compare/v0.3.3...v0.3.4
